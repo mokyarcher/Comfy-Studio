@@ -1,0 +1,11 @@
+{
+  "positive_prompt": { "node_id": "459:474", "input": "prompt" },
+  "negative_prompt": { "node_id": "459:474", "input": "negative_prompt" },
+  "width": { "node_id": "459:456", "input": "width" },
+  "height": { "node_id": "459:456", "input": "height" },
+  "steps": { "node_id": "459:458", "input": "steps" },
+  "seed": { "node_id": "459:458", "input": "seed" },
+  "custom_size": { "node_id": "459:468", "input": "switch" },
+  "image_1": { "node_id": "470", "input": "image" },
+  "image_2": { "node_id": "475", "input": "image" }
+}

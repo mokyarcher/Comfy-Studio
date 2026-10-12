@@ -1,0 +1,19 @@
+# 放到台式机 frpc.exe 同目录，改名 frpc.toml 或：
+#   frpc.exe -c frpc.qwen-image.toml
+#
+# auth.token 必须与云服务器 /usr/local/frp/frps.toml 里完全一致
+# （和你现有 Ollama 的 frpc 用同一个 token）
+
+serverAddr = "111.229.166.216"
+serverPort = 7000
+auth.method = "token"
+auth.token = "PASTE_SAME_TOKEN_AS_YOUR_OLLAMA_FRPC"
+
+transport.tls.enable = true
+
+[[proxies]]
+name = "qwen-image-api"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8000
+remotePort = 18000

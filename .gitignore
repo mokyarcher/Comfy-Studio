@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.env
+*.log
+data/
+.idea/
+.vscode/
+*.egg-info/
+dist/
+build/
+node_modules/
+desktop/**/release/
+desktop/**/out/
+desktop/**/dist/
+*.exe
+.DS_Store
+
+# Local / tooling leftovers
+desktop/**/release-*/
+desktop/**/win-unpacked-old-*/
+other/_t.png

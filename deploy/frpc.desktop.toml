@@ -1,0 +1,17 @@
+# Copy this file to the desktop PC next to frpc.exe, then fill/check values.
+# Reuse the SAME frps token as your existing Ollama frpc (do not invent a new one).
+# Desktop must also be running: ComfyUI + start_api.ps1 (127.0.0.1:8000)
+
+serverAddr = "111.229.166.216"
+serverPort = 7000
+auth.method = "token"
+auth.token = "PASTE_SAME_TOKEN_AS_OLLAMA_FRPC"
+
+transport.tls.enable = true
+
+[[proxies]]
+name = "qwen-image-api"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8000
+remotePort = 18000

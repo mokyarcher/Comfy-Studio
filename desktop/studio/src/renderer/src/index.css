@@ -1,0 +1,119 @@
+@import '../../../../shared/theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Studio graphite overrides on shared tokens */
+  --bg: #12141a;
+  --panel: #1a1d27;
+  --panel-elevated: #222632;
+  --border: #2e3444;
+  --text: #e8eaf0;
+  --muted: #8b93a7;
+  --primary: #8b5cf6;
+  --primary-hover: #a78bfa;
+  --accent: #22d3ee;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+}
+
+.titlebar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.titlebar button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a4154;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition
+      disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-white shadow-glow hover:bg-primary-hover active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply btn border border-border bg-panel-elevated text-text hover:bg-panel;
+  }
+  .btn-secondary:hover {
+    border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  }
+
+  .btn-danger {
+    @apply btn text-danger;
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
+  }
+
+  .btn-ghost {
+    @apply btn text-muted hover:bg-panel-elevated hover:text-text;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none
+      focus:ring-2;
+  }
+  .input::placeholder {
+    color: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+  .input:focus {
+    border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+    --tw-ring-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-muted;
+  }
+
+  .card {
+    @apply rounded-lg border border-border bg-panel shadow-panel;
+  }
+
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-text;
+  }
+}

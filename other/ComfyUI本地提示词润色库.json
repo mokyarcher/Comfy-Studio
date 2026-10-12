@@ -1,0 +1,1953 @@
+{
+  "schema_version": "1.0.0",
+  "library_id": "comfyui_local_prompt_polish",
+  "display_name": "ComfyUI 本地提示词润色库",
+  "description_zh": "面向本地规则润色的保守型双语语义片段库。通过关键词命中选择少量相关补充，不是模型，不具备真正的语义理解能力；不得保证生成结果绝对无畸变或无常识错误。",
+  "default_policy": {
+    "preserve_original_prompt": true,
+    "never_submit_without_user_confirmation": true,
+    "never_invent_core_subject": true,
+    "never_change_explicit_attributes": [
+      "主体",
+      "数量",
+      "身份",
+      "颜色",
+      "动作",
+      "地点",
+      "年代",
+      "风格",
+      "构图",
+      "视角",
+      "服装",
+      "指定文字",
+      "指定配件"
+    ],
+    "only_add_when_relevant": [
+      "空间关系",
+      "材质细节",
+      "光影一致性",
+      "透视一致性",
+      "清晰的视觉层级"
+    ],
+    "max_category_profiles_per_prompt": 3,
+    "max_added_fragments_per_category": 3,
+    "generic_quality_fragments_max": 2,
+    "do_not_append_all_quality_tags": true,
+    "do_not_force_negative_prompt": true,
+    "do_not_force_style": true,
+    "do_not_force_camera_lens": true,
+    "do_not_force_subject_count": true,
+    "output_language_default": "match_input",
+    "style_default": "preserve_user_style",
+    "local_mode_must_not_make_network_calls": true,
+    "retain_original_negative_prompt_unless_user_edits": true,
+    "max_output_length_multiplier": 2.5
+  },
+  "prompt_structure": {
+    "preferred_order": [
+      "subject",
+      "action_or_pose",
+      "explicit_attributes",
+      "spatial_relationships",
+      "setting",
+      "style",
+      "composition",
+      "lighting",
+      "materials_and_details"
+    ],
+    "zh_labels": {
+      "subject": "主体",
+      "action_or_pose": "动作/姿态",
+      "explicit_attributes": "用户指定属性",
+      "spatial_relationships": "空间关系",
+      "setting": "场景",
+      "style": "风格",
+      "composition": "构图",
+      "lighting": "光线",
+      "materials_and_details": "材质与细节"
+    },
+    "en_labels": {
+      "subject": "subject",
+      "action_or_pose": "action or pose",
+      "explicit_attributes": "specified attributes",
+      "spatial_relationships": "spatial relationships",
+      "setting": "setting",
+      "style": "style",
+      "composition": "composition",
+      "lighting": "lighting",
+      "materials_and_details": "materials and details"
+    }
+  },
+  "model_profiles": {
+    "sd15": {
+      "display_name": "Stable Diffusion 1.5",
+      "positive_strategy": "concise_tags_or_short_phrases",
+      "negative_prompt_strategy": "conditional_negative_prompt_supported_by_workflow",
+      "default_quality_zh": [
+        "主体清晰，轮廓明确",
+        "透视与光照关系协调"
+      ],
+      "default_quality_en": [
+        "clearly defined subject and silhouette",
+        "coherent perspective and lighting"
+      ],
+      "notes": "较常使用正向标签与负面提示词，但效果依具体 checkpoint 与工作流而变化。"
+    },
+    "sdxl": {
+      "display_name": "SDXL",
+      "positive_strategy": "natural_phrases_with_moderate_detail",
+      "negative_prompt_strategy": "conditional_negative_prompt_supported_by_workflow",
+      "default_quality_zh": [
+        "主体与背景层次分明",
+        "材质细节清楚，光影自然"
+      ],
+      "default_quality_en": [
+        "clear separation between subject and background",
+        "defined material details and natural lighting"
+      ],
+      "notes": "避免把所有质量标签无差别塞入提示词；按实际 checkpoint 测试。"
+    },
+    "flux": {
+      "display_name": "FLUX family",
+      "positive_strategy": "natural_language_subject_action_style_context_lighting",
+      "negative_prompt_strategy": "usually_describe_desired_state_in_positive_prompt_and_do_not_assume_negative_prompt_support",
+      "default_quality_zh": [
+        "明确描述期望的画面状态",
+        "优先写清主体、动作、风格和场景关系"
+      ],
+      "default_quality_en": [
+        "describe the desired visual state directly",
+        "prioritize subject, action, style and scene relationships"
+      ],
+      "notes": "FLUX 的具体版本与节点实现不同；许多 FLUX 工作流不使用传统负面提示词。必须检查用户实际工作流。"
+    },
+    "sd3": {
+      "display_name": "Stable Diffusion 3 family",
+      "positive_strategy": "clear_natural_language_with_explicit_relationships",
+      "negative_prompt_strategy": "follow_checkpoint_and_workflow_configuration",
+      "default_quality_zh": [
+        "清晰描述元素之间的关系",
+        "将重要主体和属性放在前面"
+      ],
+      "default_quality_en": [
+        "describe relationships between elements clearly",
+        "place the key subject and attributes first"
+      ],
+      "notes": "遵循具体 checkpoint 与工作流的编码器和负向分支设置。"
+    },
+    "unknown": {
+      "display_name": "未知或自定义模型",
+      "positive_strategy": "conservative_subject_first_natural_language",
+      "negative_prompt_strategy": "preserve_existing_negative_prompt_and_do_not_invent_one",
+      "default_quality_zh": [
+        "主体明确，空间关系清楚"
+      ],
+      "default_quality_en": [
+        "a clearly defined subject and readable spatial relationships"
+      ],
+      "notes": "未知模型时保持保守，不自动注入大量标签或更改负面提示词。"
+    }
+  },
+  "generic_quality_fragments": {
+    "clarity": {
+      "zh": "主体清晰，关键轮廓与重要细节可辨认",
+      "en": "a clearly defined subject with readable contours and important details",
+      "when": "默认可选，最多添加一个通用质量片段"
+    },
+    "lighting": {
+      "zh": "光源方向统一，明暗过渡自然",
+      "en": "consistent light direction with natural tonal transitions",
+      "when": "仅当用户未指定互相矛盾的照明且场景适用时"
+    },
+    "perspective": {
+      "zh": "透视与空间尺度关系连贯",
+      "en": "coherent perspective and spatial scale",
+      "when": "建筑、车辆、产品、室内、多人或复杂场景优先"
+    },
+    "materials": {
+      "zh": "材质纹理有区分，细节不过度堆叠",
+      "en": "distinct material textures with controlled detail",
+      "when": "具有多种可区分材料的主体"
+    },
+    "composition": {
+      "zh": "视觉焦点明确，主体与背景层次清楚",
+      "en": "a clear focal hierarchy with separation between subject and background",
+      "when": "用户未指定特殊构图，且适用于场景"
+    }
+  },
+  "negative_prompt_policy": {
+    "rules": [
+      "如果现有工作流没有负面提示词输入节点，不要为了使用负面词而擅自改工作流。",
+      "如果模型配置为不支持或通常不使用负面提示词，则把限制改写成期望的正向状态。",
+      "不要把所有类别的负面词拼成一个巨大的默认负面提示词。",
+      "只从命中的类别里建议最多 4 到 8 个相关词组；默认不覆盖用户已有负面提示词。",
+      "负面提示词是风险缓解，不是防畸变保证。"
+    ],
+    "positive_rephrasing_examples": [
+      {
+        "avoid_zh": "不要模糊",
+        "prefer_zh": "主体与关键细节清晰对焦",
+        "avoid_en": "blurry",
+        "prefer_en": "the subject and key details are sharply in focus"
+      },
+      {
+        "avoid_zh": "不要增加多余肢体",
+        "prefer_zh": "肢体数量符合用户描述，结构清楚",
+        "avoid_en": "no extra limbs",
+        "prefer_en": "the specified number of limbs with clearly defined anatomy"
+      },
+      {
+        "avoid_zh": "不要让物体穿模",
+        "prefer_zh": "物体之间的接触、遮挡与空间关系自然",
+        "avoid_en": "no object intersection",
+        "prefer_en": "natural contact, occlusion and spatial relationships between objects"
+      }
+    ]
+  },
+  "triggering_rules": [
+    {
+      "id": "explicit_constraints_first",
+      "priority": 1000,
+      "action": "extract_and_lock_explicit_constraints",
+      "description": "提取原文中明确的人物/动物/物品数量、颜色、动作、年代、地点、风格、视角、构图、尺寸、文字、否定要求；润色后逐项校验不被改变。"
+    },
+    {
+      "id": "detect_conflicts",
+      "priority": 990,
+      "action": "detect_conflicting_attributes_and_do_not_resolve_silently",
+      "description": "如同时出现白天/夜晚、写实/卡通、正视图/低角度特写等实质冲突，不自行选择；保留原文并在 UI 显示冲突提示。"
+    },
+    {
+      "id": "select_relevant_categories",
+      "priority": 900,
+      "action": "match_keywords_and_rank_profiles",
+      "description": "按关键词命中、短语命中、类别优先级排序；复杂多主题场景最多选 3 类，每类最多取 3 个补充片段。命中词必须避开否定上下文，例如‘不要加猫’不能触发增加猫。"
+    },
+    {
+      "id": "preserve_user_style",
+      "priority": 890,
+      "action": "do_not_inject_unrequested_styles",
+      "description": "禁止无条件加入 cinematic、photorealistic、anime、8k、masterpiece、camera lens 或特定天气等风格词。只有原文或用户预设明确要求时才使用。"
+    },
+    {
+      "id": "conservative_enrichment",
+      "priority": 800,
+      "action": "add_only_supportive_details",
+      "description": "只添加能提升关系可读性、材质分辨、透视或光照一致性的细节；不引入新的核心主体、场景对象、动作和故事。"
+    },
+    {
+      "id": "length_guard",
+      "priority": 700,
+      "action": "deduplicate_and_limit_length",
+      "description": "删除同义重复词，避免过度扩写。默认润色后不超过原文约 2.5 倍，用户明确选择‘详细扩写’时可放宽。"
+    },
+    {
+      "id": "explain_changes",
+      "priority": 600,
+      "action": "return_diff_and_added_details",
+      "description": "向用户展示原文、润色结果、增加/调整的片段以及保留的硬性要求；不自动发送生图。"
+    },
+    {
+      "id": "model_specific_format",
+      "priority": 500,
+      "action": "apply_selected_model_profile",
+      "description": "依据用户配置的模型档案选择提示词写法，并遵守负面提示词策略；模型未识别时使用 unknown 档案。"
+    }
+  ],
+  "categories": [
+    {
+      "id": "general_scene",
+      "name_zh": "通用场景",
+      "priority": 10,
+      "keywords_zh": [
+        "场景",
+        "画面",
+        "一个",
+        "一张",
+        "一幅",
+        "图片",
+        "照片"
+      ],
+      "keywords_en": [
+        "scene",
+        "image",
+        "photo",
+        "picture"
+      ],
+      "positive_zh": [
+        "主体清晰，主体与背景有明确层次",
+        "空间关系自然，前景、中景与背景衔接合理",
+        "光源方向一致，明暗过渡自然",
+        "画面重点明确，细节清楚但不过度堆叠"
+      ],
+      "positive_en": [
+        "a clearly defined focal subject with a distinct background hierarchy",
+        "coherent spatial relationships and natural depth between foreground and background",
+        "consistent light direction with natural tonal transitions",
+        "a clear visual hierarchy and crisp, controlled details"
+      ],
+      "negative_zh": [
+        "主体与背景混杂",
+        "透视关系不一致",
+        "光照方向相互冲突",
+        "过度锐化或杂乱细节"
+      ],
+      "negative_en": [
+        "subject blending into the background",
+        "inconsistent perspective",
+        "conflicting light directions",
+        "excessive sharpening or cluttered details"
+      ],
+      "notes": "仅作为保守的基础补充；不得因通用场景词触发额外人物、物体或地点。"
+    },
+    {
+      "id": "portrait",
+      "name_zh": "人物肖像",
+      "priority": 90,
+      "keywords_zh": [
+        "人物",
+        "男人",
+        "女人",
+        "男孩",
+        "女孩",
+        "人像",
+        "肖像",
+        "脸",
+        "面部",
+        "模特",
+        "老人",
+        "青年",
+        "小孩",
+        "孩子",
+        "女生",
+        "男生",
+        "女性",
+        "男性"
+      ],
+      "keywords_en": [
+        "portrait",
+        "person",
+        "man",
+        "woman",
+        "girl",
+        "boy",
+        "face",
+        "model",
+        "elderly",
+        "child",
+        "young woman",
+        "young man"
+      ],
+      "positive_zh": [
+        "面部结构自然，五官比例协调",
+        "保留自然皮肤纹理，避免塑料感",
+        "姿态符合身体重心，颈肩连接自然",
+        "焦点优先落在用户指定的主体上"
+      ],
+      "positive_en": [
+        "natural facial structure and balanced feature proportions",
+        "realistic skin texture without an artificial plastic look",
+        "a physically plausible pose with natural neck and shoulder transitions",
+        "focus prioritized on the requested subject"
+      ],
+      "negative_zh": [
+        "五官错位",
+        "面部不对称失真",
+        "脖颈与肩部连接异常",
+        "不自然的肢体比例"
+      ],
+      "negative_en": [
+        "misaligned facial features",
+        "unintended facial distortion",
+        "unnatural neck-to-shoulder connections",
+        "implausible limb proportions"
+      ],
+      "notes": "不要默认改变年龄、肤色、性别表达、服装、发型或人物数量。"
+    },
+    {
+      "id": "hands_and_gesture",
+      "name_zh": "手部与动作",
+      "priority": 85,
+      "keywords_zh": [
+        "手",
+        "手指",
+        "握着",
+        "拿着",
+        "抓住",
+        "比心",
+        "挥手",
+        "指向",
+        "双手",
+        "手势",
+        "手持"
+      ],
+      "keywords_en": [
+        "hand",
+        "hands",
+        "fingers",
+        "holding",
+        "gripping",
+        "waving",
+        "pointing",
+        "gesture",
+        "handheld"
+      ],
+      "positive_zh": [
+        "手指数量与关节结构自然，动作与物体接触关系明确",
+        "手掌、手指和手腕连接连续",
+        "抓握姿势与物体形状相匹配"
+      ],
+      "positive_en": [
+        "an anatomically coherent hand pose with clear contact between fingers and the held object",
+        "continuous, natural transitions between palm, fingers and wrist",
+        "a grip that matches the shape and orientation of the object"
+      ],
+      "negative_zh": [
+        "手指融合或数量异常",
+        "手掌与手腕断裂",
+        "手与物体穿插"
+      ],
+      "negative_en": [
+        "fused or malformed fingers",
+        "disconnected palm and wrist",
+        "hands intersecting the held object"
+      ],
+      "notes": "只有输入涉及手或手势时才注入；提示词只能降低风险，不能保证手部完美。"
+    },
+    {
+      "id": "group_people",
+      "name_zh": "多人场景",
+      "priority": 95,
+      "keywords_zh": [
+        "一群人",
+        "两个人",
+        "三个人",
+        "多人",
+        "合照",
+        "团队",
+        "队伍",
+        "人群",
+        "家庭合影",
+        "情侣",
+        "双人"
+      ],
+      "keywords_en": [
+        "group of people",
+        "two people",
+        "three people",
+        "crowd",
+        "team",
+        "family portrait",
+        "couple",
+        "duo",
+        "group photo"
+      ],
+      "positive_zh": [
+        "严格保留用户指定的人数",
+        "人物之间位置、朝向和距离清楚",
+        "每个人的身体比例与场景透视一致",
+        "避免人物肢体彼此无故融合"
+      ],
+      "positive_en": [
+        "preserve the exact number of people specified by the user",
+        "clear positions, orientations and spacing between people",
+        "consistent body scale and perspective across all people",
+        "distinct silhouettes without unintended limb merging"
+      ],
+      "negative_zh": [
+        "人物数量错误",
+        "人物身体无故融合",
+        "重复的人物或肢体"
+      ],
+      "negative_en": [
+        "incorrect number of people",
+        "unintentionally merged bodies",
+        "duplicated people or limbs"
+      ],
+      "notes": "如用户没有指定人数，禁止擅自把数量固定为某个数。"
+    },
+    {
+      "id": "animal",
+      "name_zh": "真实动物",
+      "priority": 90,
+      "keywords_zh": [
+        "猫",
+        "狗",
+        "老虎",
+        "狮子",
+        "狼",
+        "狐狸",
+        "兔子",
+        "鸟",
+        "马",
+        "熊",
+        "蛇",
+        "鱼",
+        "动物",
+        "宠物",
+        "鹿",
+        "大象",
+        "熊猫",
+        "鹰",
+        "鹦鹉"
+      ],
+      "keywords_en": [
+        "cat",
+        "dog",
+        "tiger",
+        "lion",
+        "wolf",
+        "fox",
+        "rabbit",
+        "bird",
+        "horse",
+        "bear",
+        "snake",
+        "fish",
+        "animal",
+        "pet",
+        "deer",
+        "elephant",
+        "panda",
+        "eagle",
+        "parrot"
+      ],
+      "positive_zh": [
+        "符合该动物物种的身体结构与四肢数量",
+        "毛发、羽毛、鳞片或皮肤质感与物种相符",
+        "关节、站姿和运动姿态自然",
+        "动物与地面或环境的接触关系可信"
+      ],
+      "positive_en": [
+        "species-consistent anatomy and limb count",
+        "fur, feathers, scales or skin rendered with species-appropriate texture",
+        "natural joints, stance and movement",
+        "credible contact between the animal and its surroundings"
+      ],
+      "negative_zh": [
+        "物种特征混乱",
+        "四肢数量异常",
+        "关节反折",
+        "身体与地面接触不合理"
+      ],
+      "negative_en": [
+        "inconsistent species traits",
+        "incorrect limb count",
+        "unnatural joint bending",
+        "implausible ground contact"
+      ],
+      "notes": "若用户明确要求奇幻混种动物，不应用真实物种解剖规则抹去其创意。"
+    },
+    {
+      "id": "fantasy_creature",
+      "name_zh": "奇幻生物与怪物",
+      "priority": 88,
+      "keywords_zh": [
+        "怪物",
+        "巨兽",
+        "魔兽",
+        "恶魔",
+        "龙",
+        "亡灵",
+        "骷髅",
+        "哥斯拉",
+        "神兽",
+        "异形",
+        "触手怪",
+        "怪兽",
+        "巨龙",
+        "boss",
+        "小怪"
+      ],
+      "keywords_en": [
+        "monster",
+        "beast",
+        "demon",
+        "dragon",
+        "undead",
+        "skeleton",
+        "kaiju",
+        "eldritch",
+        "tentacle creature",
+        "creature design",
+        "boss monster"
+      ],
+      "positive_zh": [
+        "整体轮廓鲜明，主要肢体与附属结构层次清楚",
+        "身体结构具有一致的设计逻辑，即使造型超现实也能辨认连接关系",
+        "鳞片、骨骼、甲壳或皮肤的材质区分明确",
+        "关键轮廓与背景保持足够对比"
+      ],
+      "positive_en": [
+        "a distinctive silhouette with clearly layered primary limbs and secondary structures",
+        "internally coherent creature anatomy, even when intentionally fantastical",
+        "clearly differentiated materials such as scales, bone, carapace and skin",
+        "strong separation between the creature silhouette and its background"
+      ],
+      "negative_zh": [
+        "无意的肢体粘连",
+        "结构细节无法辨认",
+        "材质混成一片",
+        "主体轮廓被背景吞没"
+      ],
+      "negative_en": [
+        "unintended limb fusion",
+        "unreadable structural details",
+        "indistinguishable materials",
+        "the silhouette disappearing into the background"
+      ],
+      "notes": "不将人类正常解剖强加给怪物；优先保证用户设定的肢体数量、部位和造型特征。"
+    },
+    {
+      "id": "mechanical_mech",
+      "name_zh": "机械与机甲",
+      "priority": 90,
+      "keywords_zh": [
+        "机械",
+        "机甲",
+        "机器人",
+        "机械兽",
+        "机械巨兽",
+        "齿轮",
+        "液压",
+        "装甲",
+        "金属骨架",
+        "机械臂",
+        "外骨骼",
+        "变形金刚"
+      ],
+      "keywords_en": [
+        "mechanical",
+        "mech",
+        "robot",
+        "cybernetic beast",
+        "gear",
+        "hydraulic",
+        "armor plating",
+        "metal skeleton",
+        "mechanical arm",
+        "exoskeleton",
+        "transformer"
+      ],
+      "positive_zh": [
+        "机械部件连接关系清晰，关节与运动方向协调",
+        "装甲、金属、橡胶、玻璃和发光部件材质分明",
+        "结构具有可辨认的支撑关系与合理厚度",
+        "磨损、污渍和划痕符合部件受力与使用位置"
+      ],
+      "positive_en": [
+        "clearly connected mechanical components with coherent joint orientation",
+        "distinct materials for armor, metal, rubber, glass and luminous elements",
+        "readable support structures and plausible component thickness",
+        "wear, grime and scratches placed consistently with use and exposure"
+      ],
+      "negative_zh": [
+        "机械零件无故悬浮",
+        "结构穿插",
+        "重复或断裂的关节",
+        "金属材质失去层次"
+      ],
+      "negative_en": [
+        "unsupported floating mechanical parts",
+        "intersecting components",
+        "duplicated or broken joints",
+        "flat, indistinct metal materials"
+      ],
+      "notes": "只补充工程清晰度，不擅自改变机甲类别、武器数量或用户指定部件。"
+    },
+    {
+      "id": "product_photo",
+      "name_zh": "产品摄影",
+      "priority": 85,
+      "keywords_zh": [
+        "产品图",
+        "产品摄影",
+        "商品",
+        "电商",
+        "包装",
+        "瓶子",
+        "手机",
+        "耳机",
+        "相机",
+        "手表",
+        "鞋子",
+        "背包",
+        "化妆品",
+        "广告图",
+        "产品海报"
+      ],
+      "keywords_en": [
+        "product photo",
+        "product photography",
+        "e-commerce",
+        "packaging",
+        "bottle",
+        "smartphone",
+        "headphones",
+        "camera",
+        "watch",
+        "shoes",
+        "backpack",
+        "cosmetics",
+        "product ad"
+      ],
+      "positive_zh": [
+        "准确保留产品轮廓、主要部件和用户指定配色",
+        "产品边缘清楚，材质反射符合表面属性",
+        "采用干净、可读的产品构图和有层次的布光",
+        "产品与背景分离清楚"
+      ],
+      "positive_en": [
+        "preserve the product silhouette, key components and specified colors",
+        "clean product edges and material-appropriate reflections",
+        "a readable product composition with controlled studio lighting",
+        "clear separation between product and background"
+      ],
+      "negative_zh": [
+        "产品比例改变",
+        "部件数量错误",
+        "材质反射不合理",
+        "产品边缘与背景粘连"
+      ],
+      "negative_en": [
+        "altered product proportions",
+        "incorrect component count",
+        "implausible material reflections",
+        "product edges blending into the background"
+      ],
+      "notes": "若需准确商标或文字，应提醒用户图像模型可能无法稳定复现，应考虑后期排版；不可擅自添加品牌。"
+    },
+    {
+      "id": "architecture",
+      "name_zh": "建筑与城市",
+      "priority": 82,
+      "keywords_zh": [
+        "建筑",
+        "大楼",
+        "摩天楼",
+        "城市",
+        "街道",
+        "桥梁",
+        "房屋",
+        "教堂",
+        "寺庙",
+        "城堡",
+        "废墟",
+        "楼房",
+        "建筑效果图",
+        "城市天际线"
+      ],
+      "keywords_en": [
+        "architecture",
+        "building",
+        "skyscraper",
+        "city",
+        "street",
+        "bridge",
+        "house",
+        "church",
+        "temple",
+        "castle",
+        "ruins",
+        "cityscape",
+        "architectural visualization"
+      ],
+      "positive_zh": [
+        "建筑结构和承重关系可读，空间透视一致",
+        "窗户、楼层、道路和栏杆遵循合理的空间排列",
+        "垂直线与地平线稳定，主体尺度统一",
+        "建筑材质与年代、环境和天气相匹配"
+      ],
+      "positive_en": [
+        "readable architectural structure and consistent spatial perspective",
+        "windows, floors, roads and railings arranged coherently",
+        "stable verticals and horizon with consistent scale",
+        "materials consistent with the building type, age and environment"
+      ],
+      "negative_zh": [
+        "建筑结构不连贯",
+        "门窗重复错位",
+        "透视线冲突",
+        "道路或桥梁无故断裂"
+      ],
+      "negative_en": [
+        "incoherent building structure",
+        "misaligned or duplicated windows",
+        "conflicting perspective lines",
+        "broken roads or bridges"
+      ],
+      "notes": "对真实建筑复原任务，优先遵守参考图与规格；不要自动添加不存在的构筑物。"
+    },
+    {
+      "id": "interior_design",
+      "name_zh": "室内与空间设计",
+      "priority": 82,
+      "keywords_zh": [
+        "室内",
+        "客厅",
+        "卧室",
+        "厨房",
+        "浴室",
+        "卫生间",
+        "办公室",
+        "工作室",
+        "室内设计",
+        "装修",
+        "家具布置",
+        "房间"
+      ],
+      "keywords_en": [
+        "interior",
+        "living room",
+        "bedroom",
+        "kitchen",
+        "bathroom",
+        "office",
+        "studio",
+        "interior design",
+        "furniture layout",
+        "room"
+      ],
+      "positive_zh": [
+        "家具尺寸与房间尺度协调，摆放关系合理",
+        "地板、墙面和天花板的透视连贯",
+        "主要光源与阴影方向一致",
+        "材质与空间用途相符"
+      ],
+      "positive_en": [
+        "furniture scaled coherently to the room and arranged with practical spacing",
+        "continuous perspective across floor, walls and ceiling",
+        "consistent light-source and shadow direction",
+        "materials appropriate to the intended space"
+      ],
+      "negative_zh": [
+        "家具比例失衡",
+        "门窗结构错乱",
+        "地板透视断裂",
+        "家具互相穿插"
+      ],
+      "negative_en": [
+        "poorly scaled furniture",
+        "incoherent doors or windows",
+        "broken floor perspective",
+        "intersecting furniture"
+      ],
+      "notes": "不可擅自增加房间数量、门窗或用户未要求的大件家具。"
+    },
+    {
+      "id": "landscape_nature",
+      "name_zh": "自然风景",
+      "priority": 80,
+      "keywords_zh": [
+        "风景",
+        "山脉",
+        "森林",
+        "树林",
+        "草原",
+        "沙漠",
+        "海边",
+        "海岸",
+        "大海",
+        "海景",
+        "海面",
+        "汪洋",
+        "一望无际",
+        "碧海",
+        "湖泊",
+        "瀑布",
+        "雪山",
+        "日落",
+        "日出",
+        "田野",
+        "自然风光",
+        "夜景",
+        "空旷"
+      ],
+      "keywords_en": [
+        "landscape",
+        "mountain",
+        "forest",
+        "woodland",
+        "grassland",
+        "desert",
+        "coast",
+        "sea",
+        "ocean",
+        "seascape",
+        "lake",
+        "waterfall",
+        "snow mountain",
+        "sunset",
+        "sunrise",
+        "field",
+        "nature"
+      ],
+      "positive_zh": [
+        "前中远景层次明确，远景有合理的大气透视",
+        "地平线位置符合构图意图",
+        "天气、植被和地形特征彼此协调",
+        "光线与环境时间相匹配"
+      ],
+      "positive_en": [
+        "clear foreground, midground and background with natural atmospheric perspective",
+        "a horizon placement consistent with the intended composition",
+        "coherent relationships between weather, vegetation and terrain",
+        "lighting appropriate to the time and conditions"
+      ],
+      "negative_zh": [
+        "地形层次混乱",
+        "地平线倾斜异常",
+        "植被重复感过强",
+        "光线与天气冲突"
+      ],
+      "negative_en": [
+        "confused terrain layers",
+        "unintended tilted horizon",
+        "excessively repetitive vegetation",
+        "lighting that conflicts with the weather"
+      ],
+      "notes": "不自动指定晴天、日落或季节；这些内容必须来自用户或可选风格预设。"
+    },
+    {
+      "id": "vehicle",
+      "name_zh": "车辆与交通工具",
+      "priority": 82,
+      "keywords_zh": [
+        "汽车",
+        "跑车",
+        "卡车",
+        "摩托车",
+        "自行车",
+        "飞机",
+        "战斗机",
+        "直升机",
+        "火车",
+        "坦克",
+        "军舰",
+        "船只",
+        "交通工具",
+        "飞船"
+      ],
+      "keywords_en": [
+        "car",
+        "sports car",
+        "truck",
+        "motorcycle",
+        "bicycle",
+        "aircraft",
+        "fighter jet",
+        "helicopter",
+        "train",
+        "tank",
+        "warship",
+        "boat",
+        "vehicle",
+        "spaceship"
+      ],
+      "positive_zh": [
+        "保留交通工具的整体轮廓和主要部件数量",
+        "车轮、机翼、旋翼、履带或船体结构清晰且位置协调",
+        "透视、接地或飞行姿态与镜头角度一致",
+        "金属、玻璃、橡胶和涂装材质区分明确"
+      ],
+      "positive_en": [
+        "preserve the vehicle silhouette and the specified number of major components",
+        "clearly placed wheels, wings, rotors, tracks or hull structures",
+        "consistent perspective and believable ground contact or flight attitude",
+        "distinct metal, glass, rubber and painted surfaces"
+      ],
+      "negative_zh": [
+        "车轮或机翼数量异常",
+        "部件穿插",
+        "车体比例不一致",
+        "车辆与地面角度冲突"
+      ],
+      "negative_en": [
+        "incorrect wheel or wing count",
+        "intersecting components",
+        "inconsistent vehicle proportions",
+        "conflicting vehicle-to-ground orientation"
+      ],
+      "notes": "用户指定型号、年代或真实参考时，不擅自更换车型或增加武器。"
+    },
+    {
+      "id": "food_drink",
+      "name_zh": "食品与饮品",
+      "priority": 78,
+      "keywords_zh": [
+        "食物",
+        "美食",
+        "菜肴",
+        "蛋糕",
+        "面包",
+        "咖啡",
+        "奶茶",
+        "饮料",
+        "汉堡",
+        "披萨",
+        "寿司",
+        "水果",
+        "甜点",
+        "餐桌"
+      ],
+      "keywords_en": [
+        "food",
+        "dish",
+        "cake",
+        "bread",
+        "coffee",
+        "milk tea",
+        "drink",
+        "burger",
+        "pizza",
+        "sushi",
+        "fruit",
+        "dessert",
+        "table setting"
+      ],
+      "positive_zh": [
+        "食材质感自然，形状与烹饪方式相符",
+        "食品表面细节清楚但保持真实质感",
+        "摆盘主次明确，容器和食物比例合理",
+        "使用能呈现食物颜色与质地的柔和定向光"
+      ],
+      "positive_en": [
+        "natural ingredient textures consistent with the preparation method",
+        "clear surface detail while retaining believable food texture",
+        "a readable plating hierarchy with sensible scale between food and dishware",
+        "soft directional lighting that reveals the food's color and texture"
+      ],
+      "negative_zh": [
+        "食物材质像塑料",
+        "容器与食物比例异常",
+        "食材无故融合",
+        "油光过度"
+      ],
+      "negative_en": [
+        "plastic-looking food textures",
+        "implausible scale between food and dishware",
+        "unintentionally fused ingredients",
+        "excessively oily highlights"
+      ],
+      "notes": "不自动改变菜系、食材种类或摆盘数量。"
+    },
+    {
+      "id": "fashion_clothing",
+      "name_zh": "服装与时尚",
+      "priority": 78,
+      "keywords_zh": [
+        "服装",
+        "穿着",
+        "裙子",
+        "外套",
+        "西装",
+        "衬衫",
+        "鞋",
+        "时尚",
+        "穿搭",
+        "模特",
+        "布料",
+        "礼服",
+        "盔甲"
+      ],
+      "keywords_en": [
+        "fashion",
+        "clothing",
+        "wearing",
+        "dress",
+        "coat",
+        "suit",
+        "shirt",
+        "shoes",
+        "outfit",
+        "fabric",
+        "gown",
+        "armor"
+      ],
+      "positive_zh": [
+        "服装版型、层叠关系和布料褶皱符合重力",
+        "衣物与身体的接触和悬垂关系自然",
+        "保留指定颜色、图案和配饰",
+        "不同材质的反光和织物纹理有区别"
+      ],
+      "positive_en": [
+        "garment construction, layering and folds respond naturally to gravity",
+        "believable contact and drape between clothing and the body",
+        "preserve specified colors, patterns and accessories",
+        "distinct reflections and textures for different fabrics and materials"
+      ],
+      "negative_zh": [
+        "衣物穿入身体",
+        "布料结构混乱",
+        "配饰无故增减",
+        "图案断裂"
+      ],
+      "negative_en": [
+        "clothing intersecting the body",
+        "incoherent garment construction",
+        "unintended accessory changes",
+        "broken fabric patterns"
+      ],
+      "notes": "不要改变用户指定的服装款式、露肤程度或配色。"
+    },
+    {
+      "id": "anime_illustration",
+      "name_zh": "动漫与插画",
+      "priority": 76,
+      "keywords_zh": [
+        "动漫",
+        "二次元",
+        "漫画",
+        "插画",
+        "日系",
+        "卡通",
+        "赛璐璐",
+        "动画风格",
+        "Q版",
+        "立绘"
+      ],
+      "keywords_en": [
+        "anime",
+        "manga",
+        "illustration",
+        "Japanese animation",
+        "cartoon",
+        "cel shading",
+        "chibi",
+        "character art",
+        "character sheet"
+      ],
+      "positive_zh": [
+        "角色设计语言统一，线条和色块风格协调",
+        "五官、发型和服装轮廓清晰",
+        "画面配色有主次，避免无目的的特效堆叠",
+        "保留用户指定的画风与角色特征"
+      ],
+      "positive_en": [
+        "consistent character-design language with coherent linework and color blocking",
+        "clear facial features, hairstyle and clothing silhouette",
+        "a deliberate color hierarchy without unnecessary effects",
+        "preserve the specified art style and character traits"
+      ],
+      "negative_zh": [
+        "画风混杂",
+        "线条杂乱",
+        "角色设定前后不一致",
+        "无关装饰过多"
+      ],
+      "negative_en": [
+        "inconsistent art styles",
+        "messy linework",
+        "inconsistent character design",
+        "excessive irrelevant decoration"
+      ],
+      "notes": "如果用户要求写实或特定画师风格，不能擅自覆盖为动漫风格。"
+    },
+    {
+      "id": "cinematic_scene",
+      "name_zh": "电影感与叙事镜头",
+      "priority": 70,
+      "keywords_zh": [
+        "电影感",
+        "电影级",
+        "镜头",
+        "分镜",
+        "剧情",
+        "剧照",
+        "史诗",
+        "战场",
+        "追逐",
+        "英雄镜头",
+        "低角度",
+        "特写"
+      ],
+      "keywords_en": [
+        "cinematic",
+        "film still",
+        "storyboard",
+        "epic",
+        "battlefield",
+        "chase scene",
+        "hero shot",
+        "low angle",
+        "close-up"
+      ],
+      "positive_zh": [
+        "镜头构图服务于主体和叙事重点",
+        "光影方向统一，并形成明确视觉焦点",
+        "前景、中景与背景具有空间分离",
+        "景深与主体距离相符"
+      ],
+      "positive_en": [
+        "camera composition supports the subject and narrative focal point",
+        "consistent lighting creates a clear visual focus",
+        "foreground, midground and background remain spatially distinct",
+        "depth of field matches the subject distance and intended shot"
+      ],
+      "negative_zh": [
+        "主体被裁切得不合理",
+        "视觉焦点混乱",
+        "景深与镜头距离冲突"
+      ],
+      "negative_en": [
+        "unintended subject cropping",
+        "confused visual focus",
+        "depth of field inconsistent with camera distance"
+      ],
+      "notes": "不能在用户要求全身、正视图或产品白底图时擅自改为电影特写。"
+    },
+    {
+      "id": "cyberpunk_scifi",
+      "name_zh": "赛博朋克与科幻",
+      "priority": 74,
+      "keywords_zh": [
+        "赛博朋克",
+        "科幻",
+        "未来城市",
+        "全息",
+        "霓虹",
+        "太空站",
+        "未来科技",
+        "外星",
+        "星际",
+        "未来战士"
+      ],
+      "keywords_en": [
+        "cyberpunk",
+        "science fiction",
+        "sci-fi",
+        "futuristic city",
+        "hologram",
+        "neon",
+        "space station",
+        "futuristic technology",
+        "alien",
+        "interstellar"
+      ],
+      "positive_zh": [
+        "科技元素有清晰的材质与功能分区",
+        "发光区域控制在有意义的设备或光源上",
+        "冷暖光源形成层次但不吞没主体细节",
+        "金属、玻璃、屏幕和雾气质感区分明确"
+      ],
+      "positive_en": [
+        "technology elements have clear material and functional separation",
+        "emissive elements are tied to plausible devices or light sources",
+        "contrasting warm and cool light adds depth without obscuring the subject",
+        "distinct materials for metal, glass, screens and atmospheric haze"
+      ],
+      "negative_zh": [
+        "发光效果覆盖所有细节",
+        "科幻装置无故悬浮",
+        "主体被霓虹淹没"
+      ],
+      "negative_en": [
+        "glow obscuring all surface detail",
+        "unsupported floating devices",
+        "the subject overwhelmed by neon"
+      ],
+      "notes": "不要仅因用户提到科技就添加霓虹灯、全息屏或赛博朋克风格；需要风格触发或用户授权。"
+    },
+    {
+      "id": "horror_dark_fantasy",
+      "name_zh": "恐怖与暗黑奇幻",
+      "priority": 74,
+      "keywords_zh": [
+        "恐怖",
+        "惊悚",
+        "暗黑",
+        "黑暗奇幻",
+        "诡异",
+        "阴森",
+        "血月",
+        "亡灵",
+        "地狱",
+        "炼狱"
+      ],
+      "keywords_en": [
+        "horror",
+        "thriller",
+        "dark fantasy",
+        "eerie",
+        "ominous",
+        "blood moon",
+        "undead",
+        "hellscape",
+        "infernal"
+      ],
+      "positive_zh": [
+        "用轮廓光或局部光源保持主体可辨认",
+        "阴影有层次，暗部保留关键结构",
+        "环境细节服务于用户指定的恐怖氛围",
+        "主体与背景之间保持清晰的明暗关系"
+      ],
+      "positive_en": [
+        "rim light or selective illumination keeps the subject readable",
+        "layered shadows retain important structural detail",
+        "environmental details support the requested horror mood",
+        "clear tonal separation between subject and background"
+      ],
+      "negative_zh": [
+        "暗部完全糊成一片",
+        "恐怖元素掩盖主体",
+        "烟雾遮挡关键轮廓"
+      ],
+      "negative_en": [
+        "crushed shadows with no structural detail",
+        "horror effects obscuring the subject",
+        "smoke hiding the essential silhouette"
+      ],
+      "notes": "暗黑不等于降低可读性；若用户要求明亮或可爱风格，不触发本规则。"
+    },
+    {
+      "id": "macro_closeup",
+      "name_zh": "微距与细节特写",
+      "priority": 68,
+      "keywords_zh": [
+        "微距",
+        "特写",
+        "细节特写",
+        "近景",
+        "纹理细节",
+        "微观",
+        "放大观察"
+      ],
+      "keywords_en": [
+        "macro",
+        "macro photography",
+        "close-up",
+        "detail shot",
+        "extreme close-up",
+        "microscopic"
+      ],
+      "positive_zh": [
+        "焦点集中在指定细节，焦平面清楚",
+        "微小材质细节真实且有层次",
+        "景深符合拍摄距离，不让所有平面都无故模糊"
+      ],
+      "positive_en": [
+        "focus concentrated on the specified detail with a clearly defined focal plane",
+        "fine material texture rendered with natural depth",
+        "depth of field appropriate to the working distance"
+      ],
+      "negative_zh": [
+        "焦点偏离主体",
+        "细节被过度锐化",
+        "景深模糊遮住关键部分"
+      ],
+      "negative_en": [
+        "focus missing the intended subject",
+        "oversharpened detail",
+        "blur obscuring essential features"
+      ],
+      "notes": "用户要求全身或全景时，不因检测到某个细节词就强制改成微距。"
+    },
+    {
+      "id": "macro_nature",
+      "name_zh": "植物与自然微观",
+      "priority": 65,
+      "keywords_zh": [
+        "花朵",
+        "植物",
+        "蘑菇",
+        "苔藓",
+        "叶片",
+        "昆虫",
+        "蝴蝶",
+        "蜜蜂",
+        "种子",
+        "露珠"
+      ],
+      "keywords_en": [
+        "flower",
+        "plant",
+        "mushroom",
+        "moss",
+        "leaf",
+        "insect",
+        "butterfly",
+        "bee",
+        "seed",
+        "dew drops"
+      ],
+      "positive_zh": [
+        "植物形态和纹理层次清楚",
+        "自然光与露珠或叶片的反射协调",
+        "前后景植株尺度有变化，避免机械重复"
+      ],
+      "positive_en": [
+        "clear botanical forms and layered natural textures",
+        "coherent reflections on dew and leaves under natural light",
+        "natural variation in scale and placement rather than mechanical repetition"
+      ],
+      "negative_zh": [
+        "叶片无故融合",
+        "植物结构重复粘连",
+        "反射过亮丢失纹理"
+      ],
+      "negative_en": [
+        "unintentionally fused leaves",
+        "repetitive tangled plant structures",
+        "overexposed reflections hiding texture"
+      ],
+      "notes": "只在对应自然主体触发，不自动增加蜜蜂、蝴蝶等生物。"
+    },
+    {
+      "id": "underwater",
+      "name_zh": "水下与海洋",
+      "priority": 66,
+      "keywords_zh": [
+        "水下",
+        "海底",
+        "深海",
+        "海洋",
+        "珊瑚礁",
+        "潜水员",
+        "水母",
+        "沉船",
+        "海沟"
+      ],
+      "keywords_en": [
+        "underwater",
+        "ocean floor",
+        "deep sea",
+        "marine",
+        "coral reef",
+        "diver",
+        "jellyfish",
+        "shipwreck",
+        "ocean trench"
+      ],
+      "positive_zh": [
+        "水体透视与能见度符合场景深度",
+        "光线在水中有自然衰减与体积感",
+        "水生生物与水体环境保持合理比例",
+        "悬浮颗粒适度，不遮挡主体"
+      ],
+      "positive_en": [
+        "underwater visibility and perspective consistent with the scene depth",
+        "natural light attenuation and volumetric scattering through water",
+        "marine life scaled coherently to the environment",
+        "subtle suspended particles that do not obscure the subject"
+      ],
+      "negative_zh": [
+        "水下光线方向混乱",
+        "水体像空气一样没有层次",
+        "生物尺度失衡"
+      ],
+      "negative_en": [
+        "inconsistent underwater lighting",
+        "water lacking depth and attenuation",
+        "implausible scale of marine life"
+      ],
+      "notes": "不默认添加潜水员或沉船。"
+    },
+    {
+      "id": "space_cosmic",
+      "name_zh": "宇宙与天体",
+      "priority": 65,
+      "keywords_zh": [
+        "宇宙",
+        "星空",
+        "星系",
+        "星云",
+        "行星",
+        "恒星",
+        "黑洞",
+        "太空",
+        "宇航员",
+        "月球",
+        "火星"
+      ],
+      "keywords_en": [
+        "space",
+        "cosmos",
+        "galaxy",
+        "nebula",
+        "planet",
+        "star",
+        "black hole",
+        "astronaut",
+        "moon",
+        "mars",
+        "celestial"
+      ],
+      "positive_zh": [
+        "天体尺度关系清晰，构图有明确视觉中心",
+        "发光天体的高光与环境反射协调",
+        "星云、星点和尘埃形成远近层次",
+        "保持天体边缘与空间背景的对比"
+      ],
+      "positive_en": [
+        "clear scale relationships between celestial bodies with a defined focal point",
+        "coherent highlights and environmental illumination from luminous bodies",
+        "layered depth among nebulae, stars and cosmic dust",
+        "distinct silhouettes against the space background"
+      ],
+      "negative_zh": [
+        "天体大小关系混乱",
+        "发光区域过曝",
+        "星点无层次地堆满画面"
+      ],
+      "negative_en": [
+        "incoherent celestial scale",
+        "blown-out luminous areas",
+        "star clutter without spatial depth"
+      ],
+      "notes": "用于科学示意时，生成式提示词无法确保真实天文尺度；严谨数据需要图形或后期工具。"
+    },
+    {
+      "id": "historical_military",
+      "name_zh": "历史与军事装备",
+      "priority": 70,
+      "keywords_zh": [
+        "二战",
+        "历史",
+        "古代战场",
+        "士兵",
+        "军队",
+        "坦克",
+        "军舰",
+        "战机",
+        "战场",
+        "古代军队",
+        "盔甲",
+        "武器"
+      ],
+      "keywords_en": [
+        "World War II",
+        "historical",
+        "ancient battlefield",
+        "soldier",
+        "military",
+        "tank",
+        "warship",
+        "fighter aircraft",
+        "battlefield",
+        "ancient army",
+        "armor"
+      ],
+      "positive_zh": [
+        "装备风格、材质与用户指定的年代协调",
+        "车辆、制服、武器与环境具有一致的时代感",
+        "战场主体与烟尘保持空间层次",
+        "重要装备轮廓完整且清晰"
+      ],
+      "positive_en": [
+        "equipment style and materials consistent with the specified period",
+        "vehicles, uniforms, weapons and setting share a coherent historical era",
+        "layered battlefield depth through smoke and atmosphere",
+        "important equipment silhouettes remain complete and readable"
+      ],
+      "negative_zh": [
+        "跨时代装备混杂",
+        "制服与车辆年代冲突",
+        "武器结构模糊"
+      ],
+      "negative_en": [
+        "anachronistic equipment mixing periods",
+        "uniforms inconsistent with vehicles",
+        "unreadable weapon structures"
+      ],
+      "notes": "历史准确性需要用户提供年代、国家/阵营或参考；不要凭空补入旗帜、标识或具体单位。"
+    },
+    {
+      "id": "game_asset_turnaround",
+      "name_zh": "游戏资产与三/四视图",
+      "priority": 86,
+      "keywords_zh": [
+        "三视图",
+        "四视图",
+        "正视图",
+        "后视图",
+        "侧视图",
+        "顶视图",
+        "建模参考",
+        "模型表",
+        "角色设定图",
+        "游戏资产",
+        "turnaround",
+        "建模"
+      ],
+      "keywords_en": [
+        "turnaround",
+        "front view",
+        "back view",
+        "side view",
+        "top view",
+        "model sheet",
+        "3d modeling reference",
+        "game asset",
+        "character sheet",
+        "orthographic views"
+      ],
+      "positive_zh": [
+        "各视图展示同一主体，外观细节和比例严格一致",
+        "视图完整、主体全身可见，布局均匀，便于分区裁切",
+        "采用近似正交的建模参考视角，减少透视变形",
+        "背景干净，主体与背景清晰分离"
+      ],
+      "positive_en": [
+        "all views depict the same subject with consistent proportions and design details",
+        "complete full-body views distributed evenly for easy cropping",
+        "near-orthographic modeling reference views with minimal perspective distortion",
+        "a clean background with clear subject separation"
+      ],
+      "negative_zh": [
+        "不同视图角色设计不一致",
+        "视图数量错误",
+        "主体被裁切",
+        "视图分布不均"
+      ],
+      "negative_en": [
+        "inconsistent design between views",
+        "incorrect number of views",
+        "cropped subject",
+        "uneven view layout"
+      ],
+      "notes": "如用户指定四视图，不要输出三视图；不能保证图像模型严格等宽排版，关键建模资产建议后期分格或使用专门布局工具。"
+    },
+    {
+      "id": "poster_graphic_design",
+      "name_zh": "海报与平面设计",
+      "priority": 70,
+      "keywords_zh": [
+        "海报",
+        "封面",
+        "平面设计",
+        "宣传图",
+        "传单",
+        "排版",
+        "标题",
+        "文字",
+        "广告设计",
+        "宣传页"
+      ],
+      "keywords_en": [
+        "poster",
+        "cover design",
+        "graphic design",
+        "promotional image",
+        "flyer",
+        "typography",
+        "headline",
+        "advertisement",
+        "layout"
+      ],
+      "positive_zh": [
+        "标题、主体和辅助信息具有清晰层级",
+        "留白充分，边距与对齐关系一致",
+        "文字区域与视觉主体分离，阅读顺序明确",
+        "遵守用户提供的原文和排版要求"
+      ],
+      "positive_en": [
+        "clear hierarchy between headline, primary visual and supporting information",
+        "intentional whitespace with consistent margins and alignment",
+        "text zones separated from the primary visual with a clear reading order",
+        "preserve all supplied copy and layout requirements"
+      ],
+      "negative_zh": [
+        "层级混乱",
+        "文字区域拥挤",
+        "装饰元素遮挡主体",
+        "擅自增加文字"
+      ],
+      "negative_en": [
+        "confused visual hierarchy",
+        "crowded text areas",
+        "decorative elements obscuring the subject",
+        "unrequested copy"
+      ],
+      "notes": "文字准确性无法仅靠润色保证；对必须精准的文字，推荐后期使用 HTML/设计软件叠加文字。"
+    },
+    {
+      "id": "logo_typography",
+      "name_zh": "Logo与精确文字",
+      "priority": 70,
+      "keywords_zh": [
+        "logo",
+        "标志",
+        "商标",
+        "品牌字样",
+        "准确文字",
+        "指定文字",
+        "字样",
+        "字体"
+      ],
+      "keywords_en": [
+        "logo",
+        "brand mark",
+        "exact text",
+        "wordmark",
+        "typography",
+        "lettering"
+      ],
+      "positive_zh": [
+        "明确指定文字内容、大小写、位置和字体风格",
+        "保持文字与标志图形的层级清楚",
+        "采用干净背景并为文字留出足够空间"
+      ],
+      "positive_en": [
+        "specify exact wording, capitalization, placement and typographic style",
+        "maintain clear hierarchy between lettering and graphic mark",
+        "use a clean background with sufficient space around the text"
+      ],
+      "negative_zh": [
+        "擅自拼写或改写品牌文字",
+        "文字扭曲",
+        "额外字符"
+      ],
+      "negative_en": [
+        "altered or misspelled brand wording",
+        "distorted lettering",
+        "unrequested characters"
+      ],
+      "notes": "图像模型即使提示词明确也可能生成错字；商业商标应使用矢量/排版后期合成。"
+    },
+    {
+      "id": "abstract_surreal",
+      "name_zh": "抽象与超现实",
+      "priority": 62,
+      "keywords_zh": [
+        "抽象",
+        "超现实",
+        "梦境",
+        "潜意识",
+        "不可能空间",
+        "概念艺术",
+        "象征主义"
+      ],
+      "keywords_en": [
+        "abstract",
+        "surreal",
+        "dreamscape",
+        "subconscious",
+        "impossible space",
+        "conceptual art",
+        "symbolism"
+      ],
+      "positive_zh": [
+        "保留用户指定的超现实核心概念",
+        "画面使用清晰的视觉重心和有意图的形状关系",
+        "不同材质与色彩形成可辨识的层次"
+      ],
+      "positive_en": [
+        "preserve the user's central surreal concept",
+        "use a deliberate focal point and intentional shape relationships",
+        "maintain readable layers between different materials and colors"
+      ],
+      "negative_zh": [
+        "元素随机堆砌",
+        "视觉焦点缺失",
+        "所有细节相互干扰"
+      ],
+      "negative_en": [
+        "random accumulation of unrelated elements",
+        "no clear focal point",
+        "details competing with one another"
+      ],
+      "notes": "超现实作品允许违反现实规律，不应用真实物理规则强行纠正用户创意。"
+    },
+    {
+      "id": "documentary_realism",
+      "name_zh": "纪实与自然写实",
+      "priority": 62,
+      "keywords_zh": [
+        "纪实",
+        "抓拍",
+        "街拍",
+        "真实照片",
+        "新闻摄影",
+        "纪录片",
+        "生活照",
+        "自然写实"
+      ],
+      "keywords_en": [
+        "documentary",
+        "candid",
+        "street photography",
+        "realistic photo",
+        "photojournalism",
+        "documentary film",
+        "lifestyle photo"
+      ],
+      "positive_zh": [
+        "自然光影和真实材质优先，避免过度磨皮",
+        "构图保留真实场景的合理细节",
+        "透视和环境比例符合摄影视角",
+        "避免不必要的奇幻光效与装饰"
+      ],
+      "positive_en": [
+        "natural lighting and believable materials with restrained retouching",
+        "authentic environmental details appropriate to the scene",
+        "perspective and scale consistent with a photographic viewpoint",
+        "no unnecessary fantasy glow or decorative effects"
+      ],
+      "negative_zh": [
+        "过度磨皮",
+        "无关发光特效",
+        "塑料质感",
+        "不自然的过度对称"
+      ],
+      "negative_en": [
+        "excessive skin smoothing",
+        "unnecessary glow effects",
+        "plastic textures",
+        "unnatural over-symmetry"
+      ],
+      "notes": "只在用户要求纪实/写实摄影时使用。"
+    },
+    {
+      "id": "diagram_infographic",
+      "name_zh": "图解与信息图",
+      "priority": 60,
+      "keywords_zh": [
+        "信息图",
+        "流程图",
+        "示意图",
+        "结构图",
+        "科学图解",
+        "教学图",
+        "图表",
+        "信息可视化"
+      ],
+      "keywords_en": [
+        "infographic",
+        "flowchart",
+        "diagram",
+        "schematic",
+        "scientific illustration",
+        "educational graphic",
+        "chart",
+        "data visualization"
+      ],
+      "positive_zh": [
+        "信息分组清晰，连接关系与阅读顺序明确",
+        "图形符号风格统一，对齐与间距规律一致",
+        "避免无关装饰干扰信息理解"
+      ],
+      "positive_en": [
+        "clear information grouping, connector relationships and reading order",
+        "consistent symbol style with deliberate alignment and spacing",
+        "minimal irrelevant decoration that could hinder comprehension"
+      ],
+      "negative_zh": [
+        "连接线指向错误",
+        "图示层级混乱",
+        "标签过多或错字"
+      ],
+      "negative_en": [
+        "incorrect connector direction",
+        "confused diagram hierarchy",
+        "excessive or misspelled labels"
+      ],
+      "notes": "复杂图表与精确标签应优先使用 SVG、HTML 或绘图工具生成，再交由图像模型做装饰性润色。"
+    }
+  ],
+  "ui_copy": {
+    "mode_local": "本地润色库（离线）",
+    "mode_ai": "AI 智能润色",
+    "button_polish": "润色提示词",
+    "button_restore": "恢复原文",
+    "button_use": "使用此提示词生图",
+    "button_copy": "复制润色结果",
+    "label_original": "原始描述词",
+    "label_result": "润色结果（可编辑）",
+    "label_added": "本次补充内容",
+    "label_preserved": "已保留的关键要求",
+    "label_assumptions": "可能存在的推断",
+    "notice_local": "本地模式仅使用内置规则和词库，不会调用网络 AI；复杂语义识别能力有限。",
+    "notice_quality": "提示词优化可以降低部分常见问题的发生率，但无法保证生成图像绝对无变形或常识性错误。可结合参考图、ControlNet、构图控制或局部重绘进一步提高可控性。",
+    "conflict_warning": "检测到描述中可能存在冲突。请检查原文与润色结果后再提交。"
+  },
+  "test_cases": [
+    {
+      "input": "一只黑色猫咪坐在红色沙发上",
+      "expected_preserve": [
+        "一只",
+        "黑色",
+        "猫咪",
+        "红色沙发",
+        "坐在"
+      ],
+      "expected_category_ids": [
+        "animal"
+      ],
+      "must_not_add": [
+        "第二只猫",
+        "女孩",
+        "雨天",
+        "赛博朋克风格"
+      ]
+    },
+    {
+      "input": "不要人物，只画一辆蓝色跑车的侧视图",
+      "expected_preserve": [
+        "不要人物",
+        "一辆",
+        "蓝色跑车",
+        "侧视图"
+      ],
+      "expected_category_ids": [
+        "vehicle"
+      ],
+      "must_not_add": [
+        "驾驶员",
+        "正面视角",
+        "城市夜景"
+      ]
+    },
+    {
+      "input": "四视图的冰霜巨狼，用于3D建模",
+      "expected_preserve": [
+        "四视图",
+        "冰霜巨狼",
+        "3D建模"
+      ],
+      "expected_category_ids": [
+        "fantasy_creature",
+        "game_asset_turnaround"
+      ],
+      "must_not_add": [
+        "三视图",
+        "其他怪物",
+        "特写镜头"
+      ]
+    },
+    {
+      "input": "一个极简白色陶瓷咖啡杯，白底产品图",
+      "expected_preserve": [
+        "极简",
+        "白色",
+        "陶瓷咖啡杯",
+        "白底产品图"
+      ],
+      "expected_category_ids": [
+        "product_photo",
+        "food_drink"
+      ],
+      "must_not_add": [
+        "品牌 Logo",
+        "木桌",
+        "咖啡店背景"
+      ]
+    },
+    {
+      "input": "空旷的雪山夜景，不要人物",
+      "expected_preserve": [
+        "空旷",
+        "雪山",
+        "夜景",
+        "不要人物"
+      ],
+      "expected_category_ids": [
+        "landscape_nature"
+      ],
+      "must_not_add": [
+        "登山者",
+        "太阳升起",
+        "村庄"
+      ]
+    }
+  ]
+}

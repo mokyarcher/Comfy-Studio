@@ -1,0 +1,15 @@
+bindPort = 7000
+auth.method = "token"
+auth.token = "REPLACE_WITH_EXISTING_FRPS_TOKEN"
+
+# Proxied ports only on loopback for Nginx
+proxyBindAddr = "127.0.0.1"
+allowPorts = [
+  { start = 11434, end = 11434 },
+  { start = 18000, end = 18000 }
+]
+
+webServer.addr = "127.0.0.1"
+webServer.port = 7500
+webServer.user = "admin"
+webServer.password = "REPLACE_IF_NEEDED"

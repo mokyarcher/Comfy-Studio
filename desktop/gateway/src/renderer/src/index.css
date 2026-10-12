@@ -1,0 +1,168 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f1419;
+  --bg-deep: #0a0e13;
+  --panel: #161d27;
+  --panel-elevated: #1c2633;
+  --border: rgba(148, 163, 184, 0.14);
+  --text: #e8eef7;
+  --muted: #8b9bb0;
+  --primary: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --accent: #22d3ee;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --radius: 14px;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "Cascadia Code", "Consolas", "Sarasa Mono SC", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font);
+  /* Must stay opaque and match BrowserWindow.backgroundColor */
+  background-color: #0f1419;
+  background-image: none;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  /* Promote a stable root layer; reduces ghost frames on page switch */
+  transform: translateZ(0);
+}
+
+body {
+  overflow: hidden;
+}
+
+/* Kill glass compositing — Windows Electron + blur is a common ghost-frame trigger */
+*,
+*::before,
+*::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.page-surface {
+  background-color: #0f1419;
+  isolation: isolate;
+}
+
+/* Modal / drawer scrims: near-opaque solid, not see-through glass */
+.overlay-scrim {
+  background-color: rgba(8, 11, 16, 0.92);
+}
+
+/* Frameless window drag regions */
+.app-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.app-no-drag,
+.app-no-drag button,
+.app-no-drag a,
+.app-no-drag input {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.35);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition
+      disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-white shadow-glow hover:bg-primary-hover active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply btn border border-border bg-panel-elevated text-text hover:bg-panel;
+  }
+  .btn-secondary:hover {
+    border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  }
+
+  .btn-danger {
+    @apply btn text-danger;
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
+  }
+
+  .btn-ghost {
+    @apply btn text-muted hover:bg-panel-elevated hover:text-text;
+  }
+
+  .btn-accent {
+    @apply btn;
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  .btn-accent:hover {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-border px-3 py-2.5 text-sm text-text outline-none focus:ring-2;
+    background: var(--bg-deep);
+  }
+  .input::placeholder {
+    color: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+  .input:focus {
+    border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+    --tw-ring-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-muted;
+  }
+
+  .card {
+    @apply border border-border shadow-panel;
+    border-radius: var(--radius);
+    /* Solid panel — avoid translucent panels that leave holes when layers desync */
+    background-color: var(--panel);
+  }
+
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-text;
+  }
+
+  .page-desc {
+    @apply mt-1 text-sm text-muted;
+  }
+}

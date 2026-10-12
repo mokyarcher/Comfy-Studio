@@ -1,0 +1,13 @@
+serverAddr = "YOUR_SERVER_PUBLIC_IP"
+serverPort = 7000
+auth.method = "token"
+auth.token = "REPLACE_WITH_STRONG_FRP_TOKEN"
+
+transport.tls.enable = true
+
+[[proxies]]
+name = "comfy-image-api"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8000
+remotePort = 18000
