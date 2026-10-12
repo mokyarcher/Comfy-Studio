@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+import websockets
 
 from app.config import Settings
 from app.logging_config import truncate_for_log
 
 logger = logging.getLogger(__name__)
+
+ProgressCallback = Callable[[int, int], None]
 
 
 class ComfyClientError(Exception):
@@ -25,6 +31,14 @@ class ComfyImageRef:
     filename: str
     subfolder: str
     image_type: str
+
+
+def comfy_ws_url(http_base: str, client_id: str) -> str:
+    """Build ComfyUI progress WebSocket URL from HTTP base."""
+    parsed = urlparse(http_base.rstrip("/"))
+    scheme = "wss" if parsed.scheme == "https" else "ws"
+    netloc = parsed.netloc or parsed.path
+    return f"{scheme}://{netloc}/ws?clientId={client_id}"
 
 
 class ComfyClient:
@@ -47,9 +61,11 @@ class ComfyClient:
         except httpx.HTTPError:
             return False
 
-    async def submit_prompt(self, workflow: dict[str, Any]) -> str:
-        client_id = str(uuid.uuid4())
-        payload = {"prompt": workflow, "client_id": client_id}
+    async def submit_prompt(
+        self, workflow: dict[str, Any], *, client_id: str | None = None
+    ) -> str:
+        cid = client_id or str(uuid.uuid4())
+        payload = {"prompt": workflow, "client_id": cid}
         try:
             response = await self._client.post("/prompt", json=payload)
         except httpx.HTTPError as exc:
@@ -75,7 +91,7 @@ class ComfyClient:
                 f"ComfyUI node errors: {truncate_for_log(str(node_errors), 200)}",
                 code="comfy_node_errors",
             )
-        logger.info("Submitted prompt_id=%s", prompt_id)
+        logger.info("Submitted prompt_id=%s client_id=%s", prompt_id, cid)
         return str(prompt_id)
 
     async def get_history(self, prompt_id: str) -> dict[str, Any] | None:
@@ -98,11 +114,63 @@ class ComfyClient:
             return None
         return data.get(prompt_id) or next(iter(data.values()), None)
 
+    async def _progress_listener(
+        self,
+        *,
+        client_id: str,
+        prompt_id: str,
+        on_progress: ProgressCallback,
+        stop: asyncio.Event,
+    ) -> None:
+        """Listen for ComfyUI WS `progress` (value/max). Best-effort; never raises out."""
+        uri = comfy_ws_url(self._settings.comfyui_url, client_id)
+        try:
+            async with websockets.connect(
+                uri,
+                open_timeout=5,
+                close_timeout=2,
+                max_size=8 * 1024 * 1024,
+            ) as ws:
+                while not stop.is_set():
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+                    if isinstance(raw, (bytes, bytearray)):
+                        continue
+                    try:
+                        msg = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if msg.get("type") != "progress":
+                        continue
+                    data = msg.get("data") or {}
+                    pid = data.get("prompt_id")
+                    if pid is not None and str(pid) != str(prompt_id):
+                        continue
+                    try:
+                        value = int(data.get("value") or 0)
+                        max_v = int(data.get("max") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if max_v <= 0:
+                        continue
+                    try:
+                        on_progress(value, max_v)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("on_progress callback failed")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("ComfyUI progress WS ended: %s", exc)
+
     async def wait_for_completion(
         self,
         prompt_id: str,
         *,
         timeout_seconds: float | None = None,
+        client_id: str | None = None,
+        on_progress: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         limit = (
             float(timeout_seconds)
@@ -110,26 +178,48 @@ class ComfyClient:
             else float(self._settings.comfyui_job_timeout_seconds)
         )
         deadline = asyncio.get_running_loop().time() + limit
-        while True:
-            history = await self.get_history(prompt_id)
-            if history is not None:
-                status = history.get("status") or {}
-                if status.get("status_str") == "error" or status.get("completed") is False:
-                    messages = status.get("messages") or []
-                    raise ComfyClientError(
-                        f"ComfyUI job failed: {truncate_for_log(str(messages), 200)}",
-                        code="comfy_job_failed",
-                    )
-                outputs = history.get("outputs") or {}
-                if outputs or status.get("completed") is True:
-                    return history
-
-            if asyncio.get_running_loop().time() >= deadline:
-                raise ComfyClientError(
-                    f"ComfyUI job timed out after {limit}s",
-                    code="comfy_timeout",
+        stop = asyncio.Event()
+        listener: asyncio.Task[None] | None = None
+        if client_id and on_progress is not None:
+            listener = asyncio.create_task(
+                self._progress_listener(
+                    client_id=client_id,
+                    prompt_id=prompt_id,
+                    on_progress=on_progress,
+                    stop=stop,
                 )
-            await asyncio.sleep(self._settings.comfyui_poll_interval_seconds)
+            )
+        try:
+            while True:
+                history = await self.get_history(prompt_id)
+                if history is not None:
+                    status = history.get("status") or {}
+                    if status.get("status_str") == "error" or status.get("completed") is False:
+                        messages = status.get("messages") or []
+                        raise ComfyClientError(
+                            f"ComfyUI job failed: {truncate_for_log(str(messages), 200)}",
+                            code="comfy_job_failed",
+                        )
+                    outputs = history.get("outputs") or {}
+                    if outputs or status.get("completed") is True:
+                        return history
+
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise ComfyClientError(
+                        f"ComfyUI job timed out after {limit}s",
+                        code="comfy_timeout",
+                    )
+                await asyncio.sleep(self._settings.comfyui_poll_interval_seconds)
+        finally:
+            stop.set()
+            if listener is not None:
+                listener.cancel()
+                try:
+                    await listener
+                except asyncio.CancelledError:
+                    pass
+                except Exception:  # noqa: BLE001
+                    logger.debug("Progress listener cleanup error", exc_info=True)
 
     def extract_images(self, history: dict[str, Any]) -> list[ComfyImageRef]:
         return self.extract_media(history, kinds=("images",))

@@ -4,14 +4,19 @@ import {
   authChangePassword,
   authLogin,
   authRegister,
+  deleteSharedPrompt,
   fetchPromptLibrary,
   fetchShowcaseAsset,
   fetchTaskImage,
+  listSharedPrompts,
   listShowcase,
   pollTask,
+  sharePromptTemplate,
   shareToShowcase,
   submitGenerate,
   testConnection,
+  translateViaGateway,
+  fetchGpuStatus,
   unlistShowcase,
   uploadImage
 } from './api/client'
@@ -21,6 +26,7 @@ import {
   exportImage,
   getGalleryItem,
   listGallery,
+  openGalleryFile,
   openInFolder,
   readGalleryFileBuffer,
   readGalleryRefBuffers,
@@ -54,8 +60,14 @@ import {
   writeOfficialPrompts
 } from './store/officialPrompts'
 import { deletePhrase, deleteTemplate, listPrompts, savePhrase, saveTemplate } from './store/prompts'
+import {
+  clearTaskHistory,
+  listTaskHistory,
+  saveTaskHistory
+} from './store/taskHistory'
+import { getGalleryMediaInfo } from './galleryProtocol'
 import { getSettings, saveSettings } from './store/settings'
-import { GenerateParamsSchema } from '../shared/types'
+import { GenerateParamsSchema, type LocalTask } from '../shared/types'
 import { isEncryptionAvailable } from './store/crypto'
 import { galleryDir, getUserDataRoot } from './store/paths'
 import {
@@ -202,6 +214,10 @@ export function registerIpc(): void {
   ipcMain.handle('profiles:testConnection', async (event, raw) => {
     assertSender(event)
     return handleTestConnection(raw)
+  })
+  ipcMain.handle('studio:getGpuStatus', async (event, raw) => {
+    assertSender(event)
+    return handleGetGpuStatus(raw)
   })
 
   // --- Generate (main-process orchestration preferred) ---
@@ -399,10 +415,18 @@ export function registerIpc(): void {
     openInFolder(id)
     return { ok: true }
   })
+  ipcMain.handle('gallery:openFile', async (event, id: string) => {
+    assertSender(event)
+    return openGalleryFile(id)
+  })
 
   ipcMain.handle('gallery:readDataUrl', (event, id: string) => {
     assertSender(event)
     return readImageAsDataUrl(id)
+  })
+  ipcMain.handle('gallery:getMediaUrl', (event, id: string) => {
+    assertSender(event)
+    return getGalleryMediaInfo(id)
   })
 
   ipcMain.handle('gallery:saveFromDataUrl', (event, raw) => {
@@ -504,6 +528,7 @@ export function registerIpc(): void {
       height: item.height,
       steps: item.steps,
       seed: item.seed,
+      elapsedMs: item.elapsedMs,
       image: file,
       refs
     })
@@ -681,6 +706,22 @@ export function registerIpc(): void {
     return { ok: true }
   })
 
+  // --- Task history ---
+  ipcMain.handle('tasks:listHistory', (event) => {
+    assertSender(event)
+    return listTaskHistory()
+  })
+  ipcMain.handle('tasks:saveHistory', (event, raw) => {
+    assertSender(event)
+    const items = Array.isArray(raw) ? (raw as LocalTask[]) : []
+    return saveTaskHistory(items)
+  })
+  ipcMain.handle('tasks:clearHistory', (event) => {
+    assertSender(event)
+    clearTaskHistory()
+    return { ok: true }
+  })
+
   // --- Prompts ---
   ipcMain.handle('prompts:list', (event) => {
     assertSender(event)
@@ -724,6 +765,113 @@ export function registerIpc(): void {
     return writeOfficialPrompts(mapServerLibrary(remote))
   })
 
+  ipcMain.handle('prompts:checkOfficialUpdate', async (event, raw) => {
+    assertSender(event)
+    const { profileId } = z.object({ profileId: z.string().min(1) }).parse(raw ?? {})
+    const sec = requireProfileSecret(profileId)
+    const remote = await fetchPromptLibrary({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: Math.max(sec.profile.timeoutMs || 60_000, 30_000)
+    })
+    const local = readOfficialPrompts()
+    const remoteUpdatedAt = String(remote.updated_at || '')
+    const localUpdatedAt = local?.updatedAt || ''
+    const remoteVersion = Number(remote.version) || 0
+    const localVersion = local?.version ?? 0
+    const hasUpdate =
+      !local ||
+      remoteVersion > localVersion ||
+      (remoteUpdatedAt !== '' &&
+        localUpdatedAt !== '' &&
+        remoteUpdatedAt > localUpdatedAt)
+    return {
+      hasUpdate,
+      remoteVersion,
+      remoteUpdatedAt,
+      localVersion,
+      localUpdatedAt
+    }
+  })
+
+  ipcMain.handle('prompts:listShared', async (event, raw) => {
+    assertSender(event)
+    const { profileId } = z.object({ profileId: z.string().min(1) }).parse(raw ?? {})
+    const sec = requireProfileSecret(profileId)
+    const remote = await listSharedPrompts({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: Math.max(sec.profile.timeoutMs || 60_000, 30_000),
+      limit: 100
+    })
+    return {
+      count: remote.count,
+      items: remote.items.map((i) => ({
+        id: i.id,
+        title: i.title,
+        prompt: i.prompt,
+        negativePrompt: i.negative_prompt ?? '',
+        tags: i.tags || [],
+        authorName: i.author_name,
+        authorUsername: i.author_username,
+        createdAt: i.created_at,
+        mine: Boolean(i.mine)
+      }))
+    }
+  })
+
+  ipcMain.handle('prompts:shareToShared', async (event, raw) => {
+    assertSender(event)
+    const input = z
+      .object({
+        profileId: z.string().min(1),
+        title: z.string().min(1),
+        prompt: z.string().min(1),
+        negativePrompt: z.string().optional(),
+        tags: z.array(z.string()).optional()
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(input.profileId)
+    const shared = await sharePromptTemplate({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: Math.max(sec.profile.timeoutMs || 60_000, 30_000),
+      title: input.title,
+      prompt: input.prompt,
+      negativePrompt: input.negativePrompt,
+      tags: input.tags
+    })
+    return {
+      id: shared.id,
+      title: shared.title,
+      prompt: shared.prompt,
+      negativePrompt: shared.negative_prompt ?? '',
+      tags: shared.tags || [],
+      authorName: shared.author_name,
+      authorUsername: shared.author_username,
+      createdAt: shared.created_at,
+      mine: Boolean(shared.mine)
+    }
+  })
+
+  ipcMain.handle('prompts:deleteShared', async (event, raw) => {
+    assertSender(event)
+    const input = z
+      .object({
+        profileId: z.string().min(1),
+        itemId: z.string().min(1)
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(input.profileId)
+    await deleteSharedPrompt({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: Math.max(sec.profile.timeoutMs || 60_000, 30_000),
+      itemId: input.itemId
+    })
+    return { ok: true }
+  })
+
   // --- Prompt polish (AI / gateway only) ---
   ipcMain.handle('polish:ai', async (event, raw) => {
     assertSender(event)
@@ -732,7 +880,12 @@ export function registerIpc(): void {
       negativePrompt: z.string().optional(),
       outputLanguage: z.enum(['match_input', 'zh', 'en']).default('match_input'),
       detail: z.enum(['concise', 'standard', 'detailed']).default('standard'),
-      modelProfile: z.enum(['sd15', 'sdxl', 'flux', 'sd3', 'unknown']).default('unknown'),
+      modelProfile: z
+        .enum(['sd15', 'sdxl', 'flux', 'sd3', 'wan', 'unknown'])
+        .default('unknown'),
+      generationMode: z
+        .enum(['txt2img', 'image_edit', 'image_to_video'])
+        .default('txt2img'),
       profileId: z.string().optional()
     })
     const input = schema.parse(raw)
@@ -744,7 +897,8 @@ export function registerIpc(): void {
           mode: 'ai',
           outputLanguage: input.outputLanguage,
           detail: input.detail,
-          modelProfile: input.modelProfile
+          modelProfile: input.modelProfile,
+          generationMode: input.generationMode
         },
         input.profileId
       )
@@ -754,6 +908,25 @@ export function registerIpc(): void {
       }
       throw err
     }
+  })
+
+  ipcMain.handle('polish:translate', async (event, raw) => {
+    assertSender(event)
+    const input = z
+      .object({
+        profileId: z.string().min(1),
+        text: z.string().min(1),
+        direction: z.enum(['en2zh', 'zh2en']).optional()
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(input.profileId)
+    return translateViaGateway({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: Math.max(sec.profile.timeoutMs || 60_000, 60_000),
+      text: input.text,
+      direction: input.direction
+    })
   })
 
   ipcMain.handle('polish:getAiSettings', (event) => {
@@ -840,4 +1013,39 @@ async function handleTestConnection(raw: unknown) {
     })
   }
   return result
+}
+
+async function handleGetGpuStatus(raw: unknown) {
+  const schema = z.object({
+    profileId: z.string().optional(),
+    timeoutMs: z.number().int().positive().optional()
+  })
+  const input = schema.parse(raw ?? {})
+  const profileId = input.profileId
+  if (!profileId) {
+    return {
+      ok: false,
+      state: null,
+      queueRunning: 0,
+      queueQueued: 0,
+      localHold: false,
+      message: '请先登录'
+    }
+  }
+  const sec = getProfileSecret(profileId)
+  if (!sec) {
+    return {
+      ok: false,
+      state: null,
+      queueRunning: 0,
+      queueQueued: 0,
+      localHold: false,
+      message: '配置不存在'
+    }
+  }
+  return fetchGpuStatus({
+    baseUrl: sec.profile.baseUrl,
+    apiKey: sec.apiKey,
+    timeoutMs: input.timeoutMs || sec.profile.timeoutMs || 8_000
+  })
 }

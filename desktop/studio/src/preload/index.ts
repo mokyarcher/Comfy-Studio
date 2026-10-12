@@ -14,6 +14,7 @@ const api = {
   setActiveProfile: (id: string) => ipcRenderer.invoke('studio:setActiveProfile', id),
   setDefaultProfile: (id: string) => ipcRenderer.invoke('studio:setActiveProfile', id),
   testConnection: (input: unknown) => ipcRenderer.invoke('studio:testConnection', input),
+  getGpuStatus: (input: unknown) => ipcRenderer.invoke('studio:getGpuStatus', input),
 
   generateImage: (input: unknown) => ipcRenderer.invoke('studio:generateImage', input),
   uploadImage: (input: unknown) => ipcRenderer.invoke('studio:uploadImage', input),
@@ -36,7 +37,9 @@ const api = {
     ipcRenderer.invoke('gallery:toggleFavorite', { id, favorite }),
   exportImage: (id: string) => ipcRenderer.invoke('studio:exportImage', id),
   openInFolder: (id: string) => ipcRenderer.invoke('studio:openInFolder', id),
+  openGalleryFile: (id: string) => ipcRenderer.invoke('gallery:openFile', id),
   readGalleryDataUrl: (id: string) => ipcRenderer.invoke('gallery:readDataUrl', id),
+  getGalleryMediaUrl: (id: string) => ipcRenderer.invoke('gallery:getMediaUrl', id),
   saveImageFromDataUrl: (input: unknown) => ipcRenderer.invoke('gallery:saveFromDataUrl', input),
   clearGallery: () => ipcRenderer.invoke('studio:clearGallery'),
   openGalleryFolder: () => ipcRenderer.invoke('studio:openGalleryFolder'),
@@ -53,9 +56,14 @@ const api = {
   saveSettings: (input: unknown) => ipcRenderer.invoke('studio:saveSettings', input),
 
   polishAi: (input: unknown) => ipcRenderer.invoke('polish:ai', input),
+  translatePrompt: (input: unknown) => ipcRenderer.invoke('polish:translate', input),
   getAiPolishSettings: () => ipcRenderer.invoke('polish:getAiSettings'),
   saveAiPolishSettings: (input: unknown) => ipcRenderer.invoke('polish:saveAiSettings', input),
   testAiPolish: () => ipcRenderer.invoke('polish:testAi'),
+
+  listTaskHistory: () => ipcRenderer.invoke('tasks:listHistory'),
+  saveTaskHistory: (tasks: unknown) => ipcRenderer.invoke('tasks:saveHistory', tasks),
+  clearTaskHistory: () => ipcRenderer.invoke('tasks:clearHistory'),
 
   listPrompts: () => ipcRenderer.invoke('prompts:list'),
   saveTemplate: (input: unknown) => ipcRenderer.invoke('prompts:saveTemplate', input),
@@ -64,6 +72,10 @@ const api = {
   deletePhrase: (id: string) => ipcRenderer.invoke('prompts:deletePhrase', id),
   listOfficialPrompts: () => ipcRenderer.invoke('prompts:listOfficial'),
   refreshOfficialPrompts: (input: unknown) => ipcRenderer.invoke('prompts:refreshOfficial', input),
+  checkOfficialUpdate: (input: unknown) => ipcRenderer.invoke('prompts:checkOfficialUpdate', input),
+  listSharedPrompts: (input: unknown) => ipcRenderer.invoke('prompts:listShared', input),
+  shareToSharedLibrary: (input: unknown) => ipcRenderer.invoke('prompts:shareToShared', input),
+  deleteSharedPrompt: (input: unknown) => ipcRenderer.invoke('prompts:deleteShared', input),
 
   windowMinimize: () => ipcRenderer.invoke('studio:windowMinimize'),
   windowMaximize: () => ipcRenderer.invoke('studio:windowMaximize'),

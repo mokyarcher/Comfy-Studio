@@ -11,6 +11,7 @@ import {
 
 export function SettingsPage() {
   const settings = useAppStore((s) => s.settings)
+  const maxSteps = useAppStore((s) => s.serverLimits.maxSteps)
   const appVersion = useAppStore((s) => s.appVersion)
   const encryptionAvailable = useAppStore((s) => s.encryptionAvailable)
   const showToast = useAppStore((s) => s.showToast)
@@ -73,7 +74,7 @@ export function SettingsPage() {
       <div className="mb-5">
         <h1 className="page-title flex items-center gap-2">
           <Settings className="h-5 w-5 text-primary" />
-          设置
+          参数设置
         </h1>
       </div>
 
@@ -102,13 +103,19 @@ export function SettingsPage() {
                 />
               </div>
               <div>
-                <label className="label">Steps</label>
+                <label className="label">默认步数</label>
                 <input
                   type="number"
+                  min={1}
+                  max={maxSteps}
                   className="input"
                   value={settings.defaultSteps}
-                  onChange={(e) => void update({ defaultSteps: Number(e.target.value) || 25 })}
+                  onChange={(e) => {
+                    const n = Number(e.target.value) || 25
+                    void update({ defaultSteps: Math.max(1, Math.min(maxSteps, n)) })
+                  }}
                 />
+                <p className="mt-1 text-[11px] text-muted">上限 {maxSteps}（服务端）</p>
               </div>
               <div>
                 <label className="label">超时（秒）</label>

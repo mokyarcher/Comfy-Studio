@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings
-from app.prompt_polish_prompt import AI_POLISH_SYSTEM_PROMPT
+from app.prompt_polish_prompt import select_polish_system_prompt
 from app.schemas import PromptPolishRequest, PromptPolishResponse, PromptPolishConflict
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,10 @@ def _join_url(base: str, path: str) -> str:
 
 
 def parse_model_payload(raw: dict[str, Any], request: PromptPolishRequest) -> PromptPolishResponse:
-    enhanced = str(raw.get("enhanced_prompt") or "").strip()
+    # Accept director-doc aliases (positive_prompt) as well as legacy enhanced_*.
+    enhanced = str(
+        raw.get("enhanced_prompt") or raw.get("positive_prompt") or ""
+    ).strip()
     if not enhanced:
         raise PromptPolishError("empty", "上游模型未返回有效提示词", 502)
 
@@ -57,24 +60,50 @@ def parse_model_payload(raw: dict[str, Any], request: PromptPolishRequest) -> Pr
                 )
             )
 
-    def _str_list(key: str) -> list[str]:
-        val = raw.get(key) or []
-        if not isinstance(val, list):
-            return []
-        return [str(x) for x in val if str(x).strip()]
+    def _str_list(*keys: str) -> list[str]:
+        out: list[str] = []
+        for key in keys:
+            val = raw.get(key) or []
+            if isinstance(val, list):
+                out.extend(str(x) for x in val if str(x).strip())
+            elif isinstance(val, str) and val.strip():
+                out.append(val.strip())
+        # de-dupe preserve order
+        seen: set[str] = set()
+        uniq: list[str] = []
+        for x in out:
+            if x in seen:
+                continue
+            seen.add(x)
+            uniq.append(x)
+        return uniq
 
     neg = raw.get("enhanced_negative_prompt")
+    if neg is None:
+        neg = raw.get("negative_prompt")
     if neg is not None:
         neg = str(neg).strip() or None
+
+    categories = _str_list("matched_categories")
+    scene = raw.get("scene_type")
+    if isinstance(scene, str) and scene.strip() and scene.strip() not in categories:
+        categories = [scene.strip(), *categories]
+
+    preserved = _str_list("preserved_constraints", "consistency_constraints")
+    assumptions = _str_list("assumptions", "risk_notes")
+    intent = raw.get("intent_summary")
+    added = _str_list("added_details")
+    if isinstance(intent, str) and intent.strip():
+        added = [f"意图：{intent.strip()}", *added]
 
     return PromptPolishResponse(
         enhanced_prompt=enhanced,
         enhanced_negative_prompt=neg if neg else request.negative_prompt,
-        added_details=_str_list("added_details"),
-        preserved_constraints=_str_list("preserved_constraints"),
-        assumptions=_str_list("assumptions"),
+        added_details=added,
+        preserved_constraints=preserved,
+        assumptions=assumptions,
         conflicts=conflicts,
-        matched_categories=_str_list("matched_categories"),
+        matched_categories=categories,
         model_profile=request.model_profile,
         output_language=request.output_language,
         provider="gateway",
@@ -93,13 +122,18 @@ async def polish_via_upstream(
     if not settings.polish_ai_model:
         raise PromptPolishError("not_configured", "服务端未配置 POLISH_AI_MODEL", 503)
 
+    system_prompt = select_polish_system_prompt(request.generation_mode)
     user_payload = {
         "original_prompt": request.prompt,
         "original_negative_prompt": request.negative_prompt or "",
         "model_profile": request.model_profile,
         "output_language": request.output_language,
         "detail": request.detail,
-        "instructions": "请按 system 要求返回 JSON。不要返回 markdown 围栏。",
+        "generation_mode": request.generation_mode,
+        "instructions": (
+            "请按 system 要求返回 JSON（不要 markdown 围栏）。"
+            "必须同时给出 enhanced_prompt 与非空的 enhanced_negative_prompt。"
+        ),
     }
 
     url = _join_url(settings.polish_ai_base_url, "/chat/completions")
@@ -109,7 +143,7 @@ async def polish_via_upstream(
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
         "messages": [
-            {"role": "system", "content": AI_POLISH_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
         ],
     }

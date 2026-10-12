@@ -9,6 +9,22 @@ import type {
 import { DEFAULT_AI_POLISH_PUBLIC, DEFAULT_POLISH_PREFS } from '../../../../../shared/prompt-polish/types'
 import { useAppStore } from '../../../stores/appStore'
 
+/** Majority script wins: more CJK → Chinese, more Latin → English. */
+export function detectPromptDirection(
+  ...parts: string[]
+): 'en2zh' | 'zh2en' | null {
+  const text = parts.join('\n')
+  let latin = 0
+  let cjk = 0
+  for (const ch of text) {
+    if (/[A-Za-z]/.test(ch)) latin += 1
+    else if (/[\u4e00-\u9fff]/.test(ch)) cjk += 1
+  }
+  if (latin === 0 && cjk === 0) return null
+  if (cjk === latin) return null
+  return cjk > latin ? 'zh2en' : 'en2zh'
+}
+
 export function usePromptPolish() {
   const settings = useAppStore((s) => s.settings)
   const showToast = useAppStore((s) => s.showToast)
@@ -25,6 +41,12 @@ export function usePromptPolish() {
   const [savedOriginal, setSavedOriginal] = useState<string | null>(null)
   const [savedOriginalNegative, setSavedOriginalNegative] = useState<string | null>(null)
   const [polishing, setPolishing] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  /** Snapshot before last draft translate (独立于润色恢复). */
+  const [translateUndo, setTranslateUndo] = useState<{
+    prompt: string
+    negative: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aiSettings, setAiSettings] = useState<AiPolishSettingsPublic>(DEFAULT_AI_POLISH_PUBLIC)
   const [conflictAck, setConflictAck] = useState(false)
@@ -40,6 +62,7 @@ export function usePromptPolish() {
     setResult(null)
     setSavedOriginal(null)
     setSavedOriginalNegative(null)
+    setTranslateUndo(null)
     setError(null)
     setConflictAck(false)
   }, [draftClearSeq])
@@ -91,25 +114,32 @@ export function usePromptPolish() {
     setError(null)
     setConflictAck(false)
     try {
+      const generationMode = draft.mode
+      const profileForMode = generationMode === 'image_to_video' ? 'wan' : modelProfile
       const res = await window.studio.polishAi({
         prompt,
         negativePrompt,
         outputLanguage,
         detail,
-        modelProfile,
+        modelProfile: profileForMode,
+        generationMode,
         profileId: activeProfileId || undefined
       })
       setResult(res)
       setSavedOriginal(res.originalPrompt)
       setSavedOriginalNegative(res.originalNegativePrompt ?? negativePrompt ?? '')
+      const nextNegative = (res.enhancedNegativePrompt ?? '').trim() || negativePrompt
       setDraft({
         prompt: res.enhancedPrompt,
-        negativePrompt: res.enhancedNegativePrompt ?? negativePrompt,
-        showNegative:
-          draft.showNegative ||
-          Boolean(res.enhancedNegativePrompt && res.enhancedNegativePrompt !== negativePrompt)
+        negativePrompt: nextNegative,
+        showNegative: true
       })
-      showToast('success', 'AI 润色已写入上方提示词')
+      showToast(
+        'success',
+        generationMode === 'image_to_video'
+          ? '视频镜头润色已写入正向与负向提示词'
+          : 'AI 润色已写入正向与负向提示词'
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : '润色失败'
       setError(message)
@@ -120,6 +150,7 @@ export function usePromptPolish() {
   }, [
     draft.prompt,
     draft.negativePrompt,
+    draft.mode,
     draft.showNegative,
     outputLanguage,
     detail,
@@ -128,6 +159,83 @@ export function usePromptPolish() {
     showToast,
     setDraft
   ])
+
+  const translateDraft = useCallback(async () => {
+    const prompt = draft.prompt
+    const negativePrompt = draft.negativePrompt
+    if (!prompt.trim() && !negativePrompt.trim()) {
+      setError('请先填写提示词')
+      showToast('error', '请先填写提示词')
+      return
+    }
+    if (!activeProfileId) {
+      setError('请先登录')
+      showToast('error', '请先登录')
+      return
+    }
+    const direction = detectPromptDirection(prompt, negativePrompt)
+    if (!direction) {
+      setError('无法判断中英文占比，请先明确填写提示词')
+      showToast('error', '无法判断中英文占比')
+      return
+    }
+    setTranslating(true)
+    setError(null)
+    const snapshot = { prompt, negative: negativePrompt }
+    try {
+      const jobs: Array<Promise<string>> = [
+        prompt.trim()
+          ? window.studio
+              .translatePrompt({
+                profileId: activeProfileId,
+                text: prompt,
+                direction
+              })
+              .then((r: { translation: string }) => r.translation)
+          : Promise.resolve(prompt),
+        negativePrompt.trim()
+          ? window.studio
+              .translatePrompt({
+                profileId: activeProfileId,
+                text: negativePrompt,
+                direction
+              })
+              .then((r: { translation: string }) => r.translation)
+          : Promise.resolve(negativePrompt)
+      ]
+      const [nextPrompt, nextNegative] = await Promise.all(jobs)
+      setDraft({
+        prompt: nextPrompt,
+        negativePrompt: nextNegative,
+        showNegative: Boolean(nextNegative.trim()) || draft.showNegative
+      })
+      setTranslateUndo(snapshot)
+      showToast('success', direction === 'en2zh' ? '已译为中文' : '已译为英文')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '翻译失败'
+      setError(message)
+      showToast('error', message)
+    } finally {
+      setTranslating(false)
+    }
+  }, [
+    draft.prompt,
+    draft.negativePrompt,
+    draft.showNegative,
+    activeProfileId,
+    showToast,
+    setDraft
+  ])
+
+  const restoreTranslate = useCallback(() => {
+    if (!translateUndo) return
+    setDraft({
+      prompt: translateUndo.prompt,
+      negativePrompt: translateUndo.negative
+    })
+    setTranslateUndo(null)
+    showToast('info', '已恢复翻译前原文')
+  }, [translateUndo, setDraft, showToast])
 
   const restoreOriginal = useCallback(() => {
     if (savedOriginal === null) return
@@ -159,11 +267,15 @@ export function usePromptPolish() {
     result,
     savedOriginal,
     polishing,
+    translating,
+    translateUndo,
     error,
     aiSettings,
     conflictAck,
     setConflictAck,
     polish,
+    translateDraft,
+    restoreTranslate,
     restoreOriginal,
     copyPrompt,
     hasWarning,

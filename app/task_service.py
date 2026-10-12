@@ -18,6 +18,7 @@ from app.schemas import (
     GenerateImageRequest,
     ImageMeta,
     PurgeTaskResponse,
+    TaskProgress,
     TaskResultResponse,
     TaskStatus,
     TaskStatusResponse,
@@ -48,6 +49,21 @@ class TaskService:
         self.registry = registry
         self.comfy = comfy
         self.settings.image_output_dir.mkdir(parents=True, exist_ok=True)
+        # In-memory ComfyUI sampler progress keyed by task_id (not persisted)
+        self._progress: dict[str, TaskProgress] = {}
+
+    def set_progress(self, task_id: str, value: int, max_steps: int) -> None:
+        if max_steps <= 0:
+            return
+        value = max(0, min(int(value), int(max_steps)))
+        percent = round(100.0 * value / max_steps, 1)
+        self._progress[task_id] = TaskProgress(value=value, max=max_steps, percent=percent)
+
+    def clear_progress(self, task_id: str) -> None:
+        self._progress.pop(task_id, None)
+
+    def get_progress(self, task_id: str) -> TaskProgress | None:
+        return self._progress.get(task_id)
 
     def submit(self, request: GenerateImageRequest) -> TaskRecord:
         if not self.registry.has(request.mode):
@@ -86,6 +102,9 @@ class TaskService:
         q: dict[str, int] = {"queue_position": 0, "queue_ahead": 0, "queue_size": 0}
         if task.status in ("queued", "running"):
             q = self.db.queue_info(task_id)
+        progress = (
+            self.get_progress(task_id) if task.status == TaskStatus.running.value else None
+        )
         return TaskStatusResponse(
             task_id=task.task_id,
             status=TaskStatus(task.status),
@@ -99,6 +118,7 @@ class TaskService:
             queue_ahead=q["queue_ahead"] if task.status in ("queued", "running") else None,
             queue_size=q["queue_size"] or None,
             max_queue_size=self.settings.max_queue_size,
+            progress=progress,
         )
 
     def get_result(self, task_id: str) -> TaskResultResponse | None:
@@ -140,6 +160,7 @@ class TaskService:
 
     async def process_task(self, task: TaskRecord) -> None:
         self.db.mark_running(task.task_id)
+        self.clear_progress(task.task_id)
         request = task.request
         try:
             mode = str(request.get("mode") or "txt2img")
@@ -155,13 +176,21 @@ class TaskService:
                 images=request.get("images"),
                 length=request.get("length"),
             )
-            prompt_id = await self.comfy.submit_prompt(workflow)
+            client_id = str(uuid.uuid4())
+            prompt_id = await self.comfy.submit_prompt(workflow, client_id=client_id)
             self.db.set_prompt_id(task.task_id, prompt_id)
             job_timeout = None
             if mode == "image_to_video":
                 job_timeout = float(self.settings.comfyui_video_job_timeout_seconds)
+
+            def _on_progress(value: int, max_steps: int) -> None:
+                self.set_progress(task.task_id, value, max_steps)
+
             history = await self.comfy.wait_for_completion(
-                prompt_id, timeout_seconds=job_timeout
+                prompt_id,
+                timeout_seconds=job_timeout,
+                client_id=client_id,
+                on_progress=_on_progress,
             )
             await self._persist_images(task.task_id, history, request=request)
             self.db.mark_succeeded(task.task_id)
@@ -175,6 +204,8 @@ class TaskService:
         except Exception as exc:  # noqa: BLE001
             self.db.mark_failed(task.task_id, "internal_error", "Unexpected processing error")
             logger.exception("Unexpected error task_id=%s: %s", task.task_id, exc)
+        finally:
+            self.clear_progress(task.task_id)
 
     async def recover_running_tasks(self) -> None:
         running = self.db.list_tasks_by_status("running")

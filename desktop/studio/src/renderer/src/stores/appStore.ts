@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { ApiProfile, AppSettings, EditImageSlot, LocalTask } from '../../../shared/types'
-import { DEFAULT_SETTINGS } from '../../../shared/types'
+import type { ApiProfile, AppSettings, EditImageSlot, LocalTask, ServerLimits } from '../../../shared/types'
+import { DEFAULT_SERVER_LIMITS, DEFAULT_SETTINGS } from '../../../shared/types'
 
 export type NavPage =
   | 'create'
@@ -36,6 +36,8 @@ interface AppState {
   activeProfileId: string | null
   connectionOk: boolean | null
   connectionMessage: string
+  /** Deploy limits from last successful /health/ready */
+  serverLimits: ServerLimits
   settings: AppSettings
   appVersion: string
   draft: CreateDraft
@@ -43,6 +45,7 @@ interface AppState {
   tasks: LocalTask[]
   upsertTask: (task: LocalTask) => void
   removeTask: (id: string) => void
+  clearHistoryTasks: () => Promise<void>
   busy: boolean
   setBusy: (v: boolean) => void
   toast: { type: 'info' | 'success' | 'error'; message: string } | null
@@ -64,10 +67,31 @@ interface AppState {
   }) => void
   draftClearSeq: number
   clearCreatePrompts: () => void
+  /** Hide create-page preview after 清屏; survives nav; not gallery delete. */
+  previewDismissed: boolean
+  setPreviewDismissed: (v: boolean) => void
 }
 
 function sessionLoggedIn(profiles: ApiProfile[]): boolean {
   return profiles.some((p) => p.hasApiKey)
+}
+
+function isActiveStatus(status: LocalTask['status']): boolean {
+  return (
+    status === 'waiting' ||
+    status === 'submitting' ||
+    status === 'queued' ||
+    status === 'running'
+  )
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+function schedulePersistTasks(tasks: LocalTask[]): void {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    void window.studio.saveTaskHistory(tasks)
+  }, 250)
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -81,6 +105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeProfileId: null,
   connectionOk: null,
   connectionMessage: '尚未检测连接',
+  serverLimits: { ...DEFAULT_SERVER_LIMITS },
   settings: { ...DEFAULT_SETTINGS },
   appVersion: '1.0.0',
   draft: {
@@ -97,25 +122,36 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setDraft: (partial) => set({ draft: { ...get().draft, ...partial } }),
   tasks: [],
-  upsertTask: (task) =>
+  upsertTask: (task) => {
     set((s) => {
       const idx = s.tasks.findIndex((t) => t.id === task.id)
       if (idx < 0) return { tasks: [task, ...s.tasks] }
       const next = [...s.tasks]
       next[idx] = task
       return { tasks: next }
-    }),
-  removeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
+    })
+    schedulePersistTasks(get().tasks)
+  },
+  removeTask: (id) => {
+    set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }))
+    schedulePersistTasks(get().tasks)
+  },
+  clearHistoryTasks: async () => {
+    const keep = get().tasks.filter((t) => isActiveStatus(t.status))
+    set({ tasks: keep })
+    await window.studio.saveTaskHistory(keep)
+  },
   busy: false,
-  setBusy: (v) => set({ busy: v }),
+  setBusy: (v) => set(v ? { busy: true, previewDismissed: false } : { busy: false }),
   toast: null,
   showToast: (type, message) => set({ toast: { type, message } }),
   clearToast: () => set({ toast: null }),
 
   loadBootstrap: async () => {
-    const [profileRes, settingsRes] = await Promise.all([
+    const [profileRes, settingsRes, history] = await Promise.all([
       window.studio.listProfiles(),
-      window.studio.getSettings()
+      window.studio.getSettings(),
+      window.studio.listTaskHistory() as Promise<LocalTask[]>
     ])
     const defaultProfile =
       profileRes.profiles.find((p: ApiProfile) => p.isDefault) ?? profileRes.profiles[0]
@@ -129,6 +165,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeProfileId: defaultProfile?.id ?? null,
       settings: settingsRes.settings,
       appVersion: settingsRes.version,
+      tasks: Array.isArray(history) ? history : [],
       draft: {
         ...get().draft,
         width: settingsRes.settings.defaultWidth,
@@ -152,7 +189,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeProfileId: null,
       connectionOk: false,
       connectionMessage: '已退出登录',
-      tasks: [],
       page: 'create'
     })
   },
@@ -187,11 +223,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     try {
       const result = await window.studio.testConnection({ profileId: id })
+      const nextLimits =
+        result.ok &&
+        (result.maxSteps != null || result.maxWidth != null || result.maxHeight != null)
+          ? {
+              maxSteps: result.maxSteps ?? get().serverLimits.maxSteps,
+              maxWidth: result.maxWidth ?? get().serverLimits.maxWidth,
+              maxHeight: result.maxHeight ?? get().serverLimits.maxHeight
+            }
+          : null
       set({
         connectionOk: result.ok,
         connectionMessage: result.ok
           ? `已连接 · ${result.latencyMs} ms${result.comfyui ? ` · ComfyUI ${result.comfyui}` : ''}`
-          : result.message
+          : result.message,
+        ...(nextLimits
+          ? {
+              serverLimits: nextLimits,
+              draft: {
+                ...get().draft,
+                steps: Math.min(get().draft.steps, nextLimits.maxSteps)
+              }
+            }
+          : {})
       })
       await get().refreshProfiles()
     } catch (err) {
@@ -231,8 +285,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         showNegative: false,
         editImages: [null, null]
       },
-      tasks: [],
-      draftClearSeq: get().draftClearSeq + 1
+      draftClearSeq: get().draftClearSeq + 1,
+      previewDismissed: true
     })
-  }
+  },
+  previewDismissed: false,
+  setPreviewDismissed: (v) => set({ previewDismissed: v })
 }))

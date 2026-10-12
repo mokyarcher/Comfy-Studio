@@ -30,8 +30,16 @@
 成功 `200`：
 
 ```json
-{ "status": "ready", "comfyui": "up" }
+{
+  "status": "ready",
+  "comfyui": "up",
+  "max_steps": 40,
+  "max_width": 1024,
+  "max_height": 1024
+}
 ```
+
+`max_*` 来自服务端 `.env`（`MAX_STEPS` / `MAX_WIDTH` / `MAX_HEIGHT`），供 Studio 限制创作页输入。
 
 ComfyUI 不可达时 `503`：
 
@@ -60,7 +68,9 @@ Header：`X-API-Key`、`Content-Type: application/json`
 
 - `prompt` 必填
 - `seed` 省略时由服务端随机
-- 尺寸需为 `SIZE_MULTIPLE`（默认 8）的倍数，且不超过配置上限
+- 尺寸需为 `SIZE_MULTIPLE`（默认 8）的倍数
+- 文生图 / 图像编辑：每边 ≤ `MAX_WIDTH`/`MAX_HEIGHT`（默认 1024），且像素 ≤ `MAX_IMAGE_PIXELS`（默认 1024²）
+- 图生视频：须落在 `MAX_VIDEO_LONG_SIDE`×`MAX_VIDEO_SHORT_SIDE` 框内（默认 800×496 或 496×800）
 
 成功 `202`：
 
@@ -73,6 +83,14 @@ Header：`X-API-Key`、`Content-Type: application/json`
 ### `GET /v1/tasks/{task_id}`
 
 状态：`queued` | `running` | `succeeded` | `failed`
+
+`running` 且 ComfyUI 已开始采样时，可能带：
+
+```json
+{ "progress": { "value": 9, "max": 20, "percent": 45.0 } }
+```
+
+来自 ComfyUI WebSocket `progress`（当前采样段步数；多节点工作流会重置）。无 tick 时字段为 `null`/省略。
 
 ### `GET /v1/tasks/{task_id}/result`
 
@@ -98,14 +116,53 @@ Header：`X-API-Key`、`Content-Type: application/json`
   "negative_prompt": "",
   "output_language": "match_input",
   "detail": "standard",
-  "model_profile": "unknown"
+  "model_profile": "unknown",
+  "generation_mode": "txt2img"
 }
 ```
+
+- `generation_mode`：`txt2img` | `image_edit` | `image_to_video`（默认 `txt2img`）。`image_to_video` 时服务端使用导演式视频润色 system prompt（运动/运镜优先，尊重起始图）。
+- `model_profile`：`sd15` | `sdxl` | `flux` | `sd3` | `wan` | `unknown`（视频建议 `wan`）。
 
 成功 `200`：含 `enhanced_prompt`、`added_details`、`quota` 等。  
 配额用尽 / 过频：`429`；服务端未配置：`503`。
 
 服务端 `.env`：`POLISH_ENABLED`、`POLISH_AI_BASE_URL`、`POLISH_AI_API_KEY`、`POLISH_AI_MODEL`、`POLISH_RATE_PER_MINUTE`。
+
+### `GET /v1/system/gpu`
+
+任意已鉴权用户可查 GPU / 队列负荷（Studio 顶栏「空闲 / 繁忙」）。
+
+成功 `200`：
+
+```json
+{
+  "state": "idle",
+  "queue_running": 0,
+  "queue_queued": 0,
+  "local_hold": false
+}
+```
+
+- `state`：`idle` | `busy`（`local_hold` 或队列有 running/queued 即为 `busy`）
+- 需 `X-API-Key`；未鉴权 `401`
+
+### 提示词译文
+
+- `POST /v1/prompt/translate` `{ "text": "...", "direction": "en2zh"|"zh2en" }` → `{ "translation": "...", "source": "...", "direction": "..." }`
+- `direction` 默认 `en2zh`（兼容画廊「查看译文」）；`zh2en` 供创作页中译英
+- 复用润色上游（`POLISH_*`）；仅限流，不扣日润色配额
+- **服务端持久化缓存**（`data/translate_cache.db`，按原文 SHA-256；`zh2en` 与 `en2zh` 分键）：命中则不再打上游，全用户共享
+- 服务端只返回译文；是否写回输入框由客户端决定（创作页双译会写回，画廊仅展示）
+
+### 共享提示词库（玩家投稿，与官方库分离）
+
+需 `X-API-Key`。只存模板，不含短语。
+
+- `GET /v1/prompt-library/shared` → `{ items: [{ id, title, prompt, negative_prompt, tags, author_name, author_username, created_at, mine }], count }`
+- `POST /v1/prompt-library/shared` `{ title, prompt, negative_prompt?, tags? }` → 201，来源取当前用户
+- `DELETE /v1/prompt-library/shared/{id}` → 仅作者
+- `GET /v1/admin/prompt-library/shared` / `DELETE /v1/admin/prompt-library/shared/{id}` → 管理员
 
 ### 多用户（注册待审 + 名额池）
 

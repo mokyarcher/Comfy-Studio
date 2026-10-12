@@ -1,4 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
+import {
+  execFileSync,
+  spawn,
+  type ChildProcessWithoutNullStreams
+} from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join } from 'path'
 import type {
@@ -61,10 +65,14 @@ function attachProcessLogs(
 
 function killTree(pid: number): void {
   if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-      windowsHide: true,
-      stdio: 'ignore'
-    })
+    try {
+      execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+    } catch {
+      /* already gone */
+    }
   } else {
     try {
       process.kill(pid, 'SIGTERM')
@@ -72,6 +80,44 @@ function killTree(pid: number): void {
       /* ignore */
     }
   }
+}
+
+/** PIDs with a TCP LISTENING socket on the given port (Windows / Unix). */
+function findListeningPids(port: number): number[] {
+  const pids = new Set<number>()
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('netstat', ['-ano', '-p', 'TCP'], {
+        encoding: 'utf8',
+        windowsHide: true
+      })
+      for (const line of out.split(/\r?\n/)) {
+        if (!/LISTENING/i.test(line)) continue
+        const parts = line.trim().split(/\s+/)
+        if (parts.length < 4) continue
+        const local = parts[1] || ''
+        const m = local.match(/:(\d+)$/)
+        if (!m || Number(m[1]) !== port) continue
+        const pid = Number(parts[parts.length - 1])
+        if (Number.isFinite(pid) && pid > 0) pids.add(pid)
+      }
+    } else {
+      const out = execFileSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], {
+        encoding: 'utf8'
+      })
+      for (const line of out.split(/\n/)) {
+        const pid = Number(line.trim())
+        if (Number.isFinite(pid) && pid > 0) pids.add(pid)
+      }
+    }
+  } catch {
+    /* none / tool missing */
+  }
+  return Array.from(pids)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
 }
 
 export class ServiceManager {
@@ -156,6 +202,27 @@ export class ServiceManager {
       }
     }
 
+    const port = this.config.apiPort
+    const listeners = findListeningPids(port)
+    if (listeners.length > 0) {
+      await this.refreshProbes()
+      if (this.localProbe.ok) {
+        this.apiRuntime = {
+          state: 'running',
+          startedByApp: false,
+          pid: listeners[0]
+        }
+        return {
+          ok: false,
+          message: `端口 ${port} 已被占用（PID ${listeners.join(', ')}）。请先点「停止」或「强制停止」。`
+        }
+      }
+      return {
+        ok: false,
+        message: `端口 ${port} 已被占用（PID ${listeners.join(', ')}），且健康检查未通过。请先「强制停止」再启动。`
+      }
+    }
+
     this.apiRuntime = {
       state: 'starting',
       startedByApp: true,
@@ -229,19 +296,69 @@ export class ServiceManager {
   }
 
   async stopApi(): Promise<ActionResult> {
-    if (!this.apiProc?.pid) {
-      this.apiRuntime = emptyRuntime('stopped')
-      return { ok: true, message: '没有由本应用启动的 API 进程' }
-    }
+    return this.stopApiInternal(false)
+  }
+
+  /** Kill tracked child and any process listening on the configured API port. */
+  async forceStopApi(): Promise<ActionResult> {
+    return this.stopApiInternal(true)
+  }
+
+  private async stopApiInternal(forceByPort: boolean): Promise<ActionResult> {
+    const port = this.config.apiPort
     this.apiRuntime = { ...this.apiRuntime, state: 'stopping' }
-    const pid = this.apiProc.pid
-    this.logs.append('api', 'system', `停止 API PID=${pid}`)
-    killTree(pid)
-    this.apiProc = null
-    await new Promise((r) => setTimeout(r, 500))
+    const killed = new Set<number>()
+
+    if (this.apiProc?.pid) {
+      this.logs.append('api', 'system', `停止本应用启动的 API PID=${this.apiProc.pid}`)
+      killTree(this.apiProc.pid)
+      killed.add(this.apiProc.pid)
+      this.apiProc = null
+    }
+
+    const listeners = findListeningPids(port)
+    if (listeners.length === 0 && killed.size === 0) {
+      this.apiRuntime = emptyRuntime('stopped')
+      await this.refreshProbes()
+      return {
+        ok: true,
+        message: forceByPort
+          ? `端口 ${port} 上没有监听进程`
+          : '没有由本应用启动的 API，且端口空闲'
+      }
+    }
+
+    // Always clear port listeners on stop (covers Gateway restart orphans).
+    for (const pid of listeners) {
+      if (killed.has(pid)) continue
+      this.logs.append('api', 'system', `按端口 ${port} 结束占用进程 PID=${pid}`)
+      killTree(pid)
+      killed.add(pid)
+    }
+
+    await sleep(600)
+    const still = findListeningPids(port)
+    if (still.length > 0 && forceByPort) {
+      for (const pid of still) {
+        this.logs.append('api', 'system', `再次强制结束 PID=${pid}`)
+        killTree(pid)
+      }
+      await sleep(400)
+    }
+
     this.apiRuntime = emptyRuntime('stopped')
     await this.refreshProbes()
-    return { ok: true, message: '已停止由本应用启动的 API' }
+    const left = findListeningPids(port)
+    if (left.length > 0) {
+      return {
+        ok: false,
+        message: `已尝试停止，但端口 ${port} 仍被占用（PID ${left.join(', ')}）`
+      }
+    }
+    return {
+      ok: true,
+      message: `已停止 API（结束 PID ${Array.from(killed).join(', ')}，端口 ${port} 已释放）`
+    }
   }
 
   async startFrp(): Promise<ActionResult> {

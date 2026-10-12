@@ -26,7 +26,9 @@ export function loadConfig(): GatewayConfig {
       saveConfig(cfg)
       return cfg
     }
-    const raw = JSON.parse(readFileSync(path, 'utf-8')) as StoredConfig
+    // Strip UTF-8 BOM (e.g. PowerShell Set-Content -Encoding UTF8) so JSON.parse does not fail.
+    const text = readFileSync(path, 'utf-8').replace(/^\uFEFF/, '')
+    const raw = JSON.parse(text) as StoredConfig
     return GatewayConfigSchema.parse(raw.data ?? raw)
   } catch {
     return defaultConfig()

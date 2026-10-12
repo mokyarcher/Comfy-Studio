@@ -31,6 +31,12 @@ export function useGenerate() {
         seed: ev.seed !== undefined ? ev.seed : existing.seed,
         error: ev.error,
         progressMessage: ev.message ?? existing.progressMessage,
+        progress:
+          ev.phase === 'done' || ev.phase === 'failed'
+            ? null
+            : ev.progress !== undefined
+              ? ev.progress
+              : existing.progress,
         imageDataUrl: ev.imageDataUrl ?? existing.imageDataUrl,
         galleryId: ev.galleryItem?.id ?? existing.galleryId,
         updatedAt: new Date().toISOString(),
@@ -94,6 +100,7 @@ export function useGenerate() {
       id: localId,
       status: 'waiting',
       phase: 'waiting',
+      mode,
       prompt,
       negativePrompt,
       width,

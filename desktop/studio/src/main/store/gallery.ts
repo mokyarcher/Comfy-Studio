@@ -54,6 +54,8 @@ export function saveImageFromBuffer(payload: {
   favorite?: boolean
   mode?: 'txt2img' | 'image_edit' | 'image_to_video'
   contentType?: string
+  /** Wall-clock generate duration (ms) */
+  elapsedMs?: number | null
   /** Optional reference image bytes for image_edit / image_to_video */
   refBuffers?: Array<{ bytes: Buffer; filename?: string }>
 }): GalleryItem {
@@ -108,6 +110,10 @@ export function saveImageFromBuffer(payload: {
     profileId: payload.profileId,
     profileName: payload.profileName,
     mode: payload.mode ?? 'txt2img',
+    elapsedMs:
+      payload.elapsedMs != null && payload.elapsedMs > 0
+        ? Math.round(payload.elapsedMs)
+        : null,
     refPaths,
     showcaseId: null
   }
@@ -173,6 +179,17 @@ export function openInFolder(id: string): void {
   const item = data.items.find((i) => i.id === id)
   if (!item) throw new Error('作品不存在')
   shell.showItemInFolder(item.path)
+}
+
+/** Open media with the OS default app (reliable for Comfy video playback). */
+export async function openGalleryFile(id: string): Promise<{ ok: boolean; message?: string }> {
+  const item = getGalleryItem(id)
+  if (!item || !existsSync(item.path)) {
+    return { ok: false, message: '作品文件不存在' }
+  }
+  const err = await shell.openPath(item.path)
+  if (err) return { ok: false, message: err }
+  return { ok: true }
 }
 
 export function readImageAsDataUrl(id: string): string | null {

@@ -20,6 +20,8 @@ from app.logging_config import setup_logging
 from app.polish_quota import PolishQuotaStore
 from app.prompt_library_store import PromptLibraryStore
 from app.prompt_polish_service import PromptPolishError, polish_via_upstream
+from app.prompt_translate_service import translate_via_upstream, worth_translating
+from app.translate_cache_store import TranslateCacheStore
 from app.schemas import (
     AdminPatchUserRequest,
     AdminStatsResponse,
@@ -34,6 +36,7 @@ from app.schemas import (
     AuthRegisterResponse,
     GenerateImageRequest,
     GenerateImageResponse,
+    GpuStatusResponse,
     HealthLiveResponse,
     HealthReadyResponse,
     LocalHoldResponse,
@@ -42,6 +45,9 @@ from app.schemas import (
     PromptLibraryReplaceRequest,
     PromptLibraryResponse,
     PromptLibraryTemplate,
+    SharedPromptItemResponse,
+    SharedPromptListResponse,
+    SharedPromptShareRequest,
     UploadImageResponse,
     WorkflowModesResponse,
     PurgeTaskResponse,
@@ -51,10 +57,13 @@ from app.schemas import (
     PromptPolishRequest,
     PromptPolishResponse,
     PromptPolishStatusResponse,
+    PromptTranslateRequest,
+    PromptTranslateResponse,
     TaskResultResponse,
     TaskStatus,
     TaskStatusResponse,
 )
+from app.shared_prompt_store import SharedPromptStore
 from app.user_store import STATUS_ACTIVE, STATUS_DISABLED, STATUS_PENDING, STATUS_REJECTED
 from app.task_service import QueueFullError, TaskService, UnsupportedModeError
 from app.user_store import UserStore
@@ -79,6 +88,8 @@ class AppState:
     user_store: UserStore
     showcase: ShowcaseStore
     prompt_library: PromptLibraryStore
+    shared_prompts: SharedPromptStore
+    translate_cache: TranslateCacheStore
     retention_task: asyncio.Task[None] | None = None
 
 
@@ -127,6 +138,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.user_store = UserStore(settings.users_db_path)
     state.showcase = ShowcaseStore(settings.showcase_db_path, settings.showcase_files_dir)
     state.prompt_library = PromptLibraryStore(settings.prompt_library_path)
+    state.shared_prompts = SharedPromptStore(settings.shared_prompts_db_path)
+    state.translate_cache = TranslateCacheStore(settings.translate_cache_db_path)
     boot = state.user_store.ensure_bootstrap_admin(settings.api_key)
     if boot:
         logger.info("Bootstrapped admin user id=%s from .env API_KEY", boot.id)
@@ -182,7 +195,14 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={"status": "not_ready", "comfyui": "down"},
             )
-        return HealthReadyResponse(status="ready", comfyui="up")
+        s = state.settings
+        return HealthReadyResponse(
+            status="ready",
+            comfyui="up",
+            max_steps=s.max_steps,
+            max_width=s.max_width,
+            max_height=s.max_height,
+        )
 
     @app.post(
         "/v1/images/generate",
@@ -442,6 +462,7 @@ def create_app() -> FastAPI:
         height: int = Form(...),
         steps: int = Form(...),
         seed: int | None = Form(None),
+        elapsed_ms: int | None = Form(None),
         image: UploadFile = File(...),
         refs: list[UploadFile] | None = File(None),
     ) -> ShowcaseItemResponse:
@@ -489,6 +510,7 @@ def create_app() -> FastAPI:
             result_bytes=result_bytes,
             result_suffix=result_suffix,
             ref_blobs=ref_blobs,
+            elapsed_ms=elapsed_ms,
         )
         logger.info(
             "showcase share user=%s id=%s mode=%s refs=%s",
@@ -657,6 +679,66 @@ def create_app() -> FastAPI:
         )
         return result
 
+    @app.post(
+        "/v1/prompt/translate",
+        response_model=PromptTranslateResponse,
+        tags=["polish"],
+    )
+    async def translate_prompt(
+        body: PromptTranslateRequest,
+        auth: AuthContext = Depends(require_auth),
+    ) -> PromptTranslateResponse:
+        """Translate prompt text (en2zh / zh2en). Client decides whether to write into draft."""
+        s = state.settings
+        text = body.text
+        direction = body.direction
+        if not worth_translating(text, direction):
+            return PromptTranslateResponse(
+                translation=text, source=text, direction=direction
+            )
+
+        cached = state.translate_cache.get(text, direction)
+        if cached is not None:
+            logger.info(
+                "translate cache hit user=%s chars=%s dir=%s",
+                auth.user.id,
+                len(text),
+                direction,
+            )
+            return PromptTranslateResponse(
+                translation=cached, source=text, direction=direction
+            )
+
+        # Miss: rate-limit then call upstream (do not burn daily polish quota)
+        ok, err, _snap = state.polish_quota.check_and_consume(
+            auth.user.id, 0, s.polish_rate_per_minute
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": err or "rate_limited",
+                    "message": "翻译请求过于频繁，请稍后再试",
+                },
+            )
+        try:
+            out = await translate_via_upstream(s, text, direction)
+        except PromptPolishError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail={"code": exc.code, "message": exc.message},
+            ) from exc
+        state.translate_cache.put(text, out, direction)
+        logger.info(
+            "translate ok user=%s chars=%s dir=%s cached=1",
+            auth.user.id,
+            len(text),
+            direction,
+        )
+        return PromptTranslateResponse(
+            translation=out, source=text, direction=direction
+        )
+
     def admin_auth(auth: AuthContext = Depends(require_auth)) -> AuthContext:
         return require_admin(auth)
 
@@ -746,6 +828,23 @@ def create_app() -> FastAPI:
         snap = local_hold.snapshot()
         return LocalHoldResponse(**snap.to_public_dict())
 
+    def _gpu_status_response() -> GpuStatusResponse:
+        running = len(state.db.list_tasks_by_status("running"))
+        queued = len(state.db.list_tasks_by_status("queued"))
+        held = local_hold.is_held()
+        busy = held or running > 0 or queued > 0
+        return GpuStatusResponse(
+            state="busy" if busy else "idle",
+            queue_running=running,
+            queue_queued=queued,
+            local_hold=held,
+        )
+
+    @app.get("/v1/system/gpu", response_model=GpuStatusResponse, tags=["system"])
+    async def get_gpu_status(auth: AuthContext = Depends(require_auth)) -> GpuStatusResponse:
+        _ = auth
+        return _gpu_status_response()
+
     @app.get("/v1/local-hold", response_model=LocalHoldResponse, tags=["system"])
     async def get_local_hold(auth: AuthContext = Depends(require_auth)) -> LocalHoldResponse:
         _ = auth
@@ -827,6 +926,115 @@ def create_app() -> FastAPI:
             templates=[PromptLibraryTemplate(**t) for t in doc.templates],
             phrases=[PromptLibraryPhrase(**p) for p in doc.phrases],
         )
+
+    @app.get(
+        "/v1/prompt-library/shared",
+        response_model=SharedPromptListResponse,
+        tags=["prompt-library"],
+    )
+    async def list_shared_prompts(
+        auth: AuthContext = Depends(require_auth),
+        limit: int = 100,
+        offset: int = 0,
+    ) -> SharedPromptListResponse:
+        items = state.shared_prompts.list_all(limit=limit, offset=offset)
+        return SharedPromptListResponse(
+            items=[
+                SharedPromptItemResponse(
+                    **item.to_public_dict(viewer_user_id=auth.user.id)
+                )
+                for item in items
+            ],
+            count=len(items),
+        )
+
+    @app.post(
+        "/v1/prompt-library/shared",
+        response_model=SharedPromptItemResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["prompt-library"],
+    )
+    async def share_prompt_template(
+        body: SharedPromptShareRequest,
+        auth: AuthContext = Depends(require_auth),
+    ) -> SharedPromptItemResponse:
+        if not body.title or not body.prompt:
+            raise HTTPException(status_code=400, detail="title and prompt required")
+        item = state.shared_prompts.create(
+            title=body.title,
+            prompt=body.prompt,
+            negative_prompt=body.negative_prompt,
+            tags=body.tags,
+            author_user_id=auth.user.id,
+            author_name=auth.user.name or auth.user.username,
+            author_username=auth.user.username,
+        )
+        logger.info(
+            "shared_prompt create user=%s id=%s title=%s",
+            auth.user.id,
+            item.id,
+            item.title[:80],
+        )
+        return SharedPromptItemResponse(**item.to_public_dict(viewer_user_id=auth.user.id))
+
+    @app.delete(
+        "/v1/prompt-library/shared/{item_id}",
+        response_model=SharedPromptItemResponse,
+        tags=["prompt-library"],
+    )
+    async def delete_own_shared_prompt(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> SharedPromptItemResponse:
+        item = state.shared_prompts.get(item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Shared prompt not found")
+        if item.author_user_id != auth.user.id:
+            raise HTTPException(status_code=403, detail="only author can delete")
+        state.shared_prompts.delete(item_id)
+        return SharedPromptItemResponse(**item.to_public_dict(viewer_user_id=auth.user.id))
+
+    @app.get(
+        "/v1/admin/prompt-library/shared",
+        response_model=SharedPromptListResponse,
+        tags=["admin"],
+    )
+    async def admin_list_shared_prompts(
+        auth: AuthContext = Depends(admin_auth),
+        limit: int = 100,
+        offset: int = 0,
+    ) -> SharedPromptListResponse:
+        items = state.shared_prompts.list_all(limit=limit, offset=offset)
+        return SharedPromptListResponse(
+            items=[
+                SharedPromptItemResponse(
+                    **item.to_public_dict(viewer_user_id=auth.user.id)
+                )
+                for item in items
+            ],
+            count=len(items),
+        )
+
+    @app.delete(
+        "/v1/admin/prompt-library/shared/{item_id}",
+        response_model=SharedPromptItemResponse,
+        tags=["admin"],
+    )
+    async def admin_delete_shared_prompt(
+        item_id: str,
+        auth: AuthContext = Depends(admin_auth),
+    ) -> SharedPromptItemResponse:
+        item = state.shared_prompts.get(item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Shared prompt not found")
+        state.shared_prompts.delete(item_id)
+        logger.info(
+            "admin delete shared_prompt id=%s by=%s author=%s",
+            item_id,
+            auth.user.id,
+            item.author_user_id,
+        )
+        return SharedPromptItemResponse(**item.to_public_dict(viewer_user_id=auth.user.id))
 
     @app.get("/v1/admin/stats", response_model=AdminStatsResponse, tags=["admin"])
     async def admin_stats(auth: AuthContext = Depends(admin_auth)) -> AdminStatsResponse:

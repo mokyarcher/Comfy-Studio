@@ -124,10 +124,27 @@ class GenerateImageRequest(BaseModel):
         width = self.width
         height = self.height
         if width is not None and height is not None:
-            if width * height > settings.max_image_pixels:
-                raise ValueError(
-                    f"width*height exceeds max pixels {settings.max_image_pixels}"
-                )
+            if self.mode == "image_to_video":
+                long_side = max(width, height)
+                short_side = min(width, height)
+                if (
+                    long_side > settings.max_video_long_side
+                    or short_side > settings.max_video_short_side
+                ):
+                    raise ValueError(
+                        "video size must fit within "
+                        f"{settings.max_video_long_side}×{settings.max_video_short_side} "
+                        f"(or {settings.max_video_short_side}×{settings.max_video_long_side})"
+                    )
+            else:
+                if width > settings.max_width or height > settings.max_height:
+                    raise ValueError(
+                        f"width/height must be ≤ {settings.max_width}×{settings.max_height}"
+                    )
+                if width * height > settings.max_image_pixels:
+                    raise ValueError(
+                        f"width*height exceeds max pixels {settings.max_image_pixels}"
+                    )
         if self.mode in ("image_edit", "image_to_video"):
             if not self.images:
                 raise ValueError(
@@ -175,6 +192,7 @@ class ShowcaseItemResponse(BaseModel):
     steps: int
     seed: int | None = None
     ref_count: int = 0
+    elapsed_ms: int | None = None
     created_at: str
     updated_at: str
     image_url: str
@@ -198,6 +216,14 @@ class GenerateImageResponse(BaseModel):
     max_queue_size: int | None = None
 
 
+class TaskProgress(BaseModel):
+    """ComfyUI sampler progress from WS `progress` (value/max)."""
+
+    value: int
+    max: int
+    percent: float
+
+
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: TaskStatus
@@ -211,6 +237,8 @@ class TaskStatusResponse(BaseModel):
     queue_ahead: int | None = None
     queue_size: int | None = None
     max_queue_size: int | None = None
+    # Present while running and ComfyUI has emitted at least one progress tick
+    progress: TaskProgress | None = None
 
 
 class ImageMeta(BaseModel):
@@ -236,6 +264,10 @@ class HealthLiveResponse(BaseModel):
 class HealthReadyResponse(BaseModel):
     status: str
     comfyui: str
+    # Deploy limits from .env — Studio clamps UI to these after connection check
+    max_steps: int = 60
+    max_width: int = 1024
+    max_height: int = 1024
 
 
 class ErrorResponse(BaseModel):
@@ -256,6 +288,8 @@ class PromptPolishRequest(BaseModel):
     output_language: str = "match_input"
     detail: str = "standard"
     model_profile: str = "unknown"
+    # Generation mode from Studio Create draft (not polish provider mode).
+    generation_mode: Literal["txt2img", "image_edit", "image_to_video"] = "txt2img"
 
     @field_validator("prompt")
     @classmethod
@@ -285,7 +319,7 @@ class PromptPolishRequest(BaseModel):
     @field_validator("model_profile")
     @classmethod
     def _profile(cls, value: str) -> str:
-        if value not in ("sd15", "sdxl", "flux", "sd3", "unknown"):
+        if value not in ("sd15", "sdxl", "flux", "sd3", "wan", "unknown"):
             raise ValueError("model_profile invalid")
         return value
 
@@ -403,6 +437,15 @@ class LocalHoldSetRequest(BaseModel):
     message: str | None = Field(default=None, max_length=200)
 
 
+class GpuStatusResponse(BaseModel):
+    """Lightweight GPU / queue load for Studio clients (any authenticated user)."""
+
+    state: Literal["idle", "busy"]
+    queue_running: int = 0
+    queue_queued: int = 0
+    local_hold: bool = False
+
+
 class AdminStatsResponse(BaseModel):
     queue_open: int
     queue_queued: int
@@ -469,3 +512,66 @@ class PromptLibraryReplaceRequest(BaseModel):
 
     templates: list[PromptLibraryTemplate] = Field(default_factory=list)
     phrases: list[PromptLibraryPhrase] = Field(default_factory=list)
+
+
+class PromptTranslateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4000)
+    # en2zh default keeps「查看译文」compatible; zh2en for create-page draft translate
+    direction: Literal["en2zh", "zh2en"] = "en2zh"
+
+    @field_validator("text")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class PromptTranslateResponse(BaseModel):
+    translation: str
+    # Echo original so clients can verify cache keys
+    source: str = ""
+    direction: Literal["en2zh", "zh2en"] = "en2zh"
+
+
+class SharedPromptItemResponse(BaseModel):
+    id: str
+    title: str
+    prompt: str
+    negative_prompt: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    author_name: str
+    author_username: str
+    created_at: str
+    mine: bool = False
+
+
+class SharedPromptListResponse(BaseModel):
+    items: list[SharedPromptItemResponse]
+    count: int
+
+
+class SharedPromptShareRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1, max_length=4000)
+    negative_prompt: str = Field(default="", max_length=4000)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("title", "prompt", "negative_prompt")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("tags")
+    @classmethod
+    def _clean_tags(cls, value: list[str]) -> list[str]:
+        out: list[str] = []
+        for tag in value:
+            t = str(tag).strip()
+            if t and t not in out:
+                out.append(t[:40])
+            if len(out) >= 12:
+                break
+        return out

@@ -15,6 +15,7 @@ const gateway = {
   getStatus: (): Promise<GatewayStatus> => ipcRenderer.invoke('gateway:getStatus'),
   startApi: (): Promise<ActionResult> => ipcRenderer.invoke('gateway:startApi'),
   stopApi: (): Promise<ActionResult> => ipcRenderer.invoke('gateway:stopApi'),
+  forceStopApi: (): Promise<ActionResult> => ipcRenderer.invoke('gateway:forceStopApi'),
   startFrp: (): Promise<ActionResult> => ipcRenderer.invoke('gateway:startFrp'),
   stopFrp: (): Promise<ActionResult> => ipcRenderer.invoke('gateway:stopFrp'),
   startAll: (): Promise<ActionResult> => ipcRenderer.invoke('gateway:startAll'),
@@ -70,7 +71,10 @@ const gateway = {
 
   adminGetPromptLibrary: () => ipcRenderer.invoke('gateway:adminGetPromptLibrary'),
   adminReplacePromptLibrary: (body: { templates: unknown[]; phrases: unknown[] }) =>
-    ipcRenderer.invoke('gateway:adminReplacePromptLibrary', body)
+    ipcRenderer.invoke('gateway:adminReplacePromptLibrary', body),
+  adminListSharedPrompts: () => ipcRenderer.invoke('gateway:adminListSharedPrompts'),
+  adminDeleteSharedPrompt: (itemId: string) =>
+    ipcRenderer.invoke('gateway:adminDeleteSharedPrompt', itemId)
 }
 
 contextBridge.exposeInMainWorld('gateway', gateway)

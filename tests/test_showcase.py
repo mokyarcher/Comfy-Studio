@@ -44,6 +44,7 @@ def test_showcase_share_list_copy_unlist(client: TestClient):
         "height": "1024",
         "steps": "25",
         "seed": "42",
+        "elapsed_ms": "18320",
     }
     r = client.post("/v1/showcase", data=data, files=files, headers=_admin())
     assert r.status_code == 201, r.text
@@ -52,6 +53,7 @@ def test_showcase_share_list_copy_unlist(client: TestClient):
     assert item["negative_prompt"] == "blurry"
     assert item["mode"] == "image_edit"
     assert item["seed"] == 42
+    assert item["elapsed_ms"] == 18320
     assert item["ref_count"] == 1
     assert item["mine"] is True
     assert item["status"] == "published"

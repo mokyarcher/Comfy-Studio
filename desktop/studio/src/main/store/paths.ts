@@ -32,3 +32,7 @@ export function galleryDir(): string {
 export function promptsPath(): string {
   return join(getUserDataRoot(), 'prompts.json')
 }
+
+export function taskHistoryPath(): string {
+  return join(getUserDataRoot(), 'task-history.json')
+}

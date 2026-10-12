@@ -1,4 +1,4 @@
-import { AI_POLISH_SYSTEM_PROMPT } from '../../shared/prompt-polish/ai-system-prompt'
+import { selectPolishSystemPrompt } from '../../shared/prompt-polish/ai-system-prompt'
 import { AiPolishPayloadSchema } from '../../shared/prompt-polish/schemas'
 import type { PromptPolishRequest, PromptPolishResult } from '../../shared/prompt-polish/types'
 import { getPolishGatewayStatus, polishViaGateway } from '../api/client'
@@ -51,7 +51,8 @@ export async function polishPromptViaGateway(
       negativePrompt: request.negativePrompt,
       outputLanguage: request.outputLanguage,
       detail: request.detail,
-      modelProfile: request.modelProfile
+      modelProfile: request.modelProfile,
+      generationMode: request.generationMode || 'txt2img'
     })
 
     if (data.quota) {
@@ -109,13 +110,16 @@ export async function polishPromptDirect(request: PromptPolishRequest): Promise<
   if (!apiKey) throw new AiPolishError('missing_key', '请先配置直连 API Key')
   if (!settings.model) throw new AiPolishError('missing_model', '请先配置模型名称')
 
+  const generationMode = request.generationMode || 'txt2img'
   const userPayload = {
     original_prompt: request.prompt,
     original_negative_prompt: request.negativePrompt ?? '',
     model_profile: request.modelProfile,
     output_language: request.outputLanguage,
     detail: request.detail,
-    instructions: '请按 system 要求返回 JSON。'
+    generation_mode: generationMode,
+    instructions:
+      '请按 system 要求返回 JSON。必须同时给出 enhanced_prompt 与非空的 enhanced_negative_prompt。'
   }
 
   const controller = new AbortController()
@@ -134,7 +138,7 @@ export async function polishPromptDirect(request: PromptPolishRequest): Promise<
         temperature: 0.2,
         response_format: { type: 'json_object' },
         messages: [
-          { role: 'system', content: AI_POLISH_SYSTEM_PROMPT },
+          { role: 'system', content: selectPolishSystemPrompt(generationMode) },
           { role: 'user', content: JSON.stringify(userPayload) }
         ]
       }),
@@ -171,7 +175,19 @@ export async function polishPromptDirect(request: PromptPolishRequest): Promise<
     throw new AiPolishError('invalid_json', 'AI 返回的不是合法 JSON')
   }
 
-  const payload = AiPolishPayloadSchema.safeParse(parsedJson)
+  const normalized =
+    parsedJson && typeof parsedJson === 'object'
+      ? {
+          ...(parsedJson as Record<string, unknown>),
+          enhanced_prompt:
+            (parsedJson as Record<string, unknown>).enhanced_prompt ||
+            (parsedJson as Record<string, unknown>).positive_prompt,
+          enhanced_negative_prompt:
+            (parsedJson as Record<string, unknown>).enhanced_negative_prompt ??
+            (parsedJson as Record<string, unknown>).negative_prompt
+        }
+      : parsedJson
+  const payload = AiPolishPayloadSchema.safeParse(normalized)
   if (!payload.success) {
     throw new AiPolishError('schema', 'AI 返回结构不符合约定')
   }

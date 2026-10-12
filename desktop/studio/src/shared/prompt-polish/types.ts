@@ -1,7 +1,9 @@
 export type PolishMode = 'ai'
 export type PromptLanguage = 'match_input' | 'zh' | 'en'
 export type PolishDetail = 'concise' | 'standard' | 'detailed'
-export type ModelProfileId = 'sd15' | 'sdxl' | 'flux' | 'sd3' | 'unknown'
+export type ModelProfileId = 'sd15' | 'sdxl' | 'flux' | 'sd3' | 'wan' | 'unknown'
+/** Create-page generation mode passed into polish (not PolishMode). */
+export type GenerationMode = 'txt2img' | 'image_edit' | 'image_to_video'
 
 export interface PromptPolishConflict {
   code: string
@@ -16,6 +18,8 @@ export interface PromptPolishRequest {
   outputLanguage: PromptLanguage
   detail: PolishDetail
   modelProfile: ModelProfileId
+  /** From Studio draft.mode; selects image vs video director system prompt. */
+  generationMode?: GenerationMode
 }
 
 export interface PromptPolishResult {

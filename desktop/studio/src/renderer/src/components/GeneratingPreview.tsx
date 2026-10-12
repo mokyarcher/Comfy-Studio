@@ -1,6 +1,6 @@
 import './GeneratingPreview.css'
 
-/** Rough wall-clock estimates for UI only (not server truth). */
+/** Fallback wall-clock estimates before first ComfyUI progress tick. */
 export const ESTIMATE_MS = {
   txt2img: 25_000,
   image_edit: 60_000,
@@ -16,12 +16,21 @@ export function GeneratingPreview(props: {
   mode: 'txt2img' | 'image_edit' | 'image_to_video'
   elapsedMs: number
   statusText?: string
+  /** Real sampler progress from API (value/max). */
+  progress?: { value: number; max: number; percent: number } | null
 }) {
   const estimate = ESTIMATE_MS[props.mode] ?? ESTIMATE_MS.txt2img
-  const ratio = Math.min(0.96, props.elapsedMs / estimate)
-  const overtime = props.elapsedMs > estimate
+  const real = props.progress && props.progress.max > 0 ? props.progress : null
+  const ratio = real
+    ? Math.min(1, Math.max(0, real.percent / 100))
+    : Math.min(0.96, props.elapsedMs / estimate)
+  const overtime = !real && props.elapsedMs > estimate
   const modeLabel =
     props.mode === 'image_edit' ? '图生图' : props.mode === 'image_to_video' ? '图生视频' : '文生图'
+
+  const etaText = real
+    ? `${modeLabel} · ${real.value}/${real.max} · ${Math.round(real.percent)}%`
+    : `${modeLabel} · ${formatSecs(props.elapsedMs)}${overtime ? '' : ` / ~${formatSecs(estimate)}`}`
 
   return (
     <div className="gen-preview" role="status" aria-live="polite">
@@ -54,10 +63,7 @@ export function GeneratingPreview(props: {
         {props.statusText ? (
           <div className="gen-preview-sub">{props.statusText}</div>
         ) : null}
-        <div className="gen-preview-eta">
-          {modeLabel} · {formatSecs(props.elapsedMs)}
-          {overtime ? '' : ` / ~${formatSecs(estimate)}`}
-        </div>
+        <div className="gen-preview-eta">{etaText}</div>
       </div>
       <div className="gen-preview-bar">
         {overtime ? (

@@ -25,7 +25,7 @@ export default function App() {
 
   if (!bootstrapped) {
     return (
-      <div className="flex h-full flex-col bg-bg text-text">
+      <div className="flex h-full flex-col bg-bg text-text" style={{ backgroundColor: '#12141a' }}>
         <TitleBar />
         <div className="flex flex-1 items-center justify-center text-sm text-muted">加载中…</div>
         <Toast />
@@ -35,7 +35,7 @@ export default function App() {
 
   if (!isLoggedIn) {
     return (
-      <div className="flex h-full flex-col bg-bg text-text">
+      <div className="flex h-full flex-col bg-bg text-text" style={{ backgroundColor: '#12141a' }}>
         <TitleBar />
         <AuthPage />
         <Toast />
@@ -44,13 +44,13 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-bg text-text">
+    <div className="flex h-full flex-col bg-bg text-text" style={{ backgroundColor: '#12141a' }}>
       <TitleBar />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1" style={{ backgroundColor: '#12141a' }}>
         <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col" style={{ backgroundColor: '#12141a' }}>
           <TopBar />
-          <main className="min-h-0 flex-1 overflow-hidden">
+          <main key={page} className="page-surface min-h-0 flex-1 overflow-hidden">
             {page === 'create' && <CreatePage />}
             {page === 'queue' && <QueuePage />}
             {page === 'gallery' && <GalleryPage />}

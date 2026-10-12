@@ -3,8 +3,10 @@ import type { GatewayConfig } from '../shared/types'
 import {
   adminApproveUser,
   adminGetLocalHold,
+  adminDeleteSharedPrompt,
   adminGetPromptLibrary,
   adminGetStats,
+  adminListSharedPrompts,
   adminListUsers,
   adminPatchUser,
   adminRejectUser,
@@ -33,6 +35,7 @@ export function registerIpc(services: ServiceManager, getWindow: () => BrowserWi
 
   ipcMain.handle('gateway:startApi', () => services.startApi())
   ipcMain.handle('gateway:stopApi', () => services.stopApi())
+  ipcMain.handle('gateway:forceStopApi', () => services.forceStopApi())
   ipcMain.handle('gateway:startFrp', () => services.startFrp())
   ipcMain.handle('gateway:stopFrp', () => services.stopFrp())
   ipcMain.handle('gateway:startAll', () => services.startAll())
@@ -201,4 +204,14 @@ export function registerIpc(services: ServiceManager, getWindow: () => BrowserWi
       })
     }
   )
+
+  ipcMain.handle('gateway:adminListSharedPrompts', async () => {
+    const cfg = services.getConfig()
+    return adminListSharedPrompts(cfg, services.getApiKeyRaw())
+  })
+
+  ipcMain.handle('gateway:adminDeleteSharedPrompt', async (_e, itemId: string) => {
+    const cfg = services.getConfig()
+    return adminDeleteSharedPrompt(cfg, services.getApiKeyRaw(), String(itemId || ''))
+  })
 }

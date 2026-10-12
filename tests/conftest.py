@@ -86,6 +86,8 @@ def test_settings(tmp_path: Path, workflow_files, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("SHOWCASE_DB_PATH", str(tmp_path / "showcase.db"))
     monkeypatch.setenv("SHOWCASE_FILES_DIR", str(tmp_path / "showcase"))
     monkeypatch.setenv("PROMPT_LIBRARY_PATH", str(tmp_path / "prompt_library.json"))
+    monkeypatch.setenv("SHARED_PROMPTS_DB_PATH", str(tmp_path / "shared_prompts.db"))
+    monkeypatch.setenv("TRANSLATE_CACHE_DB_PATH", str(tmp_path / "translate_cache.db"))
     monkeypatch.setenv("MAX_APPROVED_USERS", "20")
     get_settings.cache_clear()
     settings = get_settings()

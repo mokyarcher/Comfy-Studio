@@ -8,6 +8,7 @@ import type {
   TaskStatus
 } from '../shared/types'
 import { fetchTaskImage, pollTask, purgeTask, submitGenerate } from './api/client'
+import { galleryMediaUrl } from './galleryProtocol'
 import { getProfileSecret } from './store/profiles'
 import { getSettings } from './store/settings'
 import { saveImageFromBuffer } from './store/gallery'
@@ -142,13 +143,16 @@ async function runJob(item: QueueItem): Promise<void> {
       lastStatus = poll.status
       if (poll.seed != null) seed = poll.seed
 
+      const progress = poll.progress ?? null
       const queueMsg =
         poll.status === 'queued'
           ? poll.queueAhead != null && poll.queueAhead > 0
             ? `排队中，前方还有 ${poll.queueAhead} 个任务（第 ${poll.queuePosition ?? '?'} 位）`
             : '排队中，下一位就是你…'
           : poll.status === 'running'
-            ? '正在生成（GPU 占用中）…'
+            ? progress && progress.max > 0
+              ? `正在生成… ${progress.value}/${progress.max}`
+              : '正在生成…'
             : `状态：${poll.status}`
 
       sendProgress(sender, {
@@ -162,6 +166,7 @@ async function runJob(item: QueueItem): Promise<void> {
         queueAhead: poll.queueAhead,
         queuePosition: poll.queuePosition,
         queueSize: poll.queueSize,
+        progress,
         elapsedMs: Date.now() - started
       })
 
@@ -202,12 +207,13 @@ async function runJob(item: QueueItem): Promise<void> {
           }))
         : undefined
 
+    const elapsedMs = Date.now() - started
     const galleryItem = saveImageFromBuffer({
       buffer: buf,
       prompt: input.params.prompt,
       negativePrompt: input.params.negative_prompt,
-      width: input.params.width ?? (mode === 'image_to_video' ? 832 : 1024),
-      height: input.params.height ?? (mode === 'image_to_video' ? 480 : 1024),
+      width: input.params.width ?? (mode === 'image_to_video' ? 800 : 1024),
+      height: input.params.height ?? (mode === 'image_to_video' ? 496 : 1024),
       steps: input.params.steps ?? 20,
       seed: seed ?? null,
       taskId: submit.taskId,
@@ -215,6 +221,7 @@ async function runJob(item: QueueItem): Promise<void> {
       profileName: input.profileName ?? sec.profile.name,
       mode,
       contentType,
+      elapsedMs,
       refBuffers
     })
 
@@ -236,7 +243,8 @@ async function runJob(item: QueueItem): Promise<void> {
       doneMessage = '生成完成（服务端清理未成功，不影响本机已保存）'
     }
 
-    const imageDataUrl = `data:${contentType};base64,${buf.toString('base64')}`
+    // Prefer custom protocol over huge data: URLs (Chromium fails on large video base64).
+    const imageDataUrl = galleryMediaUrl(galleryItem.id)
     const result: GenerateJobResult = {
       localId,
       remoteTaskId: submit.taskId,
@@ -255,7 +263,7 @@ async function runJob(item: QueueItem): Promise<void> {
       imageDataUrl,
       galleryItem,
       message: doneMessage,
-      elapsedMs: Date.now() - started
+      elapsedMs
     })
 
     item.resolve(result)

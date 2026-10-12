@@ -72,6 +72,7 @@ class ShowcaseItem:
     ref_count: int
     created_at: str
     updated_at: str
+    elapsed_ms: int | None = None
 
     def to_public_dict(self, *, mine: bool = False) -> dict[str, Any]:
         return {
@@ -87,6 +88,7 @@ class ShowcaseItem:
             "steps": self.steps,
             "seed": self.seed,
             "ref_count": self.ref_count,
+            "elapsed_ms": self.elapsed_ms,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "image_url": f"/v1/showcase/{self.id}/image",
@@ -148,6 +150,14 @@ class ShowcaseStore:
                     ON showcase_items(author_user_id, created_at DESC);
                 """
             )
+            cols = {
+                str(r[1])
+                for r in conn.execute("PRAGMA table_info(showcase_items)").fetchall()
+            }
+            if "elapsed_ms" not in cols:
+                conn.execute(
+                    "ALTER TABLE showcase_items ADD COLUMN elapsed_ms INTEGER"
+                )
 
     def item_dir(self, item_id: str) -> Path:
         return self.files_dir / item_id
@@ -168,6 +178,7 @@ class ShowcaseStore:
         result_bytes: bytes,
         result_suffix: str,
         ref_blobs: list[tuple[bytes, str]],
+        elapsed_ms: int | None = None,
     ) -> ShowcaseItem:
         item_id = str(uuid.uuid4())
         now = utcnow()
@@ -196,8 +207,8 @@ class ShowcaseStore:
                     INSERT INTO showcase_items (
                         id, author_user_id, author_name, author_username, status,
                         prompt, negative_prompt, mode, width, height, steps, seed,
-                        result_filename, ref_count, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        result_filename, ref_count, created_at, updated_at, elapsed_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item_id,
@@ -216,6 +227,7 @@ class ShowcaseStore:
                         len(refs_meta),
                         now,
                         now,
+                        int(elapsed_ms) if elapsed_ms is not None and elapsed_ms > 0 else None,
                     ),
                 )
         except Exception:
@@ -346,6 +358,9 @@ class ShowcaseStore:
 
     @staticmethod
     def _row(row: sqlite3.Row) -> ShowcaseItem:
+        keys = set(row.keys())
+        raw_elapsed = row["elapsed_ms"] if "elapsed_ms" in keys else None
+        elapsed_ms = int(raw_elapsed) if raw_elapsed is not None else None
         return ShowcaseItem(
             id=row["id"],
             author_user_id=row["author_user_id"],
@@ -363,4 +378,5 @@ class ShowcaseStore:
             ref_count=int(row["ref_count"] or 0),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            elapsed_ms=elapsed_ms,
         )

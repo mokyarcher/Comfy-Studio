@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Copy, Download, Expand, Landmark, Loader2, RefreshCw, X } from 'lucide-react'
 import type { ShowcaseItem } from '../../../shared/types'
 import { toUserErrorMessage } from '../../../shared/errors'
+import { WorkDetailMeta } from '../components/WorkDetailMeta'
 import { formatDateTime } from '../lib/format'
 import { useAppStore } from '../stores/appStore'
 
@@ -172,27 +173,25 @@ export function ShowcasePage() {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted">
-                {selected.author_name || selected.author_username}
-                {' · '}
-                {formatDateTime(selected.created_at)}
-                {' · '}
-                {selected.mode === 'image_edit'
-                  ? '图生图'
-                  : selected.mode === 'image_to_video'
-                    ? '图生视频'
-                    : '文生图'}
-                {selected.mine ? ' · 我的分享' : ''}
-              </p>
-              <p className="mt-3 text-sm leading-relaxed">{selected.prompt}</p>
-              {selected.negative_prompt && (
-                <p className="mt-2 text-xs text-muted">负向：{selected.negative_prompt}</p>
-              )}
-              <p className="mt-3 font-mono text-xs text-muted">
-                {selected.width}×{selected.height} · steps {selected.steps}
-                {selected.seed != null ? ` · seed ${selected.seed}` : ''}
-                {selected.ref_count > 0 ? ` · 参考图 ${selected.ref_count}` : ''}
-              </p>
+              <WorkDetailMeta
+                eyebrow={
+                  <>
+                    {selected.author_name || selected.author_username}
+                    {' · '}
+                    {formatDateTime(selected.created_at)}
+                    {selected.mine ? ' · 我的分享' : ''}
+                  </>
+                }
+                prompt={selected.prompt}
+                negativePrompt={selected.negative_prompt}
+                width={selected.width}
+                height={selected.height}
+                steps={selected.steps}
+                seed={selected.seed}
+                mode={selected.mode}
+                elapsedMs={selected.elapsed_ms}
+                refCount={selected.ref_count}
+              />
               {selected.ref_count > 0 && selected.ref_urls?.length > 0 && (
                 <div className="mt-4 space-y-2">
                   <p className="text-xs font-medium text-muted">引用图</p>

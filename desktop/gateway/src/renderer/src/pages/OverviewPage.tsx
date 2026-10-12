@@ -214,6 +214,14 @@ export function OverviewPage() {
               >
                 停止
               </button>
+              <button
+                className="btn-danger"
+                disabled={busy}
+                title="结束占用 API 端口的进程（含 Gateway 重启后残留）"
+                onClick={() => void runAction(() => window.gateway.forceStopApi())}
+              >
+                强制停止
+              </button>
             </>
           }
         />

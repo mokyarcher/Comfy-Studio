@@ -1,12 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Copy, Dices, Eraser, Expand, ImagePlus, Loader2, PenLine, Save, X } from 'lucide-react'
-import { SIZE_PRESETS, type EditImageSlot } from '../../../shared/types'
+import {
+  Check,
+  Copy,
+  Dices,
+  Eraser,
+  Expand,
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  PenLine,
+  Save,
+  X
+} from 'lucide-react'
+import {
+  IMAGE_MAX_SIDE,
+  SIZE_PRESETS,
+  VIDEO_MAX_LONG,
+  VIDEO_MAX_SHORT,
+  VIDEO_SIZE_PRESETS,
+  clampImageSize,
+  clampVideoSize,
+  sizeFromAspect,
+  type EditImageSlot
+} from '../../../shared/types'
 import { formatElapsed, phaseText, statusLabel } from '../lib/format'
 import { useGenerate } from '../hooks/useGenerate'
 import { useAppStore } from '../stores/appStore'
 import { PromptPolishPanel } from '../features/prompt-polish/components/PromptPolishPanel'
 import { GeneratingPreview } from '../components/GeneratingPreview'
+import { StableVideo } from '../components/StableVideo'
 import { randomUUID } from '../lib/uuid'
+
+async function probeDataUrlSize(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    img.onerror = () => reject(new Error('无法读取图片尺寸'))
+    img.src = dataUrl
+  })
+}
 
 async function fileToEditSlot(file: File): Promise<EditImageSlot> {
   const buffer = await file.arrayBuffer()
@@ -35,9 +67,11 @@ export function CreatePage() {
   const busy = useAppStore((s) => s.busy)
   const tasks = useAppStore((s) => s.tasks)
   const showToast = useAppStore((s) => s.showToast)
+  const previewDismissed = useAppStore((s) => s.previewDismissed)
+  const maxSteps = useAppStore((s) => s.serverLimits.maxSteps)
   const { run } = useGenerate()
   const [tick, setTick] = useState(0)
-  const [fullscreen, setFullscreen] = useState(false)
+  const [imageFullscreen, setImageFullscreen] = useState(false)
   const fileRef0 = useRef<HTMLInputElement>(null)
   const fileRef1 = useRef<HTMLInputElement>(null)
   const fileRefs = [fileRef0, fileRef1]
@@ -59,8 +93,7 @@ export function CreatePage() {
     draft.prompt.trim() ||
       draft.negativePrompt.trim() ||
       draft.editImages.some(Boolean) ||
-      current?.imageDataUrl ||
-      tasks.length
+      (!previewDismissed && current?.imageDataUrl)
   )
 
   useEffect(() => {
@@ -70,22 +103,45 @@ export function CreatePage() {
   }, [busy])
 
   useEffect(() => {
-    if (!fullscreen) return
+    if (!imageFullscreen) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFullscreen(false)
+      if (e.key === 'Escape') setImageFullscreen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [fullscreen])
+  }, [imageFullscreen])
 
   // tick forces re-render each second while busy
   void tick
   const elapsed = current?.startedAt ? Date.now() - new Date(current.startedAt).getTime() : 0
-  const previewUrl = current?.imageDataUrl && !busy ? current.imageDataUrl : null
+  const previewUrl =
+    !previewDismissed && current?.imageDataUrl && !busy ? current.imageDataUrl : null
   const previewIsVideo = Boolean(
-    previewUrl?.startsWith('data:video/') ||
-      (draft.mode === 'image_to_video' && previewUrl && !previewUrl.startsWith('data:image/'))
+    previewUrl &&
+      (previewUrl.startsWith('data:video/') ||
+        current?.mode === 'image_to_video' ||
+        (draft.mode === 'image_to_video' &&
+          (previewUrl.startsWith('studio-gallery://') ||
+            !previewUrl.startsWith('data:image/'))))
   )
+
+  function openPreviewFullscreen() {
+    if (!previewUrl || previewIsVideo) return
+    setImageFullscreen(true)
+  }
+
+  async function openVideoExternally() {
+    const galleryId = current?.galleryId
+    if (!galleryId) {
+      showToast('info', '请先在作品画廊中打开该视频')
+      return
+    }
+    const res = (await window.studio.openGalleryFile(galleryId)) as {
+      ok: boolean
+      message?: string
+    }
+    if (!res?.ok) showToast('error', res?.message || '无法打开系统播放器')
+  }
 
   const buttonLabel = busy
     ? current?.phase === 'waiting' || current?.status === 'waiting'
@@ -97,7 +153,7 @@ export function CreatePage() {
           : current?.phase === 'downloading'
             ? '下载中…'
             : '生成中…'
-    : current?.status === 'succeeded'
+    : current?.status === 'succeeded' && !previewDismissed
       ? '再次生成'
       : '开始生成'
 
@@ -113,9 +169,10 @@ export function CreatePage() {
             type="button"
             className="btn-secondary shrink-0"
             disabled={!canClear || busy}
-            title="清屏"
+            title="清空提示词与右侧预览（不删除画廊作品）"
             onClick={() => {
               clearCreatePrompts()
+              setImageFullscreen(false)
               showToast('info', '已清屏')
             }}
           >
@@ -148,9 +205,15 @@ export function CreatePage() {
                     disabled={busy}
                     onClick={() => {
                       if (m.id === 'image_to_video') {
-                        setDraft({ mode: m.id, width: 832, height: 480, steps: 20 })
+                        setDraft({
+                          mode: m.id,
+                          width: VIDEO_MAX_LONG,
+                          height: VIDEO_MAX_SHORT,
+                          steps: 20
+                        })
                       } else {
-                        setDraft({ mode: m.id })
+                        const sized = clampImageSize(draft.width, draft.height)
+                        setDraft({ mode: m.id, width: sized.width, height: sized.height })
                       }
                     }}
                   >
@@ -167,7 +230,7 @@ export function CreatePage() {
                 {draft.mode === 'image_to_video' ? '起始图' : '参考图'}
               </label>
               <div
-                className={`grid gap-3 ${draft.mode === 'image_to_video' ? 'grid-cols-1 max-w-xs' : 'grid-cols-2'}`}
+                className={`grid gap-3 ${draft.mode === 'image_to_video' ? 'grid-cols-1 max-w-sm' : 'grid-cols-2'}`}
               >
                 {(
                   draft.mode === 'image_to_video'
@@ -175,6 +238,7 @@ export function CreatePage() {
                     : (['底图 <image1>', '参考 <image2>'] as const)
                 ).map((label, index) => {
                   const slot = draft.editImages[index]
+                  const isVideoStart = draft.mode === 'image_to_video'
                   return (
                     <div
                       key={label}
@@ -199,15 +263,25 @@ export function CreatePage() {
                         )}
                       </div>
                       {slot ? (
-                        <img
-                          src={slot.previewDataUrl}
-                          alt={label}
-                          className="h-28 w-full rounded-lg object-cover"
-                        />
+                        <div
+                          className={`flex items-center justify-center rounded-lg bg-bg ${
+                            isVideoStart ? 'min-h-[220px] max-h-72 p-2' : 'h-28'
+                          }`}
+                        >
+                          <img
+                            src={slot.previewDataUrl}
+                            alt={label}
+                            className={`rounded-md object-contain ${
+                              isVideoStart ? 'max-h-64 max-w-full' : 'h-full w-full'
+                            }`}
+                          />
+                        </div>
                       ) : (
                         <button
                           type="button"
-                          className="flex h-28 w-full items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted hover:text-text"
+                          className={`flex w-full items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted hover:text-text ${
+                            isVideoStart ? 'min-h-[220px]' : 'h-28'
+                          }`}
                           disabled={busy}
                           onClick={() => fileRefs[index]?.current?.click()}
                         >
@@ -224,9 +298,27 @@ export function CreatePage() {
                           e.target.value = ''
                           if (!file) return
                           void fileToEditSlot(file)
-                            .then((slot) => {
+                            .then(async (nextSlot) => {
                               const next = [...draft.editImages] as Array<EditImageSlot | null>
-                              next[index] = slot
+                              next[index] = nextSlot
+                              if (draft.mode === 'image_to_video' && index === 0) {
+                                try {
+                                  const dim = await probeDataUrlSize(nextSlot.previewDataUrl)
+                                  const sized = sizeFromAspect(dim.width, dim.height)
+                                  setDraft({
+                                    editImages: next,
+                                    width: sized.width,
+                                    height: sized.height
+                                  })
+                                  showToast(
+                                    'info',
+                                    `已按起始图比例设置输出 ${sized.width}×${sized.height}`
+                                  )
+                                  return
+                                } catch {
+                                  /* keep previous size */
+                                }
+                              }
                               setDraft({ editImages: next })
                             })
                             .catch((err) =>
@@ -238,11 +330,16 @@ export function CreatePage() {
                   )
                 })}
               </div>
+              {draft.mode === 'image_to_video' && (
+                <p className="mt-1.5 text-[11px] text-muted">预览按原图比例完整显示，不会裁成横图。</p>
+              )}
             </div>
           )}
 
           <div>
-            <label className="label">正向提示词</label>
+            <label className="label" title="描述想要生成的画面；写得越具体，结果越稳">
+              正向提示词
+            </label>
             <textarea
               className="input min-h-[180px] resize-y leading-relaxed"
               placeholder={
@@ -258,7 +355,9 @@ export function CreatePage() {
           </div>
 
           <div>
-            <label className="label">负向提示词</label>
+            <label className="label" title="写出不想出现的内容，用来抑制常见瑕疵与多余元素">
+              负向提示词
+            </label>
             <textarea
               className="input min-h-[100px] resize-y leading-relaxed"
               placeholder="不想出现的元素…"
@@ -270,13 +369,16 @@ export function CreatePage() {
           <PromptPolishPanel />
 
           <div>
-            <label className="label">尺寸</label>
+            <label className="label">
+              {draft.mode === 'image_to_video' ? '视频尺寸' : '尺寸'}
+            </label>
             <div className="flex flex-wrap gap-2">
-              {SIZE_PRESETS.map((p) => {
+              {(draft.mode === 'image_to_video' ? VIDEO_SIZE_PRESETS : SIZE_PRESETS).map((p) => {
                 const active = draft.width === p.width && draft.height === p.height
                 return (
                   <button
                     key={p.id}
+                    type="button"
                     className={`rounded-xl border px-3 py-2 text-xs transition ${
                       active
                         ? 'border-primary/50 bg-primary/15 text-primary'
@@ -290,22 +392,79 @@ export function CreatePage() {
                 )
               })}
             </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">宽</label>
+                <input
+                  type="number"
+                  min={64}
+                  max={draft.mode === 'image_to_video' ? VIDEO_MAX_LONG : IMAGE_MAX_SIDE}
+                  step={8}
+                  className="input"
+                  value={draft.width}
+                  onChange={(e) => setDraft({ width: Number(e.target.value) || 64 })}
+                  onBlur={(e) => {
+                    const w = Number(e.target.value) || 64
+                    const next =
+                      draft.mode === 'image_to_video'
+                        ? clampVideoSize(w, draft.height)
+                        : clampImageSize(w, draft.height)
+                    setDraft(next)
+                  }}
+                />
+              </div>
+              <div>
+                <label className="label">高</label>
+                <input
+                  type="number"
+                  min={64}
+                  max={draft.mode === 'image_to_video' ? VIDEO_MAX_LONG : IMAGE_MAX_SIDE}
+                  step={8}
+                  className="input"
+                  value={draft.height}
+                  onChange={(e) => setDraft({ height: Number(e.target.value) || 64 })}
+                  onBlur={(e) => {
+                    const h = Number(e.target.value) || 64
+                    const next =
+                      draft.mode === 'image_to_video'
+                        ? clampVideoSize(draft.width, h)
+                        : clampImageSize(draft.width, h)
+                    setDraft(next)
+                  }}
+                />
+              </div>
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted">
+              {draft.mode === 'image_to_video'
+                ? `上限 ${VIDEO_MAX_LONG}×${VIDEO_MAX_SHORT} 或 ${VIDEO_MAX_SHORT}×${VIDEO_MAX_LONG}（8 的倍数）；上传起始图会按比例建议。`
+                : `上限 ${IMAGE_MAX_SIDE}×${IMAGE_MAX_SIDE}（8 的倍数）。`}
+              当前 {draft.width}×{draft.height}
+              {draft.width >= draft.height ? ' · 横/方' : ' · 竖版'}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">步数</label>
+              <label className="label" title="采样迭代次数；更高通常更细，也更慢">
+                步数
+              </label>
               <input
                 type="number"
                 min={1}
-                max={100}
+                max={maxSteps}
                 className="input"
                 value={draft.steps}
-                onChange={(e) => setDraft({ steps: Number(e.target.value) || 1 })}
+                onChange={(e) => {
+                  const n = Number(e.target.value) || 1
+                  setDraft({ steps: Math.max(1, Math.min(maxSteps, n)) })
+                }}
               />
+              <p className="mt-1 text-[11px] text-muted">上限 {maxSteps}（服务端）</p>
             </div>
             <div>
-              <label className="label">种子</label>
+              <label className="label" title="随机数种子；相同种子+相同参数更容易复现相似结果">
+                种子
+              </label>
               <div className="flex gap-2">
                 <select
                   className="input !w-28"
@@ -361,7 +520,7 @@ export function CreatePage() {
       <section className="card flex w-[420px] shrink-0 flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-base font-semibold">预览</h2>
-          {(busy || current) && (
+          {(busy || (current && !previewDismissed)) && (
             <span className="text-xs text-muted">
               {busy
                 ? current?.progressMessage || phaseText(current?.status ?? 'waiting', current?.phase)
@@ -371,36 +530,37 @@ export function CreatePage() {
         </div>
         <div className="flex min-h-0 flex-1 items-stretch justify-center bg-[#12141a] p-3">
           {previewUrl ? (
-            <button
-              type="button"
-              className="group relative flex max-h-full max-w-full self-center"
-              title="点击全屏查看"
-              onClick={() => setFullscreen(true)}
-            >
-              {previewIsVideo ? (
-                <video
+            previewIsVideo ? (
+              <div className="max-h-full max-w-full self-center overflow-hidden rounded-lg border border-border shadow-panel">
+                <StableVideo
                   src={previewUrl}
-                  controls
-                  playsInline
-                  className="max-h-full max-w-full rounded-lg border border-border object-contain shadow-panel"
-                  onClick={(e) => e.stopPropagation()}
+                  className="max-h-full max-w-full object-contain"
+                  onOpenExternal={() => void openVideoExternally()}
                 />
-              ) : (
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="group relative flex max-h-full max-w-full self-center"
+                title="点击全屏查看"
+                onClick={openPreviewFullscreen}
+              >
                 <img
                   src={previewUrl}
                   alt="preview"
                   className="max-h-full max-w-full rounded-lg border border-border object-contain shadow-panel"
                 />
-              )}
-              <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/65 px-2 py-1 text-[11px] text-white opacity-80 group-hover:opacity-100">
-                <Expand className="h-3.5 w-3.5" />
-                全屏
-              </span>
-            </button>
+                <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/65 px-2 py-1 text-[11px] text-white opacity-80 group-hover:opacity-100">
+                  <Expand className="h-3.5 w-3.5" />
+                  全屏
+                </span>
+              </button>
+            )
           ) : busy ? (
             <GeneratingPreview
               mode={draft.mode}
               elapsedMs={elapsed}
+              progress={current?.progress}
               statusText={
                 current?.progressMessage || phaseText(current?.status ?? 'waiting', current?.phase)
               }
@@ -412,44 +572,60 @@ export function CreatePage() {
             />
           )}
         </div>
-        <div className="grid grid-cols-4 gap-1.5 border-t border-border px-3 py-2.5">
-          <button
-            className="btn-secondary !gap-1 !px-2 !py-1.5 text-xs whitespace-nowrap"
-            title="全屏查看"
-            disabled={!previewUrl}
-            onClick={() => setFullscreen(true)}
-          >
-            <Expand className="h-3.5 w-3.5 shrink-0" />
-            全屏
-          </button>
-          <button
-            className="btn-secondary !gap-1 !px-2 !py-1.5 text-xs whitespace-nowrap"
-            title="保存到作品画廊"
-            disabled={!previewUrl}
-            onClick={async () => {
-              if (!previewUrl || !current) return
-              try {
-                await window.studio.saveImageFromDataUrl({
-                  dataUrl: previewUrl,
-                  prompt: current.prompt,
-                  negativePrompt: current.negativePrompt,
-                  width: current.width,
-                  height: current.height,
-                  steps: current.steps,
-                  seed: current.seed,
-                  taskId: current.remoteTaskId || current.id,
-                  profileId: current.profileId,
-                  profileName: current.profileName
-                })
-                showToast('success', '已保存到作品画廊')
-              } catch (err) {
-                showToast('error', err instanceof Error ? err.message : '保存失败')
-              }
-            }}
-          >
-            <Save className="h-3.5 w-3.5 shrink-0" />
-            保存
-          </button>
+        <div
+          className={`grid gap-1.5 border-t border-border px-3 py-2.5 ${previewIsVideo ? 'grid-cols-3' : 'grid-cols-4'}`}
+        >
+          {previewIsVideo ? (
+            <button
+              className="btn-primary !gap-1 !px-2 !py-1.5 text-xs whitespace-nowrap"
+              title="用系统播放器打开"
+              disabled={!previewUrl || !current?.galleryId}
+              onClick={() => void openVideoExternally()}
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              播放
+            </button>
+          ) : (
+            <button
+              className="btn-secondary !gap-1 !px-2 !py-1.5 text-xs whitespace-nowrap"
+              title="全屏查看"
+              disabled={!previewUrl}
+              onClick={openPreviewFullscreen}
+            >
+              <Expand className="h-3.5 w-3.5 shrink-0" />
+              全屏
+            </button>
+          )}
+          {!previewIsVideo && (
+            <button
+              className="btn-secondary !gap-1 !px-2 !py-1.5 text-xs whitespace-nowrap"
+              title="保存到作品画廊"
+              disabled={!previewUrl}
+              onClick={async () => {
+                if (!previewUrl || !current) return
+                try {
+                  await window.studio.saveImageFromDataUrl({
+                    dataUrl: previewUrl,
+                    prompt: current.prompt,
+                    negativePrompt: current.negativePrompt,
+                    width: current.width,
+                    height: current.height,
+                    steps: current.steps,
+                    seed: current.seed,
+                    taskId: current.remoteTaskId || current.id,
+                    profileId: current.profileId,
+                    profileName: current.profileName
+                  })
+                  showToast('success', '已保存到作品画廊')
+                } catch (err) {
+                  showToast('error', err instanceof Error ? err.message : '保存失败')
+                }
+              }}
+            >
+              <Save className="h-3.5 w-3.5 shrink-0" />
+              保存
+            </button>
+          )}
           <button
             className="btn-secondary !gap-1 !px-2 !py-1.5 text-xs whitespace-nowrap"
             title="复制提示词"
@@ -475,7 +651,8 @@ export function CreatePage() {
                 width: current.width,
                 height: current.height,
                 steps: current.steps,
-                seed: current.seed
+                seed: current.seed,
+                mode: current.mode
               })
               showToast('info', '已回填参数')
             }}
@@ -486,10 +663,10 @@ export function CreatePage() {
         </div>
       </section>
 
-      {fullscreen && previewUrl && (
+      {imageFullscreen && previewUrl && !previewIsVideo && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4"
-          onClick={() => setFullscreen(false)}
+          onClick={() => setImageFullscreen(false)}
           role="dialog"
           aria-modal="true"
           aria-label="全屏预览"
@@ -498,27 +675,16 @@ export function CreatePage() {
             type="button"
             className="absolute right-4 top-4 z-10 rounded-lg border border-white/20 bg-black/50 p-2 text-white hover:bg-black/70"
             title="关闭全屏（Esc）"
-            onClick={() => setFullscreen(false)}
+            onClick={() => setImageFullscreen(false)}
           >
             <X className="h-5 w-5" />
           </button>
-          {previewIsVideo ? (
-            <video
-              src={previewUrl}
-              controls
-              autoPlay
-              playsInline
-              className="max-h-full max-w-full object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt=""
-              className="max-h-full max-w-full object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
+          <img
+            src={previewUrl}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

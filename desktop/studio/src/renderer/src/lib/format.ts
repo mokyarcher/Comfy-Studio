@@ -14,6 +14,19 @@ export function formatDateTime(iso: string): string {
   }
 }
 
+export function modeLabel(mode?: string): string {
+  switch (mode) {
+    case 'image_edit':
+      return '图像编辑'
+    case 'image_to_video':
+      return '图生视频'
+    case 'txt2img':
+      return '文生图'
+    default:
+      return mode || '文生图'
+  }
+}
+
 export function statusLabel(status: string): string {
   switch (status) {
     case 'waiting':

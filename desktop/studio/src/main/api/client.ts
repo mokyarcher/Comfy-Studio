@@ -1,5 +1,12 @@
 import { mapHttpError, mapNetworkError, sanitizeErrorMessage } from '../../shared/errors'
-import type { GenerateParams, GenerateResult, HealthResult, TaskPollResult, TaskStatus } from '../../shared/types'
+import type {
+  GenerateParams,
+  GenerateResult,
+  HealthResult,
+  TaskPollResult,
+  TaskProgressInfo,
+  TaskStatus
+} from '../../shared/types'
 import { joinUrl } from '../../shared/url'
 
 async function fetchWithTimeout(
@@ -43,14 +50,23 @@ export async function testConnection(opts: {
     const body = await parseJsonSafe(res)
 
     if (res.ok) {
-      const b = (body ?? {}) as { status?: string; comfyui?: string }
+      const b = (body ?? {}) as {
+        status?: string
+        comfyui?: string
+        max_steps?: number
+        max_width?: number
+        max_height?: number
+      }
       return {
         ok: true,
         status: b.status,
         comfyui: b.comfyui,
         latencyMs,
         message: `就绪${b.comfyui ? ` · ComfyUI: ${b.comfyui}` : ''}`,
-        httpStatus: res.status
+        httpStatus: res.status,
+        maxSteps: typeof b.max_steps === 'number' ? b.max_steps : undefined,
+        maxWidth: typeof b.max_width === 'number' ? b.max_width : undefined,
+        maxHeight: typeof b.max_height === 'number' ? b.max_height : undefined
       }
     }
 
@@ -358,9 +374,26 @@ export async function pollTask(opts: {
       queue_position?: number
       queue_ahead?: number
       queue_size?: number
+      progress?: { value?: number; max?: number; percent?: number } | null
     }
     if (!d.status) throw new Error('任务状态响应异常')
     const errMsg = d.error_message || d.error
+    let progress: TaskProgressInfo | null = null
+    if (
+      d.progress &&
+      typeof d.progress.value === 'number' &&
+      typeof d.progress.max === 'number' &&
+      d.progress.max > 0
+    ) {
+      progress = {
+        value: d.progress.value,
+        max: d.progress.max,
+        percent:
+          typeof d.progress.percent === 'number'
+            ? d.progress.percent
+            : Math.round((1000 * d.progress.value) / d.progress.max) / 10
+      }
+    }
     return {
       taskId: d.task_id ?? opts.taskId,
       status: d.status,
@@ -368,10 +401,48 @@ export async function pollTask(opts: {
       seed: d.seed,
       queuePosition: d.queue_position ?? null,
       queueAhead: d.queue_ahead ?? null,
-      queueSize: d.queue_size ?? null
+      queueSize: d.queue_size ?? null,
+      progress
     }
   } catch (err) {
     if (err instanceof Error && /密钥|参数|队列|服务|接口|网关|ComfyUI|超时|无法|任务/.test(err.message)) {
+      throw err
+    }
+    throw new Error(mapNetworkError(err))
+  }
+}
+
+export async function translateViaGateway(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  text: string
+  direction?: 'en2zh' | 'zh2en'
+}): Promise<{ translation: string; source: string; direction: 'en2zh' | 'zh2en' }> {
+  const direction = opts.direction ?? 'en2zh'
+  const url = joinUrl(opts.baseUrl, '/v1/prompt/translate')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      timeoutMs: Math.min(opts.timeoutMs, 90_000),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-API-Key': opts.apiKey
+      },
+      body: JSON.stringify({ text: opts.text, direction })
+    })
+    const data = await parseJsonSafe(res)
+    if (!res.ok) throw new Error(mapHttpError(res.status, data))
+    const d = data as { translation?: string; source?: string; direction?: 'en2zh' | 'zh2en' }
+    if (!d.translation) throw new Error('译文响应异常')
+    return {
+      translation: d.translation,
+      source: d.source || opts.text,
+      direction: d.direction ?? direction
+    }
+  } catch (err) {
+    if (err instanceof Error && /密钥|服务|限流|配置|润色|翻译|上游|超时/.test(err.message)) {
       throw err
     }
     throw new Error(mapNetworkError(err))
@@ -387,6 +458,7 @@ export async function polishViaGateway(opts: {
   outputLanguage: string
   detail: string
   modelProfile: string
+  generationMode?: string
 }): Promise<{
   enhanced_prompt: string
   enhanced_negative_prompt?: string | null
@@ -421,7 +493,8 @@ export async function polishViaGateway(opts: {
         negative_prompt: opts.negativePrompt || undefined,
         output_language: opts.outputLanguage,
         detail: opts.detail,
-        model_profile: opts.modelProfile
+        model_profile: opts.modelProfile,
+        generation_mode: opts.generationMode || 'txt2img'
       })
     })
     const data = await parseJsonSafe(res)
@@ -502,6 +575,81 @@ export async function getPolishGatewayStatus(opts: {
   }
 }
 
+export type GpuState = 'idle' | 'busy'
+
+export interface GpuStatusResult {
+  ok: boolean
+  state: GpuState | null
+  queueRunning: number
+  queueQueued: number
+  localHold: boolean
+  message: string
+}
+
+export async function fetchGpuStatus(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+}): Promise<GpuStatusResult> {
+  if (!opts.apiKey) {
+    return {
+      ok: false,
+      state: null,
+      queueRunning: 0,
+      queueQueued: 0,
+      localHold: false,
+      message: '缺少 API Key'
+    }
+  }
+  const url = joinUrl(opts.baseUrl, '/v1/system/gpu')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      timeoutMs: Math.min(opts.timeoutMs, 12_000),
+      headers: {
+        Accept: 'application/json',
+        'X-API-Key': opts.apiKey
+      }
+    })
+    const data = await parseJsonSafe(res)
+    if (!res.ok) {
+      return {
+        ok: false,
+        state: null,
+        queueRunning: 0,
+        queueQueued: 0,
+        localHold: false,
+        message: mapHttpError(res.status, data)
+      }
+    }
+    const body = (data ?? {}) as {
+      state?: string
+      queue_running?: number
+      queue_queued?: number
+      local_hold?: boolean
+    }
+    const state: GpuState | null =
+      body.state === 'busy' || body.state === 'idle' ? body.state : null
+    return {
+      ok: state != null,
+      state,
+      queueRunning: body.queue_running ?? 0,
+      queueQueued: body.queue_queued ?? 0,
+      localHold: Boolean(body.local_hold),
+      message: state === 'busy' ? '繁忙' : state === 'idle' ? '空闲' : '状态未知'
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      state: null,
+      queueRunning: 0,
+      queueQueued: 0,
+      localHold: false,
+      message: err instanceof Error ? err.message : '无法读取 GPU 状态'
+    }
+  }
+}
+
 export interface ShowcaseItemDto {
   id: string
   author_name: string
@@ -515,6 +663,7 @@ export interface ShowcaseItemDto {
   steps: number
   seed?: number | null
   ref_count: number
+  elapsed_ms?: number | null
   created_at: string
   updated_at: string
   image_url: string
@@ -567,6 +716,91 @@ export async function fetchPromptLibrary(opts: {
   }
 }
 
+export interface SharedPromptDto {
+  id: string
+  title: string
+  prompt: string
+  negative_prompt?: string | null
+  tags?: string[]
+  author_name: string
+  author_username: string
+  created_at: string
+  mine?: boolean
+}
+
+export async function listSharedPrompts(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  limit?: number
+}): Promise<{ items: SharedPromptDto[]; count: number }> {
+  const q = new URLSearchParams()
+  if (opts.limit != null) q.set('limit', String(opts.limit))
+  const qs = q.toString()
+  const url = joinUrl(opts.baseUrl, `/v1/prompt-library/shared${qs ? `?${qs}` : ''}`)
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'X-API-Key': opts.apiKey
+    }
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as { items: SharedPromptDto[]; count: number }
+}
+
+export async function sharePromptTemplate(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  title: string
+  prompt: string
+  negativePrompt?: string
+  tags?: string[]
+}): Promise<SharedPromptDto> {
+  const url = joinUrl(opts.baseUrl, '/v1/prompt-library/shared')
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-API-Key': opts.apiKey
+    },
+    body: JSON.stringify({
+      title: opts.title,
+      prompt: opts.prompt,
+      negative_prompt: opts.negativePrompt || '',
+      tags: opts.tags || []
+    })
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as SharedPromptDto
+}
+
+export async function deleteSharedPrompt(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  itemId: string
+}): Promise<SharedPromptDto> {
+  const url = joinUrl(opts.baseUrl, `/v1/prompt-library/shared/${opts.itemId}`)
+  const res = await fetchWithTimeout(url, {
+    method: 'DELETE',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'X-API-Key': opts.apiKey
+    }
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as SharedPromptDto
+}
+
 export async function listShowcase(opts: {
   baseUrl: string
   apiKey: string
@@ -603,6 +837,7 @@ export async function shareToShowcase(opts: {
   height: number
   steps: number
   seed?: number | null
+  elapsedMs?: number | null
   image: { buffer: Buffer; filename: string }
   refs?: Array<{ buffer: Buffer; filename: string }>
 }): Promise<ShowcaseItemDto> {
@@ -615,6 +850,9 @@ export async function shareToShowcase(opts: {
   form.set('height', String(opts.height))
   form.set('steps', String(opts.steps))
   if (opts.seed != null) form.set('seed', String(opts.seed))
+  if (opts.elapsedMs != null && opts.elapsedMs > 0) {
+    form.set('elapsed_ms', String(Math.round(opts.elapsedMs)))
+  }
   form.set(
     'image',
     new Blob([new Uint8Array(opts.image.buffer)], { type: 'application/octet-stream' }),

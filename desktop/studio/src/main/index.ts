@@ -1,14 +1,41 @@
 import { existsSync } from 'node:fs'
 import { join } from 'path'
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
+import {
+  registerGalleryProtocolHandler,
+  registerGalleryScheme
+} from './galleryProtocol'
 import { registerIpc } from './ipc'
 
+registerGalleryScheme()
+
+/** Match renderer --bg; keep window & CSS in sync to avoid transparent seams. */
+const WINDOW_BG = '#12141a'
+
+/**
+ * Win11 + some discrete GPUs: translucent layers / backdrop-filter leave ghost frames.
+ * - Default: ANGLE D3D11
+ * - Fallback: "Comfy Studio.exe" --disable-gpu   or   COMFY_SOFT_RENDER=1
+ */
+const wantSoftRender =
+  process.env.COMFY_SOFT_RENDER === '1' ||
+  process.argv.includes('--disable-gpu') ||
+  process.argv.includes('--disable-gpu-compositing')
+
 if (process.platform === 'win32') {
-  if (process.env.COMFY_SOFT_RENDER === '1') {
+  if (wantSoftRender) {
     app.disableHardwareAcceleration()
   } else {
     app.commandLine.appendSwitch('use-angle', 'd3d11')
     app.commandLine.appendSwitch('disable-features', 'CanvasOopRasterization')
+  }
+  // Comfy/Wan mp4 often flickers under HW video decode in Chromium (same class of
+  // issue as ComfyUI desktop preview). Soft-decode unless explicitly re-enabled.
+  const wantHwVideo =
+    process.env.COMFY_HW_VIDEO === '1' || process.argv.includes('--enable-accelerated-video-decode')
+  if (!wantHwVideo) {
+    app.commandLine.appendSwitch('disable-accelerated-video-decode')
+    app.commandLine.appendSwitch('disable-accelerated-video-encode')
   }
 }
 
@@ -29,6 +56,25 @@ function resolveAppIcon(): Electron.NativeImage | undefined {
   return undefined
 }
 
+/** Force Chromium to recompose after DWM focus changes (no full reload). */
+function nudgeRepaint(win: BrowserWindow | null): void {
+  if (!win || win.isDestroyed()) return
+  void win.webContents
+    .executeJavaScript(
+      `(() => {
+        const el = document.documentElement;
+        el.style.transform = 'translateZ(0) scale(0.9999)';
+        requestAnimationFrame(() => {
+          el.style.transform = '';
+        });
+      })();`,
+      true
+    )
+    .catch(() => {
+      /* ignore */
+    })
+}
+
 function createWindow(): void {
   const icon = resolveAppIcon()
   mainWindow = new BrowserWindow({
@@ -38,7 +84,8 @@ function createWindow(): void {
     minHeight: 760,
     show: false,
     frame: false,
-    backgroundColor: '#12141a',
+    transparent: false,
+    backgroundColor: WINDOW_BG,
     title: 'Comfy Studio',
     autoHideMenuBar: true,
     ...(icon ? { icon } : {}),
@@ -51,27 +98,32 @@ function createWindow(): void {
       backgroundThrottling: false
     }
   })
-  mainWindow.setBackgroundColor('#12141a')
+  mainWindow.setBackgroundColor(WINDOW_BG)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
   })
 
+  mainWindow.on('focus', () => nudgeRepaint(mainWindow))
+  mainWindow.on('show', () => nudgeRepaint(mainWindow))
+  mainWindow.on('restore', () => nudgeRepaint(mainWindow))
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:') || url.startsWith('http:')) {
-      shell.openExternal(url)
+      void shell.openExternal(url)
     }
     return { action: 'deny' }
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
 app.whenReady().then(() => {
+  registerGalleryProtocolHandler()
   registerIpc()
   createWindow()
 

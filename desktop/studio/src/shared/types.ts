@@ -35,6 +35,13 @@ export type GenerateUiPhase =
   | 'done'
   | 'failed'
 
+/** ComfyUI sampler progress from GET /v1/tasks/{id}.progress */
+export interface TaskProgressInfo {
+  value: number
+  max: number
+  percent: number
+}
+
 export interface GenerateProgressEvent {
   localId: string
   phase: GenerateUiPhase
@@ -49,6 +56,7 @@ export interface GenerateProgressEvent {
   queueAhead?: number | null
   queuePosition?: number | null
   queueSize?: number | null
+  progress?: TaskProgressInfo | null
 }
 
 export interface ApiProfile {
@@ -97,6 +105,8 @@ export interface GalleryItem {
   profileId?: string
   profileName?: string
   mode?: 'txt2img' | 'image_edit' | 'image_to_video'
+  /** Wall-clock generate duration (ms), from submit to local save */
+  elapsedMs?: number | null
   /** Local paths to reference images (image_edit / image_to_video) */
   refPaths?: string[]
   /** Remote showcase id after sharing */
@@ -116,6 +126,8 @@ export interface ShowcaseItem {
   steps: number
   seed?: number | null
   ref_count: number
+  /** Generate duration in ms when shared from Studio (optional) */
+  elapsed_ms?: number | null
   created_at: string
   updated_at: string
   image_url: string
@@ -149,6 +161,7 @@ export interface LocalTask {
   remoteTaskId?: string
   status: TaskStatus | 'submitting' | 'waiting' | 'cancelled'
   phase?: GenerateUiPhase
+  mode?: 'txt2img' | 'image_edit' | 'image_to_video'
   prompt: string
   negativePrompt?: string
   width: number
@@ -161,6 +174,9 @@ export interface LocalTask {
   finishedAt?: string
   error?: string
   progressMessage?: string
+  /** Live sampler progress from API (ephemeral). */
+  progress?: TaskProgressInfo | null
+  /** Ephemeral preview; not persisted to disk. */
   imageDataUrl?: string
   profileId?: string
   profileName?: string
@@ -174,6 +190,23 @@ export interface HealthResult {
   latencyMs: number
   message: string
   httpStatus?: number
+  /** From GET /health/ready when API supports it */
+  maxSteps?: number
+  maxWidth?: number
+  maxHeight?: number
+}
+
+/** Fallback when server has not reported limits yet */
+export const DEFAULT_SERVER_LIMITS = {
+  maxSteps: 40,
+  maxWidth: 1024,
+  maxHeight: 1024
+} as const
+
+export type ServerLimits = {
+  maxSteps: number
+  maxWidth: number
+  maxHeight: number
 }
 
 export interface GenerateResult {
@@ -192,6 +225,7 @@ export interface TaskPollResult {
   queuePosition?: number | null
   queueAhead?: number | null
   queueSize?: number | null
+  progress?: TaskProgressInfo | null
 }
 
 export interface PromptTemplate {
@@ -202,6 +236,19 @@ export interface PromptTemplate {
   tags: string[]
   createdAt: string
   updatedAt: string
+}
+
+/** Player-shared template from GET /v1/prompt-library/shared */
+export interface SharedPromptTemplate {
+  id: string
+  title: string
+  prompt: string
+  negativePrompt?: string | null
+  tags: string[]
+  authorName: string
+  authorUsername: string
+  createdAt: string
+  mine: boolean
 }
 
 export interface PhraseChip {
@@ -227,6 +274,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
   }
 }
 
+/** Image modes: each side ≤ 1024. */
+export const IMAGE_MAX_SIDE = 1024
+
+/**
+ * Video: landscape ≤ 800×496, portrait ≤ 496×800.
+ * (500 is not ×8; 496 is the ≤500 ceiling.)
+ */
+export const VIDEO_MAX_LONG = 800
+export const VIDEO_MAX_SHORT = 496
+
 export const SIZE_PRESETS = [
   { id: '512', label: '512²', width: 512, height: 512 },
   { id: '768', label: '768²', width: 768, height: 768 },
@@ -234,3 +291,59 @@ export const SIZE_PRESETS = [
   { id: 'landscape', label: '横版 1024×768', width: 1024, height: 768 },
   { id: 'portrait', label: '竖版 768×1024', width: 768, height: 1024 }
 ] as const
+
+export const VIDEO_SIZE_PRESETS = [
+  { id: 'v-landscape', label: '横版 800×496', width: 800, height: 496 },
+  { id: 'v-portrait', label: '竖版 496×800', width: 496, height: 800 },
+  { id: 'v-landscape-sm', label: '横版 640×384', width: 640, height: 384 },
+  { id: 'v-portrait-sm', label: '竖版 384×640', width: 384, height: 640 },
+  { id: 'v-square', label: '方版 496²', width: 496, height: 496 }
+] as const
+
+export function snapSizeMultiple(n: number, multiple = 8, maxSide = IMAGE_MAX_SIDE): number {
+  const m = Math.max(multiple, Math.round(n / multiple) * multiple)
+  return Math.min(maxSide, Math.max(multiple, m))
+}
+
+export function clampImageSize(width: number, height: number): { width: number; height: number } {
+  return {
+    width: snapSizeMultiple(width, 8, IMAGE_MAX_SIDE),
+    height: snapSizeMultiple(height, 8, IMAGE_MAX_SIDE)
+  }
+}
+
+/** Fit into 800×496 (or 496×800) box while keeping aspect. */
+export function clampVideoSize(width: number, height: number): { width: number; height: number } {
+  let w = Math.max(8, width)
+  let h = Math.max(8, height)
+  const landscape = w >= h
+  const maxW = landscape ? VIDEO_MAX_LONG : VIDEO_MAX_SHORT
+  const maxH = landscape ? VIDEO_MAX_SHORT : VIDEO_MAX_LONG
+  const scale = Math.min(1, maxW / w, maxH / h)
+  w = snapSizeMultiple(w * scale, 8, maxW)
+  h = snapSizeMultiple(h * scale, 8, maxH)
+  // Re-clamp if snap pushed over the box
+  if (w > maxW) w = maxW
+  if (h > maxH) h = maxH
+  if (w % 8 !== 0) w = snapSizeMultiple(w, 8, maxW)
+  if (h % 8 !== 0) h = snapSizeMultiple(h, 8, maxH)
+  return { width: w, height: h }
+}
+
+/** Pick output size matching source aspect within video limits. */
+export function sizeFromAspect(
+  srcW: number,
+  srcH: number,
+  targetLong = VIDEO_MAX_LONG
+): { width: number; height: number } {
+  if (srcW <= 0 || srcH <= 0) return { width: VIDEO_MAX_LONG, height: VIDEO_MAX_SHORT }
+  const ratio = srcW / srcH
+  if (ratio >= 1) {
+    const width = snapSizeMultiple(Math.min(targetLong, VIDEO_MAX_LONG), 8, VIDEO_MAX_LONG)
+    const height = snapSizeMultiple(width / ratio, 8, VIDEO_MAX_SHORT)
+    return clampVideoSize(width, height)
+  }
+  const height = snapSizeMultiple(Math.min(targetLong, VIDEO_MAX_LONG), 8, VIDEO_MAX_LONG)
+  const width = snapSizeMultiple(height * ratio, 8, VIDEO_MAX_SHORT)
+  return clampVideoSize(width, height)
+}

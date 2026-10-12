@@ -100,6 +100,23 @@ async def test_restart_running_without_prompt_id_fails(test_settings):
 
 
 @pytest.mark.asyncio
+async def test_status_includes_sampler_progress(test_settings):
+    svc = _svc(test_settings)
+    task = svc.submit(GenerateImageRequest(prompt="progress"))
+    svc.db.mark_running(task.task_id)
+    svc.set_progress(task.task_id, 9, 20)
+    status = svc.get_status(task.task_id)
+    assert status is not None
+    assert status.progress is not None
+    assert status.progress.value == 9
+    assert status.progress.max == 20
+    assert status.progress.percent == 45.0
+    svc.clear_progress(task.task_id)
+    assert svc.get_status(task.task_id).progress is None
+    await svc.comfy.aclose()
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_process_success_saves_image(test_settings):
     settings = test_settings

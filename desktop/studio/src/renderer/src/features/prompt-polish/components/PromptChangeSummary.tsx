@@ -9,8 +9,19 @@ export function PromptChangeSummary({ result }: Props) {
     return <p className="text-xs text-muted">暂无润色结果</p>
   }
 
+  const negChanged =
+    (result.enhancedNegativePrompt || '').trim() !== (result.originalNegativePrompt || '').trim()
+
   return (
     <div className="space-y-3 text-xs">
+      {negChanged && (
+        <section>
+          <h4 className="mb-1 font-medium text-text">负向提示词</h4>
+          <p className="whitespace-pre-wrap break-words text-muted">
+            {result.enhancedNegativePrompt || '（空）'}
+          </p>
+        </section>
+      )}
       <section>
         <h4 className="mb-1 font-medium text-text">本次补充</h4>
         {result.addedDetails.length === 0 ? (

@@ -508,3 +508,64 @@ export async function adminReplacePromptLibrary(
     return { ok: false, message: err instanceof Error ? err.message : '保存提示词库失败' }
   }
 }
+
+export interface SharedPromptAdminItem {
+  id: string
+  title: string
+  prompt: string
+  negative_prompt?: string | null
+  tags?: string[]
+  author_name: string
+  author_username: string
+  created_at: string
+  mine?: boolean
+}
+
+export async function adminListSharedPrompts(
+  cfg: GatewayConfig,
+  apiKey: string
+): Promise<{ ok: boolean; message: string; items?: SharedPromptAdminItem[]; count?: number }> {
+  if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
+  try {
+    const res = await fetchJson(`${localBase(cfg)}/v1/admin/prompt-library/shared?limit=100`, apiKey)
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: failDetail(res.status, res.data) || `读取共享库失败 HTTP ${res.status}`
+      }
+    }
+    const data = res.data as { items?: SharedPromptAdminItem[]; count?: number }
+    return {
+      ok: true,
+      message: 'ok',
+      items: data.items ?? [],
+      count: data.count ?? 0
+    }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : '读取共享库失败' }
+  }
+}
+
+export async function adminDeleteSharedPrompt(
+  cfg: GatewayConfig,
+  apiKey: string,
+  itemId: string
+): Promise<{ ok: boolean; message: string }> {
+  if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
+  try {
+    const res = await fetchJson(
+      `${localBase(cfg)}/v1/admin/prompt-library/shared/${encodeURIComponent(itemId)}`,
+      apiKey,
+      { method: 'DELETE' }
+    )
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: failDetail(res.status, res.data) || `删除共享条目失败 HTTP ${res.status}`
+      }
+    }
+    return { ok: true, message: '已删除' }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : '删除共享条目失败' }
+  }
+}
