@@ -70,66 +70,71 @@ export function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto p-5">
-      <h1 className="page-title mb-4 flex items-center gap-2">
-        <Settings className="h-5 w-5 text-primary" />
-        设置
-      </h1>
+      <div className="mb-5">
+        <h1 className="page-title flex items-center gap-2">
+          <Settings className="h-5 w-5 text-primary" />
+          设置
+        </h1>
+      </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section className="card p-4">
-          <h2 className="mb-3 text-sm font-semibold">默认生图参数</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div>
-              <label className="label">宽度</label>
-              <input
-                type="number"
-                className="input"
-                value={settings.defaultWidth}
-                onChange={(e) => void update({ defaultWidth: Number(e.target.value) || 1024 })}
-              />
+      {/* 卡片拉满内容区；表单不必撑满卡片内部 */}
+      <div className="space-y-4">
+        <section className="card space-y-3 p-5">
+          <h2 className="text-sm font-semibold">默认生图参数</h2>
+          <div className="max-w-xl space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">宽度</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={settings.defaultWidth}
+                  onChange={(e) => void update({ defaultWidth: Number(e.target.value) || 1024 })}
+                />
+              </div>
+              <div>
+                <label className="label">高度</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={settings.defaultHeight}
+                  onChange={(e) => void update({ defaultHeight: Number(e.target.value) || 1024 })}
+                />
+              </div>
+              <div>
+                <label className="label">Steps</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={settings.defaultSteps}
+                  onChange={(e) => void update({ defaultSteps: Number(e.target.value) || 25 })}
+                />
+              </div>
+              <div>
+                <label className="label">超时（秒）</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={Math.round(settings.timeoutMs / 1000)}
+                  onChange={(e) =>
+                    void update({ timeoutMs: Math.max(30, Number(e.target.value) || 900) * 1000 })
+                  }
+                />
+              </div>
             </div>
             <div>
-              <label className="label">高度</label>
-              <input
-                type="number"
-                className="input"
-                value={settings.defaultHeight}
-                onChange={(e) => void update({ defaultHeight: Number(e.target.value) || 1024 })}
+              <label className="label">默认负向提示词</label>
+              <textarea
+                className="input min-h-[72px] resize-y"
+                value={settings.defaultNegativePrompt}
+                onChange={(e) => void update({ defaultNegativePrompt: e.target.value })}
               />
             </div>
-            <div>
-              <label className="label">Steps</label>
-              <input
-                type="number"
-                className="input"
-                value={settings.defaultSteps}
-                onChange={(e) => void update({ defaultSteps: Number(e.target.value) || 25 })}
-              />
-            </div>
-            <div>
-              <label className="label">超时（秒）</label>
-              <input
-                type="number"
-                className="input"
-                value={Math.round(settings.timeoutMs / 1000)}
-                onChange={(e) =>
-                  void update({ timeoutMs: Math.max(30, Number(e.target.value) || 900) * 1000 })
-                }
-              />
-            </div>
-          </div>
-          <div className="mt-3">
-            <label className="label">默认负向提示词</label>
-            <textarea
-              className="input min-h-[72px] resize-y"
-              value={settings.defaultNegativePrompt}
-              onChange={(e) => void update({ defaultNegativePrompt: e.target.value })}
-            />
           </div>
         </section>
 
-        <section className="card p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <section className="card space-y-3 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">AI 润色</h2>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-muted">
@@ -146,7 +151,7 @@ export function SettingsPage() {
                 网关代理
               </label>
               <button
-                className="btn-secondary !py-1 text-xs"
+                className="btn-secondary !py-1.5 text-xs"
                 disabled={aiTesting}
                 onClick={async () => {
                   setAiTesting(true)
@@ -168,7 +173,7 @@ export function SettingsPage() {
           </div>
 
           {(ai.gatewayMessage || ai.lastTestMessage) && (
-            <p className="mb-3 text-xs text-muted">
+            <p className="text-xs text-muted">
               {ai.gatewayMessage}
               {ai.lastTestMessage
                 ? `${ai.gatewayMessage ? ' · ' : ''}${ai.lastTestOk ? '测试成功' : '测试失败'}`
@@ -176,7 +181,7 @@ export function SettingsPage() {
             </p>
           )}
 
-          <details className="rounded-lg border border-border/80 p-3">
+          <details className="max-w-xl rounded-lg border border-border/80 p-3">
             <summary className="cursor-pointer text-xs text-muted">高级：直连上游</summary>
             <div className="mt-3 space-y-3">
               <label className="flex items-center gap-2 text-sm">
@@ -295,11 +300,11 @@ export function SettingsPage() {
           </details>
         </section>
 
-        <section className="card p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <section className="card space-y-3 p-5">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">本地数据</h2>
             <button
-              className="btn-secondary !py-1 text-xs"
+              className="btn-secondary !py-1.5 text-xs"
               onClick={() => void window.studio.openGalleryFolder()}
             >
               <FolderOpen className="h-3.5 w-3.5" />
@@ -308,38 +313,36 @@ export function SettingsPage() {
           </div>
           <div className="space-y-2 text-xs">
             <div>
-              <span className="text-muted">画廊 · </span>
-              <span className="break-all font-mono text-text">{galleryPath || '…'}</span>
+              <div className="text-muted">画廊</div>
+              <div className="mt-0.5 break-all font-mono text-text">{galleryPath || '…'}</div>
             </div>
             <div>
-              <span className="text-muted">数据 · </span>
-              <span className="break-all font-mono text-text">{userDataPath || '…'}</span>
+              <div className="text-muted">数据</div>
+              <div className="mt-0.5 break-all font-mono text-text">{userDataPath || '…'}</div>
             </div>
           </div>
         </section>
 
-        <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="mb-2 text-sm font-semibold">清理</h2>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn-secondary !py-1.5 text-xs" onClick={() => setClearTasksOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
-                清空任务
-              </button>
-              <button className="btn-danger !py-1.5 text-xs" onClick={() => setClearGalleryOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
-                清空画廊
-              </button>
-            </div>
+        <section className="card space-y-3 p-5">
+          <h2 className="text-sm font-semibold">清理</h2>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" onClick={() => setClearTasksOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+              清空任务
+            </button>
+            <button className="btn-danger" onClick={() => setClearGalleryOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+              清空画廊
+            </button>
           </div>
-          <div className="sm:text-right">
-            <h2 className="mb-1 text-sm font-semibold">关于</h2>
-            <p className="text-xs text-muted">
-              Comfy Studio · v{appVersion}
-              <br />
-              加密：{encryptionAvailable ? 'safeStorage' : 'Base64'}
-            </p>
-          </div>
+        </section>
+
+        <section className="card space-y-2 p-5">
+          <h2 className="text-sm font-semibold">关于</h2>
+          <p className="text-sm text-text">Comfy Studio · v{appVersion}</p>
+          <p className="text-xs text-muted">
+            加密：{encryptionAvailable ? 'safeStorage' : 'Base64'}
+          </p>
         </section>
       </div>
 
