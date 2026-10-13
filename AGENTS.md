@@ -24,7 +24,7 @@ Gateway（本机控制台）
 | `desktop/gateway` | Electron 服务端控制台 |
 | `desktop/studio` | Electron 远程创作客户端 |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
-| `scripts/` | 启动、巡检、UI→API 工作流转换 |
+| `scripts/` | 启动、巡检、UI→API 工作流转换；`start_stack.ps1` 一键 ComfyUI+API+frpc+Studio（路径见 `stack.local.json`） |
 | `tests/` | pytest |
 | `docs/` | 实施/部署/排障长文 |
 | `other/` | 杂项资产（如本地润色库 JSON），**不进运行时默认路径** |

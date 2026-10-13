@@ -1,0 +1,11 @@
+{
+  "comfyUiDir": "E:/ComfyUI",
+  "comfyUiLaunch": "python main.py --listen 127.0.0.1 --port 8188",
+  "frpcExe": "E:/AI/Frps/frp_0.71.0_windows_amd64/frpc.exe",
+  "frpcConfig": "E:/AI/Frps/frp_0.71.0_windows_amd64/frpc.qwen-image.toml",
+  "studioExe": "desktop/studio/release/win-unpacked/Comfy Studio.exe",
+  "skipComfyUi": false,
+  "skipFrpc": false,
+  "skipApi": false,
+  "skipStudio": false
+}

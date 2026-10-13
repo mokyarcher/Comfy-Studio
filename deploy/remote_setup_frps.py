@@ -17,7 +17,8 @@ auth.token = "{token}"
 proxyBindAddr = "127.0.0.1"
 allowPorts = [
   {{ start = 11434, end = 11434 }},
-  {{ start = 18000, end = 18000 }}
+  {{ start = 18000, end = 18000 }},
+  {{ start = 18001, end = 18001 }}
 ]
 
 webServer.addr = "127.0.0.1"

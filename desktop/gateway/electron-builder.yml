@@ -15,6 +15,8 @@ extraResources:
     to: icon.png
 win:
   icon: icon.png
+  # 避免 winCodeSign 解压需管理员符号链接权限
+  signAndEditExecutable: false
   # NSIS/portable 需在线下载工具；当前网络受限时用 dir（解压即用）
   target:
     - target: dir

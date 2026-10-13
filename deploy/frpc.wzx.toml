@@ -1,0 +1,16 @@
+# Friend PC (wzx) — copy next to frpc.exe / Gateway config, then fill token.
+# Must use remotePort 18001 (owner keeps 18000). Same frps token as existing server.
+
+serverAddr = "111.229.166.216"
+serverPort = 7000
+auth.method = "token"
+auth.token = "PASTE_SAME_TOKEN_AS_EXISTING_FRPS"
+
+transport.tls.enable = true
+
+[[proxies]]
+name = "qwen-image-api-wzx"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8000
+remotePort = 18001
