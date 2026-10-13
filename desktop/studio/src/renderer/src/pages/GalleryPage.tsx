@@ -225,12 +225,15 @@ export function GalleryPage() {
                         profileId: activeProfileId,
                         showcaseId: selected.showcaseId,
                         galleryId: selected.id
-                      })) as { galleryItem?: GalleryItem | null }
+                      })) as { galleryItem?: GalleryItem | null; alreadyGone?: boolean }
                       if (res.galleryItem) setSelected(res.galleryItem)
                       else setSelected({ ...selected, showcaseId: null })
                       void qc.invalidateQueries({ queryKey: ['gallery'] })
                       void qc.invalidateQueries({ queryKey: ['showcase'] })
-                      showToast('success', '已从作品展馆下架')
+                      showToast(
+                        'success',
+                        res.alreadyGone ? '展馆中已无此作品，已清除本地标记' : '已从作品展馆下架'
+                      )
                     } catch (err) {
                       showToast('error', err instanceof Error ? err.message : '下架失败')
                     } finally {

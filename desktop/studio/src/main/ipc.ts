@@ -18,6 +18,7 @@ import {
   translateViaGateway,
   fetchGpuStatus,
   unlistShowcase,
+  ShowcaseNotFoundError,
   uploadImage
 } from './api/client'
 import { enqueueGenerate } from './generateQueue'
@@ -546,21 +547,35 @@ export function registerIpc(): void {
       })
       .parse(raw)
     const sec = requireProfileSecret(profileId)
-    const unlisted = await unlistShowcase({
-      baseUrl: sec.profile.baseUrl,
-      apiKey: sec.apiKey,
-      timeoutMs: sec.profile.timeoutMs,
-      itemId: showcaseId
-    })
+    let unlisted: Awaited<ReturnType<typeof unlistShowcase>> | null = null
+    let alreadyGone = false
+    try {
+      unlisted = await unlistShowcase({
+        baseUrl: sec.profile.baseUrl,
+        apiKey: sec.apiKey,
+        timeoutMs: sec.profile.timeoutMs,
+        itemId: showcaseId
+      })
+    } catch (err) {
+      // Stale local showcaseId: server already has no record — still clear local flag.
+      if (err instanceof ShowcaseNotFoundError) {
+        alreadyGone = true
+      } else {
+        throw err
+      }
+    }
     if (galleryId) {
       setGalleryShowcaseId(galleryId, null)
     } else {
-      // clear any local gallery rows pointing at this showcase id
       for (const g of listGallery()) {
         if (g.showcaseId === showcaseId) setGalleryShowcaseId(g.id, null)
       }
     }
-    return { item: unlisted, galleryItem: galleryId ? getGalleryItem(galleryId) : null }
+    return {
+      item: unlisted,
+      galleryItem: galleryId ? getGalleryItem(galleryId) : null,
+      alreadyGone
+    }
   })
 
   ipcMain.handle('studio:fetchShowcaseAsset', async (event, raw) => {

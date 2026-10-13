@@ -279,11 +279,14 @@ export function ShowcasePage() {
                   onClick={async () => {
                     setBusy(true)
                     try {
-                      await window.studio.unlistShowcase({
+                      const res = (await window.studio.unlistShowcase({
                         profileId: activeProfileId,
                         showcaseId: selected.id
-                      })
-                      showToast('success', '已从展馆下架')
+                      })) as { alreadyGone?: boolean }
+                      showToast(
+                        'success',
+                        res.alreadyGone ? '展馆中已无此作品，已清除本地标记' : '已从展馆下架'
+                      )
                       closeDetail()
                       void refetch()
                     } catch (err) {

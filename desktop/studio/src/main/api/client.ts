@@ -886,6 +886,15 @@ export async function shareToShowcase(opts: {
   }
 }
 
+/** Server has no such showcase item (already unlisted / wiped). */
+export class ShowcaseNotFoundError extends Error {
+  readonly status = 404
+  constructor(message = '展馆中已无此作品（404）') {
+    super(message)
+    this.name = 'ShowcaseNotFoundError'
+  }
+}
+
 export async function unlistShowcase(opts: {
   baseUrl: string
   apiKey: string
@@ -902,6 +911,7 @@ export async function unlistShowcase(opts: {
     }
   })
   const data = await parseJsonSafe(res)
+  if (res.status === 404) throw new ShowcaseNotFoundError()
   if (!res.ok) throw new Error(mapHttpError(res.status, data))
   return data as ShowcaseItemDto
 }

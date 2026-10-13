@@ -26,7 +26,7 @@ export function mapHttpError(status: number, detail?: unknown): string {
     case 403:
       return '没有访问权限，请检查账号配置（403）'
     case 404:
-      return connectionFailed(404)
+      return detailText || '内容不存在或已删除（404）'
     case 422:
       return detailText ? `参数有误：${detailText}` : '参数有误，请检查后重试（422）'
     case 429:
