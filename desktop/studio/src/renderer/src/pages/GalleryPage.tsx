@@ -14,6 +14,12 @@ import {
 } from 'lucide-react'
 import type { GalleryItem } from '../../../shared/types'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import {
+  MediaGridColumnsPicker,
+  mediaGridClass,
+  mediaGridStyle,
+  useMediaGridColumns
+} from '../components/MediaGridColumns'
 import { StableVideo } from '../components/StableVideo'
 import { WorkDetailMeta } from '../components/WorkDetailMeta'
 import { formatDateTime } from '../lib/format'
@@ -92,14 +98,16 @@ export function GalleryPage() {
   }, [imageFullscreen, selected])
 
   const previewIsVideo = preview?.kind === 'video'
+  const gridCols = useMediaGridColumns()
 
   return (
     <div className="relative h-full overflow-y-auto p-5">
-      <div className="mb-5">
+      <div className="mb-5 flex items-center justify-between gap-4">
         <h1 className="page-title flex items-center gap-2">
           <GalleryHorizontalEnd className="h-5 w-5 text-primary" />
           作品画廊
         </h1>
+        <MediaGridColumnsPicker />
       </div>
 
       {isLoading ? (
@@ -107,7 +115,7 @@ export function GalleryPage() {
       ) : items.length === 0 ? (
         <div className="card flex h-64 items-center justify-center text-sm text-muted">暂无作品</div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className={mediaGridClass(gridCols)} style={mediaGridStyle(gridCols)}>
           {items.map((item) => (
             <button
               key={item.id}

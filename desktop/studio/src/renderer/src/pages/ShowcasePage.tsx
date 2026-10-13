@@ -3,6 +3,12 @@ import { useEffect, useState } from 'react'
 import { Copy, Download, Expand, Landmark, Loader2, RefreshCw, X } from 'lucide-react'
 import type { ShowcaseItem } from '../../../shared/types'
 import { toUserErrorMessage } from '../../../shared/errors'
+import {
+  MediaGridColumnsPicker,
+  mediaGridClass,
+  mediaGridStyle,
+  useMediaGridColumns
+} from '../components/MediaGridColumns'
 import { WorkDetailMeta } from '../components/WorkDetailMeta'
 import { formatDateTime } from '../lib/format'
 import { useAppStore } from '../stores/appStore'
@@ -29,6 +35,7 @@ export function ShowcasePage() {
   })
 
   const items = data ?? []
+  const gridCols = useMediaGridColumns()
 
   async function openDetail(item: ShowcaseItem) {
     setSelected(item)
@@ -78,14 +85,17 @@ export function ShowcasePage() {
           <Landmark className="h-5 w-5 text-primary" />
           作品展馆
         </h1>
-        <button
-          className="btn-secondary shrink-0"
-          disabled={isFetching}
-          onClick={() => void refetch()}
-        >
-          {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          刷新
-        </button>
+        <div className="flex items-center gap-3">
+          <MediaGridColumnsPicker />
+          <button
+            className="btn-secondary shrink-0"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            刷新
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -100,7 +110,7 @@ export function ShowcasePage() {
       ) : items.length === 0 ? (
         <div className="card flex h-64 items-center justify-center text-sm text-muted">暂无分享</div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className={mediaGridClass(gridCols)} style={mediaGridStyle(gridCols)}>
           {items.map((item) => (
             <button
               key={item.id}

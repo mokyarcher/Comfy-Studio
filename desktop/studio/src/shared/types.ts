@@ -144,6 +144,9 @@ export interface PromptPolishPrefsStored {
   modelProfile: 'sd15' | 'sdxl' | 'flux' | 'sd3' | 'unknown'
 }
 
+/** Gallery / showcase grid columns (NxN rows). */
+export type MediaGridColumns = 4 | 5 | 6 | 7 | 8
+
 export interface AppSettings {
   theme: 'dark' | 'light' | 'system'
   defaultWidth: number
@@ -152,6 +155,8 @@ export interface AppSettings {
   defaultNegativePrompt: string
   timeoutMs: number
   pollIntervalMs: number
+  /** Works gallery & showcase: columns per row (4–8). */
+  mediaGridColumns?: MediaGridColumns
   /** Prompt polish UI preferences (no secrets). */
   polishPrefs?: PromptPolishPrefsStored
 }
@@ -266,6 +271,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   /** Overall generate wait timeout (submit + poll + download). Default 900s. */
   timeoutMs: 900_000,
   pollIntervalMs: 2000,
+  mediaGridColumns: 4,
   polishPrefs: {
     mode: 'ai',
     outputLanguage: 'match_input',
