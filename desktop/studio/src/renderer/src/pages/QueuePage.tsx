@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ListTodo, RotateCcw, Trash2, X } from 'lucide-react'
-import type { LocalTask } from '../../../shared/types'
+import { useQuery } from '@tanstack/react-query'
+import { ImageIcon, ListTodo, RotateCcw, Trash2, X } from 'lucide-react'
+import type { GalleryItem, LocalTask } from '../../../shared/types'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PromptTranslateButton } from '../components/PromptTranslate'
 import { formatDateTime, formatElapsed, modeLabel, statusLabel } from '../lib/format'
+import { captureVideoPoster } from '../lib/videoPoster'
 import { useGenerate } from '../hooks/useGenerate'
 import { useAppStore } from '../stores/appStore'
+
+type MediaInfo = { url: string; kind: 'image' | 'video'; mime: string }
 
 function isActiveStatus(status: LocalTask['status']): boolean {
   return (
@@ -225,6 +229,58 @@ export function QueuePage() {
   )
 }
 
+function TaskThumb({ task }: { task: LocalTask }) {
+  const { data: galleryItems } = useQuery({
+    queryKey: ['gallery'],
+    queryFn: () => window.studio.listGallery() as Promise<GalleryItem[]>,
+    staleTime: 60_000
+  })
+
+  const galleryId =
+    task.galleryId ||
+    galleryItems?.find((g) => g.taskId === task.remoteTaskId || g.taskId === task.id)?.id
+
+  const { data: media } = useQuery({
+    queryKey: ['gallery-thumb', galleryId],
+    enabled: Boolean(galleryId),
+    queryFn: () => window.studio.getGalleryMediaUrl(galleryId!) as Promise<MediaInfo | null>
+  })
+
+  const { data: poster } = useQuery({
+    queryKey: ['gallery-video-poster', galleryId, media?.url],
+    enabled: Boolean(media?.kind === 'video' && media.url),
+    staleTime: Infinity,
+    retry: 1,
+    queryFn: () => captureVideoPoster(media!.url)
+  })
+
+  const src =
+    media?.kind === 'image'
+      ? media.url
+      : media?.kind === 'video'
+        ? poster
+        : task.imageDataUrl && !task.imageDataUrl.startsWith('data:video/')
+          ? task.imageDataUrl
+          : null
+
+  return (
+    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-bg">
+      {src ? (
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-muted/50">
+          <ImageIcon className="h-5 w-5" />
+        </div>
+      )}
+      {(media?.kind === 'video' || task.mode === 'image_to_video') && (
+        <span className="absolute bottom-0.5 left-0.5 rounded bg-black/65 px-1 py-px text-[9px] text-white">
+          视频
+        </span>
+      )}
+    </div>
+  )
+}
+
 function TaskCard(props: {
   task: LocalTask
   busy: boolean
@@ -250,7 +306,8 @@ function TaskCard(props: {
         }
       }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <TaskThumb task={t} />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <StatusBadge status={t.status} />
@@ -270,7 +327,7 @@ function TaskCard(props: {
           </p>
           {t.error && <p className="mt-2 text-xs text-danger">{t.error}</p>}
         </div>
-        <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
           {(t.status === 'queued' || t.status === 'submitting' || t.status === 'waiting') && (
             <button
               className="btn-secondary !px-3 text-xs"
