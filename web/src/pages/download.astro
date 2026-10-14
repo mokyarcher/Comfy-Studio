@@ -1,0 +1,59 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { DownloadCards } from '../components/DownloadCards'
+import { Reveal } from '../components/Reveal'
+import releasesJson from '../data/releases.json'
+import { FALLBACK_RELEASES, type ReleasesManifest } from '../data/releases'
+import { withBase } from '../lib/paths'
+
+const releases = { ...FALLBACK_RELEASES, ...releasesJson } as ReleasesManifest
+---
+
+<BaseLayout
+  title="下载"
+  description="下载 Comfy Studio 与 Comfy Gateway Windows 客户端，或前往 GitHub Releases。"
+>
+  <section class="container-page py-16 sm:py-20">
+    <Reveal client:visible>
+      <p class="eyebrow">下载</p>
+      <h1 class="section-title mt-3">客户端与控制台</h1>
+      <p class="section-lead">
+        构建时可通过
+        <code class="font-mono text-accent">npm run sync:releases</code>
+        同步 GitHub Releases。无资产时一键跳转仓库。
+      </p>
+    </Reveal>
+
+    <div class="mt-10">
+      <DownloadCards client:load releases={releases} />
+    </div>
+
+    {
+      releases.notes ? (
+        <Reveal client:visible className="mt-12">
+          <div class="rounded-xl border border-border bg-panel/50 p-5">
+            <h2 class="text-sm font-medium text-text">Release 摘要</h2>
+            <p class="mt-2 whitespace-pre-wrap text-sm text-muted">{releases.notes}</p>
+            {releases.publishedAt ? (
+              <p class="mt-3 font-mono text-xs text-muted">
+                发布于 {new Date(releases.publishedAt).toLocaleString('zh-CN')}
+              </p>
+            ) : null}
+          </div>
+        </Reveal>
+      ) : null
+    }
+
+    <div class="mt-10 flex flex-wrap gap-3">
+      <a
+        href="https://github.com/mokyarcher/Comfy-Studio"
+        class="btn-secondary"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        源码仓库
+      </a>
+      <a href={withBase('deploy')} class="btn-secondary">部署前必读</a>
+    </div>
+  </section>
+</BaseLayout>

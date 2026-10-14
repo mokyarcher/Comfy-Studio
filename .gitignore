@@ -6,7 +6,7 @@ __pycache__/
 .env
 scripts/stack.local.json
 *.log
-data/
+/data/
 .idea/
 .vscode/
 *.egg-info/

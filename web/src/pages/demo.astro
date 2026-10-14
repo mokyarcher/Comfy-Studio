@@ -1,0 +1,71 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { DemoTour } from '../components/DemoTour'
+import { ShowcaseWall } from '../components/ShowcaseWall'
+import { Reveal } from '../components/Reveal'
+import showcase from '../data/showcase.json'
+import type { ShowcaseItem } from '../data/showcase'
+
+const items = showcase as ShowcaseItem[]
+---
+
+<BaseLayout
+  title="演示"
+  description="Comfy Studio 产品导览：创作、队列、画廊、展馆与 Gateway 运维。"
+>
+  <section class="container-page py-16 sm:py-20">
+    <Reveal client:visible>
+      <p class="eyebrow">演示</p>
+      <h1 class="section-title mt-3">从创作到展馆</h1>
+      <p class="section-lead">
+        第一期以分镜导览与样例墙为主。录屏素材可放在
+        <code class="font-mono text-accent">public/media/</code>
+        。
+      </p>
+    </Reveal>
+
+    <div class="mt-12 grid gap-10 lg:grid-cols-[1fr_1.1fr] lg:items-start">
+      <DemoTour client:visible />
+
+      <Reveal client:visible delay={0.1}>
+        <div class="overflow-hidden rounded-xl border border-border bg-panel">
+          <div class="border-b border-border px-4 py-3">
+            <p class="text-sm font-medium text-text">产品录屏</p>
+            <p class="text-xs text-muted">放置 studio-tour.mp4 后自动可用</p>
+          </div>
+          <div class="aspect-video bg-bg-elevated">
+            <video
+              class="h-full w-full object-cover"
+              controls
+              preload="none"
+              poster={`${import.meta.env.BASE_URL}og.svg`}
+            >
+              <source src={`${import.meta.env.BASE_URL}media/studio-tour.mp4`} type="video/mp4" />
+              你的浏览器不支持视频播放。可先阅读左侧导览。
+            </video>
+          </div>
+          <div class="grid grid-cols-2 gap-px border-t border-border bg-border">
+            <div class="bg-panel p-4">
+              <p class="text-xs text-muted">Studio</p>
+              <p class="mt-1 text-sm text-text">创作 · 队列 · 画廊</p>
+            </div>
+            <div class="bg-panel p-4">
+              <p class="text-xs text-muted">Gateway</p>
+              <p class="mt-1 text-sm text-text">启停 · 用户 · 库</p>
+            </div>
+          </div>
+        </div>
+      </Reveal>
+    </div>
+  </section>
+
+  <section class="container-page pb-20">
+    <Reveal client:visible>
+      <h2 class="section-title">样例作品墙</h2>
+      <p class="section-lead">静态样例占位；上线后可换成真实截图或只读展馆数据。</p>
+    </Reveal>
+    <div class="mt-8">
+      <ShowcaseWall client:visible items={items} />
+    </div>
+  </section>
+</BaseLayout>

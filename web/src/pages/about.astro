@@ -1,0 +1,49 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { Reveal } from '../components/Reveal'
+---
+
+<BaseLayout
+  title="关于"
+  description="Comfy Studio 开源边界、安全原则与反馈渠道。"
+>
+  <section class="container-page max-w-2xl py-16 sm:py-20">
+    <Reveal client:visible>
+      <p class="eyebrow">关于</p>
+      <h1 class="section-title mt-3">开源工具链</h1>
+      <p class="section-lead">
+        Comfy Studio 把本机 ComfyUI 封装为可远程使用的创作栈：FastAPI、Gateway、Studio。
+      </p>
+    </Reveal>
+
+    <div class="mt-10 space-y-6 text-sm leading-relaxed text-muted">
+      <div>
+        <h2 class="mb-2 text-base font-medium text-text">安全边界</h2>
+        <ul class="list-disc space-y-2 pl-5">
+          <li>推理始终在本地 GPU；云端只做 HTTPS 入口与转发。</li>
+          <li>不要将 ComfyUI 8188 暴露到公网。</li>
+          <li>上游润色 Key 只留服务端；客户端不落盘明文密钥。</li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="mb-2 text-base font-medium text-text">反馈</h2>
+        <p>
+          问题与建议请提交到
+          <a
+            class="text-accent underline underline-offset-2"
+            href="https://github.com/mokyarcher/Comfy-Studio/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub Issues
+          </a>
+          。
+        </p>
+      </div>
+      <div>
+        <h2 class="mb-2 text-base font-medium text-text">许可</h2>
+        <p>以仓库根目录 LICENSE 为准（若尚未添加，则以仓库声明为准）。</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,74 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { ArchDiagram } from '../components/ArchDiagram'
+import { Reveal } from '../components/Reveal'
+import LocalGuide from '../content/deploy/local.mdx'
+import RemoteGuide from '../content/deploy/remote.mdx'
+import { withBase } from '../lib/paths'
+---
+
+<BaseLayout
+  title="部署方案"
+  description="本机自用或 FRP + Nginx 远程创作。推理在本地 GPU，禁止暴露 ComfyUI 8188。"
+>
+  <section class="container-page py-16 sm:py-20">
+    <Reveal client:visible>
+      <p class="eyebrow">部署</p>
+      <h1 class="section-title mt-3">选一条适合你的路径</h1>
+      <p class="section-lead">官网只讲路径与边界；具体命令以仓库 README 与 docs 为准。</p>
+    </Reveal>
+
+    <div class="mt-10 grid gap-4 sm:grid-cols-2">
+      <a
+        href="#local"
+        class="rounded-xl border border-border bg-panel/60 p-5 transition hover:border-accent/40"
+      >
+        <p class="eyebrow">路径 A</p>
+        <h2 class="display mt-2 text-2xl text-text">本机自用</h2>
+        <p class="mt-2 text-sm text-muted">ComfyUI + FastAPI + Studio / Gateway，无需公网隧道。</p>
+      </a>
+      <a
+        href="#remote"
+        class="rounded-xl border border-border bg-panel/60 p-5 transition hover:border-accent/40"
+      >
+        <p class="eyebrow">路径 B</p>
+        <h2 class="display mt-2 text-2xl text-text">远程创作</h2>
+        <p class="mt-2 text-sm text-muted">云 Nginx HTTPS + FRP，本机 GPU 对外提供创作入口。</p>
+      </a>
+    </div>
+
+    <div class="mt-12">
+      <ArchDiagram client:load />
+    </div>
+
+    <div
+      class="mt-6 rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--color-warn)_8%,var(--color-panel))] px-4 py-3 text-sm text-text"
+    >
+      <strong class="text-warn">安全红线：</strong>
+      不要把 ComfyUI <code class="font-mono text-accent">8188</code> 暴露到公网。
+    </div>
+  </section>
+
+  <section id="local" class="container-page scroll-mt-24 pb-12">
+    <div class="prose-deploy rounded-xl border border-border bg-panel/40 p-6 sm:p-8">
+      <LocalGuide />
+    </div>
+  </section>
+
+  <section id="remote" class="container-page scroll-mt-24 pb-20">
+    <div class="prose-deploy rounded-xl border border-border bg-panel/40 p-6 sm:p-8">
+      <RemoteGuide />
+    </div>
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a
+        href="https://github.com/mokyarcher/Comfy-Studio"
+        class="btn-primary"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        打开仓库
+      </a>
+      <a href={withBase('download')} class="btn-secondary">下载客户端</a>
+    </div>
+  </section>
+</BaseLayout>

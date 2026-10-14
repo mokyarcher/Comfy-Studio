@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0B0D10"/>
+  <rect width="1200" height="630" fill="url(#g)" opacity="0.9"/>
+  <defs>
+    <radialGradient id="g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 -40) rotate(90) scale(520 800)">
+      <stop stop-color="#3DDC97" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#0B0D10" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <text x="80" y="280" fill="#E8E6E1" font-family="Georgia, serif" font-size="72" font-weight="600">Comfy Studio</text>
+  <text x="80" y="360" fill="#9A968C" font-family="system-ui, sans-serif" font-size="32">,0—› · Ü\</text>
+  <rect x="80" y="420" width="180" height="8" rx="2" fill="#3DDC97"/>
+</svg>

@@ -1,0 +1,10 @@
+{
+  "tag": "",
+  "publishedAt": null,
+  "notes": "发布包由 GitHub Releases 提供。若本页尚未同步到资产，请前往仓库下载最新构建。",
+  "apps": {
+    "studio": null,
+    "gateway": null
+  },
+  "sourceUrl": "https://github.com/mokyarcher/Comfy-Studio/releases"
+}

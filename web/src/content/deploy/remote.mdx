@@ -1,0 +1,22 @@
+## 远程创作（FRP + Nginx）
+
+适合把创作端放在另一台机器：公网只暴露 HTTPS 入口，本机 GPU 通过隧道接到云端。
+
+### 检查清单
+
+1. 云主机：Nginx（HTTPS）+ frps
+2. 本机：ComfyUI + FastAPI + frpc（可用 Gateway 管理）
+3. Studio 填写公网 Base URL 与账号 / API Key
+4. 用 Studio「测试连接」确认链路
+
+### 安全边界
+
+<div class="warning">
+
+**禁止**把 ComfyUI `8188` 或 FastAPI 直接绑到公网 `0.0.0.0` 当「临时方便」。公网入口应是 Nginx HTTPS，隧道落到本机环回地址。
+
+</div>
+
+- 上游润色 Key 只留服务端（`POLISH_*`）
+- 客户端密钥走主进程安全存储，不在渲染进程明文落盘
+- 部署模板见仓库 [`deploy/`](https://github.com/mokyarcher/Comfy-Studio/tree/main/deploy)，长文见 [`docs/`](https://github.com/mokyarcher/Comfy-Studio/tree/main/docs)

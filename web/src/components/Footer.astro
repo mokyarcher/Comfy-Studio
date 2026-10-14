@@ -1,0 +1,36 @@
+---
+import { withBase } from '../lib/paths'
+
+const year = new Date().getFullYear()
+---
+
+<footer class="mt-24 border-t border-border/80">
+  <div class="container-page flex flex-col gap-6 py-10 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="display text-xl text-text">Comfy Studio</p>
+      <p class="mt-2 max-w-md text-sm text-muted">
+        推理永远在本机 GPU；云端只做入口与转发。不要把 ComfyUI 8188 暴露到公网。
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
+      <a href={withBase('demo')} class="hover:text-accent">演示</a>
+      <a href={withBase('deploy')} class="hover:text-accent">部署</a>
+      <a href={withBase('download')} class="hover:text-accent">下载</a>
+      <a href={withBase('about')} class="hover:text-accent">关于</a>
+      <a
+        href="https://github.com/mokyarcher/Comfy-Studio"
+        class="hover:text-accent"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        源码
+      </a>
+    </div>
+  </div>
+  <div class="border-t border-border/60">
+    <div class="container-page flex flex-col gap-2 py-4 text-xs text-muted sm:flex-row sm:justify-between">
+      <span>© {year} Comfy Studio</span>
+      <span>密钥与配额留在服务端 · 客户端不落盘明文 Key</span>
+    </div>
+  </div>
+</footer>

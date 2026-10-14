@@ -24,6 +24,7 @@ Gateway（本机控制台）
 | `desktop/gateway` | Electron 服务端控制台 |
 | `desktop/studio` | Electron 远程创作客户端 |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
+| `web/` | 官方网站（Astro）：介绍 / 演示 / 部署 / 下载 |
 | `scripts/` | 启动、巡检、UI→API 工作流转换；`start_stack.ps1` 一键 ComfyUI+API+frpc+Studio（路径见 `stack.local.json`） |
 | `tests/` | pytest |
 | `docs/` | 实施/部署/排障长文 |
@@ -112,6 +113,7 @@ npm run dev
 | Agent / 开发约束（本文） | `AGENTS.md` |
 | 长篇设计、部署、排障 | `docs/` |
 | 桌面端说明 | `desktop/README.md` |
+| 官方网站 | `web/README.md` |
 
 改架构或目录约定时，**同步更新本文**，避免 Agent 按旧路径瞎改。
 

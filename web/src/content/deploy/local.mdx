@@ -1,0 +1,17 @@
+## 本机自用
+
+适合单机创作：本机跑 ComfyUI + FastAPI，用 Studio 或直接调 API。
+
+### 检查清单
+
+1. ComfyUI 已能用目标工作流出图
+2. 克隆仓库，创建虚拟环境并安装依赖
+3. 复制 `.env.example` → `.env`，至少设置 `API_KEY`
+4. 确认 `llm_workflow/` 下工作流与 mapping 路径正确
+5. 运行 `scripts/start_api.ps1`，访问 `/health/ready`
+
+### 要点
+
+- 推理在本机 GPU；无需 FRP / 公网域名
+- Gateway 可用来启停服务、管理用户与提示词库
+- 详细步骤见仓库 [README](https://github.com/mokyarcher/Comfy-Studio/blob/main/README.md)

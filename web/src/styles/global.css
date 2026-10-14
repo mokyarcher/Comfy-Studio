@@ -1,0 +1,211 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #0b0d10;
+  --color-bg-elevated: #12151a;
+  --color-panel: #161a21;
+  --color-border: #2a313c;
+  --color-text: #e8e6e1;
+  --color-muted: #9a968c;
+  --color-accent: #3ddc97;
+  --color-accent-dim: #2a9d6e;
+  --color-warn: #e8a54b;
+  --font-display: 'Fraunces', 'Noto Serif SC', Georgia, serif;
+  --font-sans: 'Noto Sans SC', 'Source Han Sans SC', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    color: var(--color-text);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+@layer components {
+  .site-shell {
+    position: relative;
+    isolation: isolate;
+    min-height: 100vh;
+  }
+
+  .site-shell::before {
+    content: '';
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(61, 220, 151, 0.08), transparent 55%),
+      radial-gradient(ellipse 40% 30% at 100% 60%, rgba(61, 220, 151, 0.04), transparent 50%),
+      var(--color-bg);
+  }
+
+  .site-shell::after {
+    content: '';
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.35;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
+  }
+
+  .container-page {
+    width: min(1120px, calc(100% - 2.5rem));
+    margin-inline: auto;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    background: var(--color-accent);
+    color: #06140e;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    background: color-mix(in srgb, var(--color-accent) 88%, white);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-panel) 70%, transparent);
+    color: var(--color-text);
+    font-weight: 500;
+    font-size: 0.9375rem;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  }
+
+  .btn-secondary:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+    background: var(--color-bg-elevated);
+    transform: translateY(-1px);
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .section-lead {
+    margin-top: 0.75rem;
+    max-width: 36rem;
+    color: var(--color-muted);
+    font-size: 1.0625rem;
+  }
+
+  .prose-deploy {
+    color: var(--color-muted);
+    font-size: 0.975rem;
+    line-height: 1.75;
+  }
+
+  .prose-deploy h2 {
+    margin: 1.75rem 0 0.75rem;
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 600;
+  }
+
+  .prose-deploy h3 {
+    margin: 1.25rem 0 0.5rem;
+    color: var(--color-text);
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  .prose-deploy ul {
+    margin: 0.75rem 0;
+    padding-left: 1.25rem;
+  }
+
+  .prose-deploy li {
+    margin: 0.35rem 0;
+  }
+
+  .prose-deploy a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .prose-deploy code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    padding: 0.1em 0.35em;
+    border-radius: 0.25rem;
+    background: var(--color-bg-elevated);
+    color: var(--color-accent);
+  }
+
+  .prose-deploy strong {
+    color: var(--color-text);
+    font-weight: 600;
+  }
+
+  .prose-deploy .warning {
+    margin: 1.25rem 0;
+    padding: 0.875rem 1rem;
+    border-left: 3px solid var(--color-warn);
+    background: color-mix(in srgb, var(--color-warn) 8%, var(--color-panel));
+    color: var(--color-text);
+    border-radius: 0 0.375rem 0.375rem 0;
+  }
+}
