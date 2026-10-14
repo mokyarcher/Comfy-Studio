@@ -1,7 +1,17 @@
 import { useState, type FormEvent } from 'react'
+import { GlassSelect } from '@/components/GlassSelect'
+import { BACKGROUNDS } from '@/lib/backgrounds'
 import { authChangePassword, testConnection } from '@/lib/api'
 import { useSession, maskedKey } from '@/store/session'
-import { useSettings } from '@/store/settings'
+import {
+  GLASS_BLUR_DEFAULT,
+  GLASS_BLUR_MAX,
+  GLASS_BLUR_MIN,
+  GLASS_OPACITY_DEFAULT,
+  GLASS_OPACITY_MAX,
+  GLASS_OPACITY_MIN,
+  useSettings
+} from '@/store/settings'
 import { useToast } from '@/store/toast'
 
 export function SettingsPage() {
@@ -27,95 +37,254 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-lg font-medium text-text">参数设置</h1>
+    <div className="page space-y-5">
+      <div className="page-header mb-0">
+        <div>
+          <h1 className="page-title">参数设置</h1>
+          <p className="page-sub">账号与创作默认值保存在本机浏览器。</p>
+        </div>
+      </div>
 
-      <section className="card space-y-3 p-4">
-        <h2 className="text-sm font-medium text-text">账号</h2>
-        <p className="text-xs text-muted">
-          {user.username} · Key {maskedKey(user)}
-        </p>
-        <button
-          type="button"
-          className="btn-secondary text-xs"
-          onClick={async () => {
-            const r = await testConnection()
-            push(r.ok ? r.message : r.message, r.ok ? 'success' : 'error')
-            if (r.ok && r.maxSteps) {
-              /* limits available for future UI */
-            }
-          }}
-        >
-          测试连接
-        </button>
-        <form className="space-y-2" onSubmit={onChangePassword}>
-          <input className="input" type="password" placeholder="当前密码" value={oldPw} onChange={(e) => setOldPw(e.target.value)} required />
-          <input className="input" type="password" placeholder="新密码" value={newPw} onChange={(e) => setNewPw(e.target.value)} required />
-          <button type="submit" className="btn-secondary">
-            修改密码
-          </button>
-        </form>
+      <section className="card space-y-3 p-4 sm:p-5">
+        <h2 className="text-sm font-medium text-text">外观</h2>
+        <p className="text-xs text-muted">背景、浓度与毛玻璃强度保存在本机浏览器，即时生效。</p>
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="label mb-0" htmlFor="glass-opacity">
+              玻璃浓度
+            </label>
+            <button
+              type="button"
+              className="text-[11px] text-muted hover:text-text"
+              onClick={() => patch({ glassOpacity: GLASS_OPACITY_DEFAULT })}
+            >
+              重置
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 text-[11px] text-muted">更透</span>
+            <input
+              id="glass-opacity"
+              className="glass-range w-full"
+              type="range"
+              min={GLASS_OPACITY_MIN}
+              max={GLASS_OPACITY_MAX}
+              step={1}
+              value={settings.glassOpacity}
+              onChange={(e) => patch({ glassOpacity: Number(e.target.value) })}
+            />
+            <span className="shrink-0 text-[11px] text-muted">更实</span>
+            <span className="w-8 shrink-0 text-right text-xs tabular-nums text-text">{settings.glassOpacity}</span>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="label mb-0" htmlFor="glass-blur">
+              毛玻璃强度
+            </label>
+            <button
+              type="button"
+              className="text-[11px] text-muted hover:text-text"
+              onClick={() => patch({ glassBlur: GLASS_BLUR_DEFAULT })}
+            >
+              重置
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 text-[11px] text-muted">更弱</span>
+            <input
+              id="glass-blur"
+              className="glass-range w-full"
+              type="range"
+              min={GLASS_BLUR_MIN}
+              max={GLASS_BLUR_MAX}
+              step={1}
+              value={settings.glassBlur}
+              onChange={(e) => patch({ glassBlur: Number(e.target.value) })}
+            />
+            <span className="shrink-0 text-[11px] text-muted">更强</span>
+            <span className="w-8 shrink-0 text-right text-xs tabular-nums text-text">{settings.glassBlur}</span>
+          </div>
+        </div>
+
+        <div>
+          <p className="label">背景图</p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
+            {BACKGROUNDS.map((bg) => {
+              const active = settings.backgroundId === bg.id
+              return (
+                <button
+                  key={bg.id}
+                  type="button"
+                  className={`overflow-hidden rounded-lg border text-left transition ${
+                    active
+                      ? 'border-white/45 shadow-[0_0_0_2px_rgba(255,255,255,0.22)]'
+                      : 'border-white/10 hover:border-white/35'
+                  }`}
+                  title={bg.label}
+                  onClick={() => {
+                    if (settings.backgroundId === bg.id) return
+                    patch({ backgroundId: bg.id })
+                  }}
+                >
+                  <img src={bg.url} alt={bg.label} className="aspect-video w-full object-cover" loading="eager" decoding="async" />
+                  <span className="block truncate px-1.5 py-1 text-[11px] text-muted">{bg.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </section>
 
-      <section className="card grid gap-3 p-4 sm:grid-cols-2">
-        <h2 className="text-sm font-medium text-text sm:col-span-2">创作默认值</h2>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="card space-y-3 p-4 sm:p-5">
+          <h2 className="text-sm font-medium text-text">账号</h2>
+          <p className="text-xs text-muted">
+            {user.username} · Key {maskedKey(user)}
+          </p>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={async () => {
+              const r = await testConnection()
+              push(r.ok ? r.message : r.message, r.ok ? 'success' : 'error')
+            }}
+          >
+            测试连接
+          </button>
+          <form className="space-y-2.5 pt-1" onSubmit={onChangePassword}>
+            <input
+              className="input"
+              type="password"
+              placeholder="当前密码"
+              value={oldPw}
+              onChange={(e) => setOldPw(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="新密码"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              required
+            />
+            <button type="submit" className="btn-secondary">
+              修改密码
+            </button>
+          </form>
+        </section>
+
+        <section className="card grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+          <h2 className="text-sm font-medium text-text sm:col-span-2">网关润色</h2>
+          <div>
+            <label className="label">语言</label>
+            <GlassSelect
+              aria-label="语言"
+              value={settings.polishLanguage}
+              onChange={(v) => patch({ polishLanguage: v as typeof settings.polishLanguage })}
+              options={[
+                { value: 'match_input', label: '跟随输入' },
+                { value: 'zh', label: '中文' },
+                { value: 'en', label: '英文' }
+              ]}
+            />
+          </div>
+          <div>
+            <label className="label">详细度</label>
+            <GlassSelect
+              aria-label="详细度"
+              value={settings.polishDetail}
+              onChange={(v) => patch({ polishDetail: v as typeof settings.polishDetail })}
+              options={[
+                { value: 'concise', label: '简洁' },
+                { value: 'standard', label: '标准' },
+                { value: 'detailed', label: '详细' }
+              ]}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">模型画像</label>
+            <GlassSelect
+              aria-label="模型画像"
+              value={settings.polishProfile}
+              onChange={(v) => patch({ polishProfile: v as typeof settings.polishProfile })}
+              options={[
+                { value: 'unknown', label: '通用' },
+                { value: 'sdxl', label: 'SDXL' },
+                { value: 'flux', label: 'Flux' },
+                { value: 'wan', label: 'Wan' }
+              ]}
+            />
+          </div>
+        </section>
+      </div>
+
+      <section className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 sm:p-5">
+        <h2 className="text-sm font-medium text-text sm:col-span-2 lg:col-span-3">创作默认值</h2>
         <div>
           <label className="label">默认宽</label>
-          <input className="input" type="number" value={settings.defaultWidth} onChange={(e) => patch({ defaultWidth: Number(e.target.value) })} />
+          <input
+            className="input"
+            type="number"
+            value={settings.defaultWidth}
+            onChange={(e) => patch({ defaultWidth: Number(e.target.value) })}
+          />
         </div>
         <div>
           <label className="label">默认高</label>
-          <input className="input" type="number" value={settings.defaultHeight} onChange={(e) => patch({ defaultHeight: Number(e.target.value) })} />
+          <input
+            className="input"
+            type="number"
+            value={settings.defaultHeight}
+            onChange={(e) => patch({ defaultHeight: Number(e.target.value) })}
+          />
         </div>
         <div>
           <label className="label">默认步数</label>
-          <input className="input" type="number" value={settings.defaultSteps} onChange={(e) => patch({ defaultSteps: Number(e.target.value) })} />
+          <input
+            className="input"
+            type="number"
+            value={settings.defaultSteps}
+            onChange={(e) => patch({ defaultSteps: Number(e.target.value) })}
+          />
         </div>
         <div>
           <label className="label">轮询间隔 (ms)</label>
-          <input className="input" type="number" value={settings.pollIntervalMs} onChange={(e) => patch({ pollIntervalMs: Number(e.target.value) })} />
+          <input
+            className="input"
+            type="number"
+            value={settings.pollIntervalMs}
+            onChange={(e) => patch({ pollIntervalMs: Number(e.target.value) })}
+          />
         </div>
         <div>
           <label className="label">任务超时 (ms)</label>
-          <input className="input" type="number" value={settings.jobTimeoutMs} onChange={(e) => patch({ jobTimeoutMs: Number(e.target.value) })} />
+          <input
+            className="input"
+            type="number"
+            value={settings.jobTimeoutMs}
+            onChange={(e) => patch({ jobTimeoutMs: Number(e.target.value) })}
+          />
         </div>
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-2 lg:col-span-3">
           <label className="label">默认负向</label>
-          <textarea className="input min-h-[4rem]" value={settings.defaultNegativePrompt} onChange={(e) => patch({ defaultNegativePrompt: e.target.value })} />
+          <textarea
+            className="input min-h-[4.5rem]"
+            value={settings.defaultNegativePrompt}
+            onChange={(e) => patch({ defaultNegativePrompt: e.target.value })}
+          />
         </div>
-        <label className="flex items-center gap-2 text-sm text-muted sm:col-span-2">
-          <input type="checkbox" checked={settings.autoPurge} onChange={(e) => patch({ autoPurge: e.target.checked })} />
+        <label className="flex items-center gap-2 text-sm text-muted sm:col-span-2 lg:col-span-3">
+          <input
+            type="checkbox"
+            checked={settings.autoPurge}
+            onChange={(e) => patch({ autoPurge: e.target.checked })}
+          />
           下载到画廊后自动 purge 服务端任务
         </label>
-      </section>
-
-      <section className="card grid gap-3 p-4 sm:grid-cols-3">
-        <h2 className="text-sm font-medium text-text sm:col-span-3">网关润色</h2>
-        <div>
-          <label className="label">语言</label>
-          <select className="input" value={settings.polishLanguage} onChange={(e) => patch({ polishLanguage: e.target.value as typeof settings.polishLanguage })}>
-            <option value="match_input">跟随输入</option>
-            <option value="zh">中文</option>
-            <option value="en">英文</option>
-          </select>
-        </div>
-        <div>
-          <label className="label">详细度</label>
-          <select className="input" value={settings.polishDetail} onChange={(e) => patch({ polishDetail: e.target.value as typeof settings.polishDetail })}>
-            <option value="concise">简洁</option>
-            <option value="standard">标准</option>
-            <option value="detailed">详细</option>
-          </select>
-        </div>
-        <div>
-          <label className="label">模型画像</label>
-          <select className="input" value={settings.polishProfile} onChange={(e) => patch({ polishProfile: e.target.value as typeof settings.polishProfile })}>
-            <option value="unknown">通用</option>
-            <option value="sdxl">SDXL</option>
-            <option value="flux">Flux</option>
-            <option value="wan">Wan</option>
-          </select>
-        </div>
       </section>
     </div>
   )

@@ -1,10 +1,12 @@
+import { createPortal } from 'react-dom'
 import { useToast } from '@/store/toast'
 
+/** Portaled to body so it never becomes a flex sibling of the workspace (layout shift). */
 export function ToastHost() {
   const items = useToast((s) => s.items)
   const dismiss = useToast((s) => s.dismiss)
-  if (!items.length) return null
-  return (
+  if (!items.length || typeof document === 'undefined') return null
+  return createPortal(
     <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
       {items.map((t) => (
         <button
@@ -22,6 +24,7 @@ export function ToastHost() {
           {t.message}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body
   )
 }

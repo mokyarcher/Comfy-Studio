@@ -6,41 +6,48 @@ export function QueuePage() {
   const clearFinished = useQueue((s) => s.clearFinished)
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-medium text-text">任务队列</h1>
+    <div className="page space-y-4">
+      <div className="page-header mb-0">
+        <div>
+          <h1 className="page-title">任务队列</h1>
+          <p className="page-sub">无法取消远端 GPU 任务；移除仅删本地记录。</p>
+        </div>
         <button type="button" className="btn-secondary text-xs" onClick={clearFinished}>
           清理已结束
         </button>
       </div>
+
       {!tasks.length ? (
-        <p className="text-sm text-muted">暂无任务。记录保存在本会话，刷新后可能保留。</p>
+        <div className="empty-state min-h-[16rem]">
+          <p className="text-sm text-muted">暂无任务</p>
+        </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-3 xl:grid-cols-2">
           {tasks.map((t) => (
-            <li key={t.id} className="card flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="truncate text-sm text-text">{t.prompt}</p>
-                <p className="mt-1 text-xs text-muted">
+            <li key={t.id} className="card flex gap-3 p-3.5 sm:p-4">
+              {t.previewUrl ? (
+                <img src={t.previewUrl} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-bg text-[10px] text-muted">
+                  无预览
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-sm text-text">{t.prompt}</p>
+                <p className="mt-1.5 text-xs text-muted">
                   {t.mode} · {t.status}
                   {t.progressMessage ? ` · ${t.progressMessage}` : ''}
                   {t.remoteTaskId ? ` · ${t.remoteTaskId.slice(0, 8)}` : ''}
                 </p>
                 {t.error ? <p className="mt-1 text-xs text-danger">{t.error}</p> : null}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {t.previewUrl ? (
-                  <img src={t.previewUrl} alt="" className="h-14 w-14 rounded object-cover" />
-                ) : null}
-                <button type="button" className="btn-ghost text-xs" onClick={() => remove(t.id)}>
-                  移除本地
-                </button>
-              </div>
+              <button type="button" className="btn-ghost shrink-0 self-start text-xs" onClick={() => remove(t.id)}>
+                移除
+              </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="text-[11px] text-muted">无法取消远端 GPU 任务；移除仅删本地记录。</p>
     </div>
   )
 }

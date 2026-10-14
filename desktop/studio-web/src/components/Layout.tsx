@@ -1,19 +1,24 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Clapperboard,
-  FolderHeart,
   Images,
   Library,
   ListOrdered,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Sparkles,
   Wand2
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fetchGpuStatus, testConnection } from '@/lib/api'
 import { useSession } from '@/store/session'
+import { useSettings } from '@/store/settings'
 import { ToastHost } from './ToastHost'
+import { WorkspaceBackground } from './WorkspaceBackground'
+
+const SIDEBAR_KEY = 'comfy-studio-web-sidebar-collapsed'
 
 const nav = [
   { to: '/create', label: '开始创作', icon: Wand2 },
@@ -24,12 +29,191 @@ const nav = [
   { to: '/settings', label: '参数设置', icon: Settings }
 ]
 
+type PillBox = { top: number; left: number; width: number; height: number }
+
+function readPillBox(navEl: HTMLElement, itemEl: HTMLElement): PillBox {
+  const navBox = navEl.getBoundingClientRect()
+  const box = itemEl.getBoundingClientRect()
+  return {
+    top: box.top - navBox.top,
+    left: box.left - navBox.left,
+    width: box.width,
+    height: box.height
+  }
+}
+
+function applyPillBox(el: HTMLDivElement, box: PillBox) {
+  el.style.top = `${box.top}px`
+  el.style.left = `${box.left}px`
+  el.style.width = `${box.width}px`
+  el.style.height = `${box.height}px`
+  el.style.transform = 'scale(1)'
+}
+
 export function Layout() {
   const user = useSession((s) => s.user)!
   const logout = useSession((s) => s.logout)
+  const backgroundId = useSettings((s) => s.backgroundId)
+  const location = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+  const asideRef = useRef<HTMLElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const indicatorRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef(new Map<string, HTMLAnchorElement>())
+  const pillReadyRef = useRef(false)
+  const pillAnimRef = useRef<Animation | null>(null)
   const [gpu, setGpu] = useState('—')
   const [health, setHealth] = useState('检测中…')
+  const [connected, setConnected] = useState(false)
   const [bgHint, setBgHint] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0 })
+  }, [location.pathname])
+
+  const syncNavPill = (animate: boolean) => {
+    const navEl = navRef.current
+    const ind = indicatorRef.current
+    if (!navEl || !ind) return
+
+    const activePath =
+      nav.find((n) => location.pathname === n.to || location.pathname.startsWith(`${n.to}/`))?.to ??
+      location.pathname
+    const itemEl = itemRefs.current.get(activePath)
+    if (!itemEl) return
+
+    const next = readPillBox(navEl, itemEl)
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    pillAnimRef.current?.cancel()
+    pillAnimRef.current = null
+
+    if (!animate || !pillReadyRef.current || reduceMotion) {
+      applyPillBox(ind, next)
+      pillReadyRef.current = true
+      return
+    }
+
+    const from: PillBox = {
+      top: parseFloat(ind.style.top) || next.top,
+      left: parseFloat(ind.style.left) || next.left,
+      width: parseFloat(ind.style.width) || next.width,
+      height: parseFloat(ind.style.height) || next.height
+    }
+
+    const same =
+      Math.abs(from.top - next.top) < 0.5 &&
+      Math.abs(from.left - next.left) < 0.5 &&
+      Math.abs(from.width - next.width) < 0.5
+    if (same) {
+      applyPillBox(ind, next)
+      return
+    }
+
+    const mid: PillBox = {
+      top: (from.top + next.top) / 2,
+      left: (from.left + next.left) / 2,
+      width: (from.width + next.width) / 2,
+      height: (from.height + next.height) / 2
+    }
+
+    const anim = ind.animate(
+      [
+        {
+          top: `${from.top}px`,
+          left: `${from.left}px`,
+          width: `${from.width}px`,
+          height: `${from.height}px`,
+          transform: 'scale(1)'
+        },
+        {
+          top: `${mid.top}px`,
+          left: `${mid.left}px`,
+          width: `${mid.width}px`,
+          height: `${mid.height}px`,
+          transform: 'scale(0.72)',
+          offset: 0.48
+        },
+        {
+          top: `${next.top}px`,
+          left: `${next.left}px`,
+          width: `${next.width}px`,
+          height: `${next.height}px`,
+          transform: 'scale(1)'
+        }
+      ],
+      {
+        duration: 460,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        fill: 'forwards'
+      }
+    )
+    pillAnimRef.current = anim
+    anim.finished
+      .then(() => {
+        applyPillBox(ind, next)
+        anim.cancel()
+        if (pillAnimRef.current === anim) pillAnimRef.current = null
+      })
+      .catch(() => undefined)
+  }
+
+  // Route change: animate pill between items
+  useLayoutEffect(() => {
+    syncNavPill(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync against pathname only
+  }, [location.pathname])
+
+  // Collapse/expand: width CSS-transitions; snap pill during + after so it never overflows
+  useLayoutEffect(() => {
+    const aside = asideRef.current
+    syncNavPill(false)
+
+    let raf = 0
+    const tick = (start: number) => {
+      syncNavPill(false)
+      if (performance.now() - start < 240) {
+        raf = requestAnimationFrame(() => tick(start))
+      }
+    }
+    raf = requestAnimationFrame(() => tick(performance.now()))
+
+    const onEnd = (e: TransitionEvent) => {
+      if (e.target !== aside) return
+      if (e.propertyName !== 'width') return
+      syncNavPill(false)
+    }
+    aside?.addEventListener('transitionend', onEnd)
+    return () => {
+      cancelAnimationFrame(raf)
+      aside?.removeEventListener('transitionend', onEnd)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed])
+
+  useEffect(() => {
+    const navEl = navRef.current
+    if (!navEl || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => syncNavPill(false))
+    ro.observe(navEl)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed])
 
   useEffect(() => {
     let alive = true
@@ -39,6 +223,7 @@ export function Layout() {
         fetchGpuStatus({ apiKey: user.apiKey })
       ])
       if (!alive) return
+      setConnected(h.ok)
       setHealth(h.ok ? `已连接 · ${h.latencyMs} ms` : h.message)
       setGpu(g.ok ? (g.state === 'idle' ? 'GPU 空闲' : 'GPU 繁忙') : g.message)
     }
@@ -60,59 +245,105 @@ export function Layout() {
   }, [])
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-panel">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <div>
-            <p className="text-sm font-semibold text-text">
-              Comfy <span className="text-primary">Studio</span>
-            </p>
-            <p className="text-[11px] text-muted">Web 工作空间</p>
-          </div>
+    <div className="workspace-shell flex h-full min-h-0">
+      <WorkspaceBackground backgroundId={backgroundId} />
+      <aside
+        ref={asideRef}
+        className={`glass-panel flex shrink-0 flex-col border-r border-white/10 transition-[width] duration-200 ${
+          collapsed ? 'w-14' : 'w-52'
+        }`}
+      >
+        <div className={`flex h-12 select-none items-center border-b border-border ${collapsed ? 'justify-center px-1' : 'gap-2 px-3'}`}>
+          {!collapsed ? (
+            <>
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-text" aria-label="Comfy Studio">
+                  Comfy <span className="text-primary">Studio</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-ghost !h-7 !w-7 !p-0"
+                title="收起"
+                aria-label="收起导航"
+                onClick={() => setCollapsed(true)}
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn-ghost !h-8 !w-8 !p-0"
+              title="展开导航"
+              aria-label="展开导航"
+              onClick={() => setCollapsed(false)}
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        <nav className="flex flex-1 flex-col gap-1 p-2">
+
+        <nav
+          ref={navRef}
+          className={`nav-rail flex flex-1 flex-col gap-1.5 py-3 ${collapsed ? 'px-1.5' : 'px-2.5'}`}
+        >
+          <div ref={indicatorRef} className="nav-pill-indicator" aria-hidden />
           {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              title={collapsed ? item.label : undefined}
+              ref={(el) => {
+                if (el) itemRefs.current.set(item.to, el)
+                else itemRefs.current.delete(item.to)
+              }}
               className={({ isActive }) =>
-                `flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition ${
-                  isActive
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted hover:bg-panel-elevated hover:text-text'
+                `nav-pill ${isActive ? 'nav-pill-active' : ''} ${
+                  collapsed ? 'justify-center px-0' : 'justify-center gap-2.5 px-3'
                 }`
               }
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
+              {!collapsed ? <span className="truncate">{item.label}</span> : null}
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-border p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs text-muted">
-            <FolderHeart className="h-3.5 w-3.5" />
-            <span className="truncate">{user.name || user.username}</span>
-          </div>
-          <button type="button" className="btn-ghost w-full justify-start px-2" onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            退出登录
+
+        <div className={`border-t border-border ${collapsed ? 'p-1.5' : 'p-2'}`}>
+          {!collapsed ? (
+            <p className="mb-1 truncate px-2 text-[11px] text-muted">{user.name || user.username}</p>
+          ) : null}
+          <button
+            type="button"
+            className={`btn-ghost h-9 w-full text-xs hover:text-danger ${collapsed ? 'justify-center !px-0' : 'justify-start px-2'}`}
+            title="退出登录"
+            onClick={logout}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            {!collapsed ? '退出登录' : null}
           </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-panel px-4 py-2.5 text-xs text-muted">
-          <span className="rounded-full border border-border bg-bg px-2.5 py-1">{health}</span>
-          <span className="rounded-full border border-border bg-bg px-2.5 py-1">{gpu}</span>
+        <header className="glass-panel flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2 sm:px-5">
+          <span className={`status-chip ${connected ? 'status-chip-ok' : ''}`}>{health}</span>
+          <span className="status-chip">{gpu}</span>
           {bgHint ? (
-            <span className="rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-warning">
+            <span className="status-chip border-warning/40 bg-warning/10 text-warning">
               标签页在后台时轮询可能变慢
             </span>
           ) : null}
         </header>
-        <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
-          <Outlet />
+        <main ref={mainRef} className="workspace-main">
+          <div key={location.pathname} className="page-enter">
+            <div className="page-enter-veil" aria-hidden />
+            <div className="page-enter-body">
+              <Outlet />
+            </div>
+          </div>
         </main>
       </div>
       <ToastHost />

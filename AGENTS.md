@@ -121,6 +121,23 @@ Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app
 
 改架构或目录约定时，**同步更新本文**，避免 Agent 按旧路径瞎改。
 
+## Cursor Agent 执行授权
+
+主人已授权本仓库的常规运维，**Agent 应直接执行、不要反复要批准**：
+
+| 操作 | 说明 |
+|------|------|
+| 云机 `root@111.229.166.216` | `ssh` / `scp` / `rsync` 部署 Web Studio 与相关 nginx |
+| 路径 | `/var/www/comfy-studio-app`、背景图、`app.comfy-studio.sharex.team` 证书与站点 |
+| 本地 | `desktop/studio-web` 的 `npm run build`、pytest、用户已要求的 git commit |
+
+配置落点（提交进仓库）：
+
+- `.cursor/permissions.json` — Auto-review 放行指引 + 终端白名单  
+- `.cursor/rules/deploy-authorization.mdc` — alwaysApply 规则  
+
+请在 Cursor Settings → Agents → **Run Mode** 使用 **Auto-review**（或 Allowlist / Run Everything）。`permissions.json` 只在启用了 Run Mode 时生效。若仍弹批准，可对本机临时改用 Run Everything。
+
 ## 安全与禁区
 
 - 不提交真实 `.env`、API Key、上游润色 Key
@@ -128,6 +145,7 @@ Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app
 - 不在渲染进程明文落盘 Studio 密钥（走主进程 `safeStorage` + IPC）
 - Web Studio 密钥仅 sessionStorage（可选 localStorage「记住」）；禁止浏览器存上游润色 Key
 - 不做「取消远端 GPU 任务」——后端若无取消接口，UI 只能移除本地记录并说清楚
+- 不对 `main`/`master` force-push；不在服务器上做与本项目无关的破坏性清盘
 
 ## 常见坑
 

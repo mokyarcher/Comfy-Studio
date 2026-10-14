@@ -3,7 +3,20 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'cache-backgrounds',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.startsWith('/backgrounds/')) {
+            res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
+          }
+          next()
+        })
+      }
+    }
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src')

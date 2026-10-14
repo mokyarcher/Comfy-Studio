@@ -453,9 +453,9 @@ function GalleryThumb({ id }: { id: string }) {
   const showImg = data?.kind === 'image' ? data.url : poster
 
   return (
-    <div className="aspect-square bg-bg">
+    <div className="relative aspect-square w-full overflow-hidden bg-bg">
       {showImg ? (
-        <div className="relative h-full w-full">
+        <div className="absolute inset-0 h-full w-full">
           <img
             src={showImg}
             alt=""

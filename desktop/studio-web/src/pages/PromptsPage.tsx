@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { PromptTranslateButton } from '@/components/PromptTranslateButton'
 import {
   deleteSharedPrompt,
   fetchPromptLibrary,
@@ -8,7 +10,6 @@ import {
 import type { PromptTemplate, SharedPrompt } from '@/lib/types'
 import { useSession } from '@/store/session'
 import { useToast } from '@/store/toast'
-import { useNavigate } from 'react-router-dom'
 
 type Tab = 'official' | 'shared' | 'local'
 
@@ -80,39 +81,63 @@ export function PromptsPage() {
     push('已保存到本地库', 'success')
   }
 
-  const list =
-    tab === 'official' ? official : tab === 'shared' ? shared : local
+  const list = tab === 'official' ? official : tab === 'shared' ? shared : local
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <h1 className="text-lg font-medium text-text">提示词库</h1>
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ['official', '官方'],
-            ['local', '本地'],
-            ['shared', '共享库']
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-primary/20 text-primary' : 'bg-panel text-muted'}`}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="page space-y-4">
+      <div className="page-header mb-0">
+        <div>
+          <h1 className="page-title">提示词库</h1>
+          <p className="page-sub">选用后带回创作页。</p>
+        </div>
+        <div className="seg">
+          {(
+            [
+              ['official', '官方'],
+              ['local', '本地'],
+              ['shared', '共享库']
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`seg-item ${tab === id ? 'seg-item-active' : 'seg-item-idle'}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'local' ? (
-        <div className="card space-y-2 p-4">
-          <p className="text-sm text-muted">新建本地模板</p>
-          <input className="input" placeholder="标题" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-          <textarea className="input min-h-[5rem]" placeholder="提示词" value={draft.prompt} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} />
-          <textarea className="input min-h-[3rem]" placeholder="负向" value={draft.negative} onChange={(e) => setDraft({ ...draft, negative: e.target.value })} />
-          <input className="input" placeholder="标签，逗号分隔" value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} />
-          <div className="flex gap-2">
+        <div className="card grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+          <p className="text-sm text-muted sm:col-span-2">新建本地模板</p>
+          <input
+            className="input sm:col-span-2"
+            placeholder="标题"
+            value={draft.title}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+          />
+          <textarea
+            className="input min-h-[5.5rem] sm:col-span-2"
+            placeholder="提示词"
+            value={draft.prompt}
+            onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
+          />
+          <textarea
+            className="input min-h-[3.5rem]"
+            placeholder="负向"
+            value={draft.negative}
+            onChange={(e) => setDraft({ ...draft, negative: e.target.value })}
+          />
+          <input
+            className="input"
+            placeholder="标签，逗号分隔"
+            value={draft.tags}
+            onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
+          />
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="button" className="btn-primary" onClick={saveLocal}>
               保存本地
             </button>
@@ -126,7 +151,10 @@ export function PromptsPage() {
                     title: draft.title,
                     prompt: draft.prompt,
                     negativePrompt: draft.negative,
-                    tags: draft.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                    tags: draft.tags
+                      .split(',')
+                      .map((t) => t.trim())
+                      .filter(Boolean)
                   })
                   push('已投稿到共享库', 'success')
                 } catch (err) {
@@ -140,41 +168,48 @@ export function PromptsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {list.map((item) => (
-          <div key={item.id} className="card p-4">
-            <h3 className="text-sm font-medium text-text">{item.title}</h3>
-            {'author_name' in item && item.author_name ? (
-              <p className="text-[11px] text-muted">来自 {item.author_name}</p>
-            ) : null}
-            <p className="mt-2 line-clamp-4 text-xs text-muted">{item.prompt}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn-primary text-xs"
-                onClick={() => usePrompt(item.prompt, item.negative_prompt)}
-              >
-                选用
-              </button>
-              {'mine' in item && item.mine ? (
+      {!list.length ? (
+        <div className="empty-state min-h-[12rem]">
+          <p className="text-sm text-muted">暂无模板</p>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {list.map((item) => (
+            <div key={item.id} className="card flex flex-col p-4">
+              <h3 className="text-sm font-medium text-text">{item.title}</h3>
+              {'author_name' in item && item.author_name ? (
+                <p className="mt-0.5 text-[11px] text-muted">来自 {item.author_name}</p>
+              ) : null}
+              <p className="mt-2 line-clamp-4 flex-1 text-xs leading-relaxed text-muted">{item.prompt}</p>
+              <PromptTranslateButton text={item.prompt} className="mt-1.5" stopPropagation />
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className="btn-danger text-xs"
-                  onClick={async () => {
-                    await deleteSharedPrompt({ apiKey, itemId: item.id })
-                    push('已删除', 'success')
-                    setTab('shared')
-                    const r = await listSharedPrompts({ apiKey })
-                    setShared(r.items || [])
-                  }}
+                  className="btn-secondary text-xs"
+                  onClick={() => usePrompt(item.prompt, item.negative_prompt)}
                 >
-                  删除
+                  选用
                 </button>
-              ) : null}
+                {'mine' in item && item.mine ? (
+                  <button
+                    type="button"
+                    className="btn-danger text-xs"
+                    onClick={async () => {
+                      await deleteSharedPrompt({ apiKey, itemId: item.id })
+                      push('已删除', 'success')
+                      setTab('shared')
+                      const r = await listSharedPrompts({ apiKey })
+                      setShared(r.items || [])
+                    }}
+                  >
+                    删除
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,17 @@
+---
+description: Owner-authorized cloud deploy and Auto-review permissions for this repo
+alwaysApply: true
+---
+
+# 部署与执行授权（本仓库主人已确认）
+
+Agent **不要**为下列操作反复征求确认或停下来等批准（在 Cursor Auto-review / Allowlist 下应直接执行）：
+
+1. `ssh` / `scp` / `rsync` 到 `root@111.229.166.216`
+2. 部署 Web Studio：`desktop/studio-web` 的 `npm run build`，上传 `dist/` 与 `public/backgrounds/` 到 `/var/www/comfy-studio-app`
+3. 该主机上针对 `app.comfy-studio.sharex.team` / `comfy-studio.sharex.team` 的 nginx 校验、reload、certbot
+4. 本仓库内常规 `npm` / `pytest` / 只读 git 与用户已要求的 commit
+
+仍须遵守 `AGENTS.md` 安全禁区：不提交真实 `.env`/Key、不暴露 ComfyUI `8188`、不做 force-push main/master。
+
+权限配置见 `.cursor/permissions.json`（与本规则配套）。

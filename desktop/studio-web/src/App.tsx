@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { GlassTheme } from '@/components/GlassTheme'
 import { Layout } from '@/components/Layout'
 import { AuthPage } from '@/pages/AuthPage'
 import { CreatePage } from '@/pages/CreatePage'
@@ -38,25 +39,28 @@ export function App() {
   }, [])
 
   return (
-    <Routes>
-      <Route path="/login" element={<AuthPage />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <Layout />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<Navigate to="/create" replace />} />
-        <Route path="create" element={<CreatePage />} />
-        <Route path="queue" element={<QueuePage />} />
-        <Route path="gallery" element={<GalleryPage />} />
-        <Route path="showcase" element={<ShowcasePage />} />
-        <Route path="prompts" element={<PromptsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <GlassTheme />
+      <Routes>
+        <Route path="/login" element={<AuthPage />} />
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <Layout />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="/create" replace />} />
+          <Route path="create" element={<CreatePage />} />
+          <Route path="queue" element={<QueuePage />} />
+          <Route path="gallery" element={<GalleryPage />} />
+          <Route path="showcase" element={<ShowcasePage />} />
+          <Route path="prompts" element={<PromptsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }

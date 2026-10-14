@@ -349,15 +349,15 @@ function ShowcaseThumb({ profileId, path }: { profileId: string; path: string })
       window.studio.fetchShowcaseAsset({ profileId, path }) as Promise<string>
   })
   return (
-    <div className="aspect-square bg-bg">
+    <div className="relative aspect-square w-full overflow-hidden bg-bg">
       {data ? (
         <img
           src={data}
           alt=""
-          className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+          className="absolute inset-0 h-full w-full object-cover transition group-hover:scale-[1.02]"
         />
       ) : (
-        <div className="flex h-full items-center justify-center text-xs text-muted">…</div>
+        <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">…</div>
       )}
     </div>
   )

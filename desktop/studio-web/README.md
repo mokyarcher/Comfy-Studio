@@ -10,7 +10,11 @@ npm install
 npm run dev
 ```
 
-默认通过 Vite 把 `/v1`、`/health` 代理到 `http://127.0.0.1:8000`。跨域直连时设置：
+浏览器打开终端提示的地址（默认 `http://localhost:5173`）。本机还需先起 FastAPI（`:8000`），Vite 会把 `/v1`、`/health` 代理过去。
+
+背景图已压到约 1920 宽；开发服对 `/backgrounds/*` 开了长缓存，硬刷新仍会重下，普通刷新可复用。
+
+跨域直连时设置：
 
 ```env
 VITE_API_BASE=https://qwen-image-2-1.sharex.team

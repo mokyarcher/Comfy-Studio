@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
+import { GlassCard } from '@/components/GlassCard'
+import { ToastHost } from '@/components/ToastHost'
+import { WorkspaceBackground } from '@/components/WorkspaceBackground'
 import { authLogin, authRegister, testConnection } from '@/lib/api'
 import { useSession } from '@/store/session'
-import { ToastHost } from '@/components/ToastHost'
+import { useSettings } from '@/store/settings'
 import { useToast } from '@/store/toast'
 
 export function AuthPage() {
@@ -13,6 +16,7 @@ export function AuthPage() {
   const login = useSession((s) => s.login)
   const remember = useSession((s) => s.remember)
   const setRemember = useSession((s) => s.setRemember)
+  const backgroundId = useSettings((s) => s.backgroundId)
   const push = useToast((s) => s.push)
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
@@ -20,6 +24,7 @@ export function AuthPage() {
   const [displayName, setDisplayName] = useState('')
   const [busy, setBusy] = useState(false)
   const [healthMsg, setHealthMsg] = useState('')
+  const shellRef = useRef<HTMLDivElement>(null)
 
   if (hydrated && user) {
     return <Navigate to="/create" replace />
@@ -63,29 +68,38 @@ export function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-bg p-6">
-      <div className="card w-full max-w-md p-6 sm:p-8">
+    <div ref={shellRef} className="workspace-shell flex min-h-full items-center justify-center p-6">
+      <WorkspaceBackground backgroundId={backgroundId} />
+      <GlassCard
+        mouseContainer={shellRef}
+        cornerRadius={18}
+        className="w-full max-w-md"
+        style={{ width: '100%', maxWidth: '28rem' }}
+        padding="1.5rem"
+      >
         <div className="mb-6 flex items-center gap-3">
-          <Sparkles className="h-7 w-7 text-primary" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
           <div>
-            <h1 className="text-xl font-semibold text-text">
+            <h1 className="text-xl font-semibold tracking-tight text-text">
               Comfy <span className="text-primary">Studio</span> Web
             </h1>
             <p className="text-sm text-muted">跨系统远程创作工作空间</p>
           </div>
         </div>
 
-        <div className="mb-4 flex rounded-lg border border-border bg-bg p-0.5">
+        <div className="seg mb-4 w-full">
           <button
             type="button"
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm ${mode === 'login' ? 'bg-primary/20 text-primary' : 'text-muted'}`}
+            className={`seg-item flex-1 ${mode === 'login' ? 'seg-item-active' : 'seg-item-idle'}`}
             onClick={() => setMode('login')}
           >
             登录
           </button>
           <button
             type="button"
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm ${mode === 'register' ? 'bg-primary/20 text-primary' : 'text-muted'}`}
+            className={`seg-item flex-1 ${mode === 'register' ? 'seg-item-active' : 'seg-item-idle'}`}
             onClick={() => setMode('register')}
           >
             注册
@@ -134,7 +148,7 @@ export function AuthPage() {
         <p className="mt-4 text-[11px] leading-relaxed text-muted">
           API Key 仅保存在浏览器会话（或可选本地存储），请勿在公用电脑勾选「记住账号」。上游润色密钥只留在服务端。
         </p>
-      </div>
+      </GlassCard>
       <ToastHost />
     </div>
   )

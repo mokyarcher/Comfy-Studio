@@ -51,28 +51,41 @@ export function GalleryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <h1 className="text-lg font-medium text-text">作品画廊</h1>
-      <p className="text-sm text-muted">保存在本机浏览器 IndexedDB，换设备不会同步。</p>
+    <div className="page space-y-4">
+      <div className="page-header mb-0">
+        <div>
+          <h1 className="page-title">作品画廊</h1>
+          <p className="page-sub">保存在本机浏览器 IndexedDB，换设备不会同步。</p>
+        </div>
+        <span className="status-chip">{items.length} 件</span>
+      </div>
+
       {!items.length ? (
-        <p className="text-sm text-muted">暂无作品</p>
+        <div className="empty-state min-h-[16rem]">
+          <p className="text-sm text-muted">暂无作品</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
           {items.map((item) => (
             <button
               key={item.id}
               type="button"
-              className="card overflow-hidden text-left"
+              className="card group overflow-hidden text-left transition hover:border-white/30"
               onClick={() => setActive(item)}
             >
-              {item.mimeType.startsWith('video/') ? (
-                <video src={item.url} className="aspect-square w-full object-cover" muted />
-              ) : (
-                <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-              )}
-              <div className="p-2">
-                <p className="truncate text-xs text-text">{item.prompt}</p>
-                <p className="text-[10px] text-muted">{item.favorite ? '★ ' : ''}{item.mode}</p>
+              <div className="media-thumb">
+                {item.mimeType.startsWith('video/') ? (
+                  <video src={item.url} muted />
+                ) : (
+                  <img src={item.url} alt="" className="transition duration-200 group-hover:scale-[1.02]" />
+                )}
+              </div>
+              <div className="space-y-1.5 p-2.5">
+                <p className="line-clamp-2 text-xs leading-relaxed text-text">{item.prompt}</p>
+                <p className="text-[10px] text-muted">
+                  {item.favorite ? '★ ' : ''}
+                  {item.mode}
+                </p>
               </div>
             </button>
           ))}
@@ -80,47 +93,67 @@ export function GalleryPage() {
       )}
 
       {active ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setActive(null)}>
-          <div className="card max-h-[90vh] w-full max-w-3xl overflow-auto p-4" onClick={(e) => e.stopPropagation()}>
-            {active.mimeType.startsWith('video/') ? (
-              <video src={active.url} controls className="max-h-[60vh] w-full object-contain" />
-            ) : (
-              <img src={active.url} alt="" className="max-h-[60vh] w-full object-contain" />
-            )}
-            <p className="mt-3 text-sm text-text">{active.prompt}</p>
-            <p className="mt-1 text-xs text-muted">
-              {active.width}×{active.height} · steps {active.steps}
-              {active.seed != null ? ` · seed ${active.seed}` : ''}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" className="btn-secondary" onClick={() => download(active)}>
-                下载
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={async () => {
-                  await toggleFavorite(active.id)
-                  await reload()
-                  push('已更新收藏', 'success')
-                }}
-              >
-                收藏
-              </button>
-              <button type="button" className="btn-secondary" onClick={() => onShare(active)}>
-                分享到展馆
-              </button>
-              <button
-                type="button"
-                className="btn-danger"
-                onClick={async () => {
-                  await deleteGallery(active.id)
-                  setActive(null)
-                  await reload()
-                }}
-              >
-                删除
-              </button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-[2px] sm:p-4"
+          onClick={() => setActive(null)}
+        >
+          <div
+            className="card grid h-[85vh] w-[85vw] max-h-[85vh] max-w-[85vw] overflow-hidden lg:grid-cols-[minmax(0,1.35fr)_minmax(15rem,0.65fr)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex min-h-0 cursor-pointer items-center justify-center bg-bg/40 p-3"
+              title="点击关闭"
+              onClick={() => setActive(null)}
+            >
+              {active.mimeType.startsWith('video/') ? (
+                <video
+                  src={active.url}
+                  controls
+                  className="max-h-full max-w-full object-contain"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <img src={active.url} alt="" className="max-h-full max-w-full object-contain" />
+              )}
+            </div>
+            <div className="flex min-h-0 flex-col gap-3 overflow-auto border-t border-border p-4 lg:border-l lg:border-t-0">
+              <p className="text-sm leading-relaxed text-text">{active.prompt}</p>
+              <p className="text-xs text-muted">
+                {active.width}×{active.height} · steps {active.steps}
+                {active.seed != null ? ` · seed ${active.seed}` : ''}
+              </p>
+              <p className="text-[11px] text-muted">点击左侧图片关闭</p>
+              <div className="mt-auto flex flex-wrap gap-2 pt-2">
+                <button type="button" className="btn-secondary" onClick={() => download(active)}>
+                  下载
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={async () => {
+                    await toggleFavorite(active.id)
+                    await reload()
+                    push('已更新收藏', 'success')
+                  }}
+                >
+                  收藏
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => onShare(active)}>
+                  分享到展馆
+                </button>
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={async () => {
+                    await deleteGallery(active.id)
+                    setActive(null)
+                    await reload()
+                  }}
+                >
+                  删除
+                </button>
+              </div>
             </div>
           </div>
         </div>

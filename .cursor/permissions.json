@@ -1,0 +1,33 @@
+{
+  // Project deploy authorization — steers Auto-review + allowlists common toolchains.
+  // Docs: https://cursor.com/docs/reference/permissions
+  // Requires Cursor Settings → Agents → Run Mode = Auto-review (or Allowlist / Run Everything).
+  "terminalAllowlist": [
+    "ssh",
+    "scp",
+    "rsync",
+    "npm",
+    "npx",
+    "git",
+    "pytest",
+    "python",
+    "curl",
+    "tar",
+    "powershell"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "This repo owner has pre-authorized deploying Web Studio and related nginx/static assets to the known production host root@111.229.166.216 (app.comfy-studio.sharex.team / comfy-studio.sharex.team).",
+      "Allow SSH and SCP/rsync that upload desktop/studio-web/dist, public backgrounds, or nginx conf under /var/www/comfy-studio-app or /etc/nginx/conf.d on 111.229.166.216.",
+      "Allow remote nginx -t, systemctl reload nginx, and certbot for app.comfy-studio.sharex.team on that host.",
+      "Allow local npm run build / typecheck in desktop/studio-web, desktop/studio, desktop/gateway, and pytest in this repo.",
+      "Allow ordinary git status, diff, log, add, and commit when the user asked to commit; do not ask again for those read/write local git ops."
+    ],
+    "block_instructions": [
+      "Block force-push to main or master.",
+      "Block committing or uploading real .env files, API keys, or polish upstream keys.",
+      "Block binding ComfyUI 8188 or FastAPI to public 0.0.0.0 as a convenience shortcut.",
+      "Block destructive disk wipes outside this project's deploy paths on the server."
+    ]
+  }
+}
