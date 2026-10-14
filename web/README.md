@@ -1,6 +1,6 @@
 # Comfy Studio 官网
 
-Astro + React 岛屿 + Tailwind。介绍 / 演示 / 部署 / 下载。
+Astro + React 岛屿 + Tailwind。介绍 / 演示 / 部署 / 下载 / 工作流。
 
 ## 开发
 
@@ -25,17 +25,17 @@ npm run preview
 - Hero / OG：`public/og.svg`
 - 演示录屏：`public/media/studio-tour.mp4`
 - 样例墙：`src/data/showcase.json`
-- **模型清单**：`src/data/models.json`（见下）
+- **工作流 / 模型清单**：`src/data/workflows.json`（维护用，勿把维护说明写进 `intro`）
 
-### 模型清单格式（`models.json`）
+### 工作流清单格式（`workflows.json`）— 仅开发维护
 
-部署者页面：`/models`。只改 JSON 即可更新，无需改组件。
+页面路由：`/workflows`（旧 `/models` 会 301 跳转）。结构：**工作流 → models[] → links[]**。
 
 ```json
 {
   "projectVersion": "1.0.0",
   "updatedAt": "2026-10-14",
-  "intro": "可选说明",
+  "intro": "面向访客的一句说明即可",
   "mirrors": [
     {
       "id": "modelscope",
@@ -52,26 +52,32 @@ npm run preview
       "note": "备选"
     }
   ],
-  "models": [
+  "workflows": [
     {
-      "id": "qwen-image",
-      "name": "显示名称",
-      "role": "用途一句话",
+      "id": "txt2img",
+      "name": "文生图",
       "mode": "txt2img",
-      "sizeHint": "约 20 GB",
-      "savePath": "ComfyUI/models/diffusion_models/xxx",
+      "summary": "Qwen 文生图主工作流",
       "required": true,
-      "links": [
-        { "label": "魔搭直链", "url": "https://…", "mirror": "modelscope" },
-        { "label": "HF Mirror 直链", "url": "https://…", "mirror": "hf-mirror" }
-      ],
-      "note": "可选备注"
+      "models": [
+        {
+          "id": "qwen-image",
+          "name": "Qwen-Image",
+          "role": "主生成权重",
+          "sizeHint": "约 20 GB",
+          "savePath": "ComfyUI/models/diffusion_models/xxx.safetensors",
+          "links": [
+            { "label": "魔搭", "url": "https://…", "mirror": "modelscope" },
+            { "label": "HF Mirror", "url": "https://…", "mirror": "hf-mirror" }
+          ]
+        }
+      ]
     }
   ]
 }
 ```
 
-`links[].url` 为空时页面显示「直链待补充」；填入 `https://` 地址后会出现下载按钮。
+`links[].url` 为空则不显示该按钮；有 `https://` 才出下载入口。改完后 `npm run build` 并 scp 到服务器。
 
 ## 部署
 

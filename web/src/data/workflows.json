@@ -1,0 +1,81 @@
+{
+  "projectVersion": "1.0.0",
+  "updatedAt": "2026-10-14",
+  "intro": "按工作流拿齐权重。国内优先魔搭，HF Mirror 备选；下载后放到对应路径即可。",
+  "mirrors": [
+    {
+      "id": "modelscope",
+      "name": "魔搭 ModelScope",
+      "priority": 1,
+      "url": "https://www.modelscope.cn/home",
+      "note": "国内首选"
+    },
+    {
+      "id": "hf-mirror",
+      "name": "HF Mirror",
+      "priority": 2,
+      "url": "https://hf-mirror.com",
+      "note": "Hugging Face 国内镜像，备选"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "txt2img",
+      "name": "文生图",
+      "mode": "txt2img",
+      "summary": "Qwen 文生图主工作流",
+      "required": true,
+      "models": [
+        {
+          "id": "qwen-image",
+          "name": "Qwen-Image",
+          "role": "主生成权重",
+          "sizeHint": "",
+          "savePath": "ComfyUI/models/diffusion_models/",
+          "links": [
+            { "label": "魔搭", "url": "", "mirror": "modelscope" },
+            { "label": "HF Mirror", "url": "", "mirror": "hf-mirror" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "image_edit",
+      "name": "图编辑",
+      "mode": "image_edit",
+      "summary": "底图 / 参考图改图工作流",
+      "required": false,
+      "models": [
+        {
+          "id": "image-edit-main",
+          "name": "图编辑主模型",
+          "role": "image_edit 权重",
+          "savePath": "ComfyUI/models/diffusion_models/",
+          "links": [
+            { "label": "魔搭", "url": "", "mirror": "modelscope" },
+            { "label": "HF Mirror", "url": "", "mirror": "hf-mirror" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "image_to_video",
+      "name": "图生视频",
+      "mode": "image_to_video",
+      "summary": "Wan TI2V 起始图 + 镜头提示",
+      "required": false,
+      "models": [
+        {
+          "id": "wan-ti2v",
+          "name": "Wan TI2V",
+          "role": "图生视频权重",
+          "savePath": "ComfyUI/models/diffusion_models/",
+          "links": [
+            { "label": "魔搭", "url": "", "mirror": "modelscope" },
+            { "label": "HF Mirror", "url": "", "mirror": "hf-mirror" }
+          ]
+        }
+      ]
+    }
+  ]
+}
