@@ -25,6 +25,53 @@ npm run preview
 - Hero / OG：`public/og.svg`
 - 演示录屏：`public/media/studio-tour.mp4`
 - 样例墙：`src/data/showcase.json`
+- **模型清单**：`src/data/models.json`（见下）
+
+### 模型清单格式（`models.json`）
+
+部署者页面：`/models`。只改 JSON 即可更新，无需改组件。
+
+```json
+{
+  "projectVersion": "1.0.0",
+  "updatedAt": "2026-10-14",
+  "intro": "可选说明",
+  "mirrors": [
+    {
+      "id": "modelscope",
+      "name": "魔搭 ModelScope",
+      "priority": 1,
+      "url": "https://www.modelscope.cn/home",
+      "note": "国内首选"
+    },
+    {
+      "id": "hf-mirror",
+      "name": "HF Mirror",
+      "priority": 2,
+      "url": "https://hf-mirror.com",
+      "note": "备选"
+    }
+  ],
+  "models": [
+    {
+      "id": "qwen-image",
+      "name": "显示名称",
+      "role": "用途一句话",
+      "mode": "txt2img",
+      "sizeHint": "约 20 GB",
+      "savePath": "ComfyUI/models/diffusion_models/xxx",
+      "required": true,
+      "links": [
+        { "label": "魔搭直链", "url": "https://…", "mirror": "modelscope" },
+        { "label": "HF Mirror 直链", "url": "https://…", "mirror": "hf-mirror" }
+      ],
+      "note": "可选备注"
+    }
+  ]
+}
+```
+
+`links[].url` 为空时页面显示「直链待补充」；填入 `https://` 地址后会出现下载按钮。
 
 ## 部署
 
