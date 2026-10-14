@@ -28,5 +28,15 @@ npm run preview
 
 ## 部署
 
-- **GitHub Pages**：推送 `web/**` 到 `main` 后由 [`.github/workflows/web.yml`](../.github/workflows/web.yml) 构建并部署。仓库 Settings → Pages → Source 选 **GitHub Actions**。站点形如 `https://<owner>.github.io/<repo>/`。
-- **Cloudflare Pages / Nginx**：本地或 CI 执行 `npm run build`（可不设 `BASE_PATH`），上传 `dist/`。自定义域名时设置 `SITE_URL`。
+- **生产站**：https://comfy-studio.sharex.team（云机 Nginx，根目录 `/var/www/comfy-studio`）
+- 配置模板：[`deploy/comfy-studio.sharex.team.http.conf`](../deploy/comfy-studio.sharex.team.http.conf) / [`ssl.conf`](../deploy/comfy-studio.sharex.team.ssl.conf)
+- 发版更新静态站：
+
+```powershell
+cd web
+$env:SITE_URL = 'https://comfy-studio.sharex.team'
+npm run build
+scp -r dist/* root@111.229.166.216:/var/www/comfy-studio/
+```
+
+- **GitHub Pages**（可选备用）：[`.github/workflows/web.yml`](../.github/workflows/web.yml)

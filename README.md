@@ -4,7 +4,7 @@
 
 **推理始终在本地 GPU 完成；云端只做入口与转发。**
 
-官网（源码在 [`web/`](web/)）：本地预览 `cd web && npm run dev`；上线后填入正式域名。
+官网：https://comfy-studio.sharex.team （源码 [`web/`](web/)，本地预览 `cd web && npm run dev`）
 
 ## 架构
 

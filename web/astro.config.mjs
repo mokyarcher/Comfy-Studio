@@ -4,7 +4,7 @@ import react from '@astrojs/react'
 import tailwindcss from '@tailwindcss/vite'
 import mdx from '@astrojs/mdx'
 
-const site = process.env.SITE_URL || 'https://comfy-studio.pages.dev'
+const site = process.env.SITE_URL || 'https://comfy-studio.sharex.team'
 const base = process.env.BASE_PATH || '/'
 
 // https://astro.build/config

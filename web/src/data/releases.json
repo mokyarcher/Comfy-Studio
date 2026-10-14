@@ -1,7 +1,7 @@
 {
   "tag": "v1.0.0",
   "publishedAt": "2026-10-14T01:46:22Z",
-  "notes": "Comfy Studio / Gateway 1.0.0 Windows x64 解压包。解压后分别运行 Comfy Studio.exe / Comfy Gateway.exe。",
+  "notes": "## 下载说明\n\n- **Comfy-Studio-1.0.0-win-x64.zip**：远程创作客户端（解压后运行 Comfy Studio.exe）\n- **Comfy-Gateway-1.0.0-win-x64.zip**：本机控制台（解压后运行 Comfy Gateway.exe）\n\n## 系统要求\n\nWindows 10/11 x64。Gateway 需本机已配置 ComfyUI 与 FastAPI；Studio 需可访问 Gateway / API。",
   "apps": {
     "studio": {
       "name": "Comfy-Studio-1.0.0-win-x64.zip",
