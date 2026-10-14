@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { authLogin, authRegister, testConnection } from '@/lib/api'
 import { useSession } from '@/store/session'
@@ -6,6 +7,9 @@ import { ToastHost } from '@/components/ToastHost'
 import { useToast } from '@/store/toast'
 
 export function AuthPage() {
+  const navigate = useNavigate()
+  const user = useSession((s) => s.user)
+  const hydrated = useSession((s) => s.hydrated)
   const login = useSession((s) => s.login)
   const remember = useSession((s) => s.remember)
   const setRemember = useSession((s) => s.setRemember)
@@ -16,6 +20,10 @@ export function AuthPage() {
   const [displayName, setDisplayName] = useState('')
   const [busy, setBusy] = useState(false)
   const [healthMsg, setHealthMsg] = useState('')
+
+  if (hydrated && user) {
+    return <Navigate to="/create" replace />
+  }
 
   async function onTest() {
     const r = await testConnection()
@@ -48,6 +56,7 @@ export function AuthPage() {
         remember
       )
       push('登录成功', 'success')
+      navigate('/create', { replace: true })
     } finally {
       setBusy(false)
     }
