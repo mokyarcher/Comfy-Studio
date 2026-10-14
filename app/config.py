@@ -99,6 +99,18 @@ class Settings(BaseSettings):
     # Consider user "active" if seen within this many minutes
     active_user_window_minutes: int = 15
 
+    # Comma-separated browser origins for CORS (Web Studio / marketing site).
+    # Empty = CORS middleware disabled (desktop / same-origin proxy only).
+    cors_origins: str = (
+        "https://comfy-studio.sharex.team,"
+        "https://app.comfy-studio.sharex.team,"
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173"
+    )
+
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     @field_validator("polish_ai_base_url")
     @classmethod
     def _strip_polish_base(cls, value: str) -> str:

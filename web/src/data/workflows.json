@@ -1,7 +1,7 @@
 {
   "projectVersion": "1.0.0",
   "updatedAt": "2026-10-14",
-  "intro": "按工作流拿齐权重。国内优先魔搭，HF Mirror 备选；下载后放到对应路径即可。",
+  "intro": "按工作流拿齐权重。国内优先魔搭，HF Mirror 备选；下载后放到对应路径即可。文生图与图编辑共用 Qwen 三件套。",
   "mirrors": [
     {
       "id": "modelscope",
@@ -23,18 +23,64 @@
       "id": "txt2img",
       "name": "文生图",
       "mode": "txt2img",
-      "summary": "Qwen 文生图主工作流",
+      "summary": "Qwen Image 2.1 · workflow_api.json",
       "required": true,
       "models": [
         {
-          "id": "qwen-image",
-          "name": "Qwen-Image",
-          "role": "主生成权重",
-          "sizeHint": "",
-          "savePath": "ComfyUI/models/diffusion_models/",
+          "id": "qwen-unet",
+          "name": "qwen_image_2.1_int8_convrot.safetensors",
+          "role": "UNET / Diffusion",
+          "sizeHint": "约 6.8 GB",
+          "savePath": "ComfyUI/models/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
           "links": [
-            { "label": "魔搭", "url": "", "mirror": "modelscope" },
-            { "label": "HF Mirror", "url": "", "mirror": "hf-mirror" }
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image-2.1/resolve/master/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+              "mirror": "hf-mirror"
+            }
+          ]
+        },
+        {
+          "id": "qwen-clip",
+          "name": "qwen3vl_8b_int8_convrot.safetensors",
+          "role": "CLIP / Text Encoder",
+          "sizeHint": "约 8.7 GB",
+          "savePath": "ComfyUI/models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "links": [
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image-2.1/resolve/master/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+              "mirror": "hf-mirror"
+            }
+          ]
+        },
+        {
+          "id": "qwen-vae",
+          "name": "qwen_image_2.1_vae_bf16.safetensors",
+          "role": "VAE",
+          "sizeHint": "约 644 MB",
+          "savePath": "ComfyUI/models/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "links": [
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image-2.1/resolve/master/vae/qwen_image_2.1_vae_bf16.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+              "mirror": "hf-mirror"
+            }
           ]
         }
       ]
@@ -43,17 +89,64 @@
       "id": "image_edit",
       "name": "图编辑",
       "mode": "image_edit",
-      "summary": "底图 / 参考图改图工作流",
+      "summary": "与文生图共用 Qwen 三件套 · workflow_image_edit_api.json",
       "required": false,
       "models": [
         {
-          "id": "image-edit-main",
-          "name": "图编辑主模型",
-          "role": "image_edit 权重",
-          "savePath": "ComfyUI/models/diffusion_models/",
+          "id": "qwen-unet-edit",
+          "name": "qwen_image_2.1_int8_convrot.safetensors",
+          "role": "UNET / Diffusion（与文生图相同）",
+          "sizeHint": "约 6.8 GB",
+          "savePath": "ComfyUI/models/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
           "links": [
-            { "label": "魔搭", "url": "", "mirror": "modelscope" },
-            { "label": "HF Mirror", "url": "", "mirror": "hf-mirror" }
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image-2.1/resolve/master/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+              "mirror": "hf-mirror"
+            }
+          ]
+        },
+        {
+          "id": "qwen-clip-edit",
+          "name": "qwen3vl_8b_int8_convrot.safetensors",
+          "role": "CLIP / Text Encoder（与文生图相同）",
+          "sizeHint": "约 8.7 GB",
+          "savePath": "ComfyUI/models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "links": [
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image-2.1/resolve/master/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+              "mirror": "hf-mirror"
+            }
+          ]
+        },
+        {
+          "id": "qwen-vae-edit",
+          "name": "qwen_image_2.1_vae_bf16.safetensors",
+          "role": "VAE（与文生图相同）",
+          "sizeHint": "约 644 MB",
+          "savePath": "ComfyUI/models/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "links": [
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image-2.1/resolve/master/vae/qwen_image_2.1_vae_bf16.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+              "mirror": "hf-mirror"
+            }
           ]
         }
       ]
@@ -62,17 +155,64 @@
       "id": "image_to_video",
       "name": "图生视频",
       "mode": "image_to_video",
-      "summary": "Wan TI2V 起始图 + 镜头提示",
+      "summary": "Wan 2.2 TI2V 5B · workflow_image_to_video_api.json",
       "required": false,
       "models": [
         {
-          "id": "wan-ti2v",
-          "name": "Wan TI2V",
-          "role": "图生视频权重",
-          "savePath": "ComfyUI/models/diffusion_models/",
+          "id": "wan-unet",
+          "name": "wan2.2_ti2v_5B_fp16.safetensors",
+          "role": "UNET / Diffusion",
+          "sizeHint": "约 9.3 GB",
+          "savePath": "ComfyUI/models/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors",
           "links": [
-            { "label": "魔搭", "url": "", "mirror": "modelscope" },
-            { "label": "HF Mirror", "url": "", "mirror": "hf-mirror" }
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/master/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors",
+              "mirror": "hf-mirror"
+            }
+          ]
+        },
+        {
+          "id": "wan-clip",
+          "name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "role": "CLIP / Text Encoder",
+          "sizeHint": "约 6.3 GB",
+          "savePath": "ComfyUI/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "links": [
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/master/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+              "mirror": "hf-mirror"
+            }
+          ]
+        },
+        {
+          "id": "wan-vae",
+          "name": "wan2.2_vae.safetensors",
+          "role": "VAE",
+          "sizeHint": "约 1.3 GB",
+          "savePath": "ComfyUI/models/vae/wan2.2_vae.safetensors",
+          "links": [
+            {
+              "label": "魔搭",
+              "url": "https://www.modelscope.cn/models/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/master/split_files/vae/wan2.2_vae.safetensors",
+              "mirror": "modelscope"
+            },
+            {
+              "label": "HF Mirror",
+              "url": "https://hf-mirror.com/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors",
+              "mirror": "hf-mirror"
+            }
           ]
         }
       ]

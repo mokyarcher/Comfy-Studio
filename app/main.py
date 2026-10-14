@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import mimetypes
 import uuid
@@ -182,6 +183,18 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.enable_docs else None,
         lifespan=lifespan,
     )
+
+    cors_origins = settings.cors_origin_list()
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key"],
+            expose_headers=["Content-Type", "Content-Length"],
+            max_age=600,
+        )
 
     @app.get("/health/live", response_model=HealthLiveResponse, tags=["health"])
     async def health_live() -> HealthLiveResponse:

@@ -23,6 +23,7 @@ Gateway（本机控制台）
 | `llm_workflow/` | ComfyUI API/UI 工作流与 `*_mapping.json`（**运行时路径默认在这里**） |
 | `desktop/gateway` | Electron 服务端控制台 |
 | `desktop/studio` | Electron 远程创作客户端 |
+| `desktop/studio-web` | 浏览器端 Studio 工作空间（Vite + React） |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
 | `web/` | 官方网站（Astro）：介绍 / 演示 / 部署 / 下载 |
 | `scripts/` | 启动、巡检、UI→API 工作流转换；`start_stack.ps1` 一键 ComfyUI+API+frpc+Studio（路径见 `stack.local.json`） |
@@ -98,10 +99,12 @@ npm run dist:dir   # → release\win-unpacked\Comfy Gateway.exe
 ### 开发
 
 ```powershell
-cd desktop\gateway   # 或 studio
+cd desktop\gateway   # 或 studio / studio-web
 npm install
 npm run dev
 ```
+
+Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 
 契约补充：`desktop/docs/api-contract.md`。
 
@@ -113,6 +116,7 @@ npm run dev
 | Agent / 开发约束（本文） | `AGENTS.md` |
 | 长篇设计、部署、排障 | `docs/` |
 | 桌面端说明 | `desktop/README.md` |
+| Web Studio | `desktop/studio-web/README.md` |
 | 官方网站 | `web/README.md` |
 
 改架构或目录约定时，**同步更新本文**，避免 Agent 按旧路径瞎改。
@@ -122,6 +126,7 @@ npm run dev
 - 不提交真实 `.env`、API Key、上游润色 Key
 - 不把 ComfyUI / FastAPI 绑到公网 `0.0.0.0` 当「临时方便」
 - 不在渲染进程明文落盘 Studio 密钥（走主进程 `safeStorage` + IPC）
+- Web Studio 密钥仅 sessionStorage（可选 localStorage「记住」）；禁止浏览器存上游润色 Key
 - 不做「取消远端 GPU 任务」——后端若无取消接口，UI 只能移除本地记录并说清楚
 
 ## 常见坑

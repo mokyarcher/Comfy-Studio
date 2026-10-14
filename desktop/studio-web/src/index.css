@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #12141a;
+  --panel: #1a1d27;
+  --panel-elevated: #222632;
+  --border: #2e3444;
+  --text: #e8eaf0;
+  --muted: #8b93a7;
+  --primary: #8b5cf6;
+  --primary-hover: #a78bfa;
+  --accent: #22d3ee;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a4154;
+  border-radius: 999px;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition
+      disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-white shadow-glow hover:bg-primary-hover active:scale-[0.98];
+  }
+  .btn-secondary {
+    @apply btn border border-border bg-panel-elevated text-text hover:bg-panel;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:bg-panel-elevated hover:text-text;
+  }
+  .btn-danger {
+    @apply btn text-danger;
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
+  }
+  .input {
+    @apply w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none;
+  }
+  .input:focus {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+  .label {
+    @apply mb-1 block text-xs text-muted;
+  }
+  .card {
+    @apply rounded-xl border border-border bg-panel;
+  }
+}

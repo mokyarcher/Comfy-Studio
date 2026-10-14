@@ -23,7 +23,34 @@ npm run preview
 ## 素材
 
 - Hero / OG：`public/og.svg`
+- 演示清单：`src/data/demo.json`（`features[].images[]`，同一功能可多张图）
+- 演示截图：`public/media/demo/`（如 `create-1.png`、`create-2.png`）
 - 演示录屏：`public/media/studio-tour.mp4`
+
+### 演示图格式（`demo.json`）— 仅开发维护
+
+```json
+{
+  "features": [
+    {
+      "id": "create",
+      "title": "Studio · 创作",
+      "body": "左侧导览说明",
+      "images": [
+        {
+          "src": "media/demo/create-01.png",
+          "caption": "文生图",
+          "note": "文生图界面，填入提示词、配置参数"
+        }
+      ]
+    }
+  ],
+  "video": "media/studio-tour.mp4",
+  "videoPoster": "og.svg"
+}
+```
+
+同一 `features[]` 下往 `images` 追加即可。左侧点功能块会切换右侧预览，底部标题跟随变动；功能内左右滑动多图。
 - 样例墙：`src/data/showcase.json`
 - **工作流 / 模型清单**：`src/data/workflows.json`（维护用，勿把维护说明写进 `intro`）
 

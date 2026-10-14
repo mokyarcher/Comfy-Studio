@@ -1,0 +1,92 @@
+{
+  "features": [
+    {
+      "id": "create",
+      "title": "Studio · 创作",
+      "body": "文生图、图编辑、图生视频。提示词可走网关 AI 润色，密钥只留服务端。",
+      "images": [
+        {
+          "src": "media/demo/create-01.png",
+          "caption": "文生图",
+          "note": "填写正负向提示词，可走 AI 润色后一键生成"
+        },
+        {
+          "src": "media/demo/create-02.png",
+          "caption": "参数配置",
+          "note": "设置尺寸、步数与种子，按需求调生成参数"
+        },
+        {
+          "src": "media/demo/create-03.png",
+          "caption": "生成中",
+          "note": "提交后轮询进度，预览区实时显示状态"
+        },
+        {
+          "src": "media/demo/create-04.png",
+          "caption": "生成完成",
+          "note": "结果进预览，可保存到画廊或复用参数"
+        }
+      ]
+    },
+    {
+      "id": "queue",
+      "title": "队列与进度",
+      "body": "提交后拿到 task_id，客户端轮询状态；历史记录可带回画廊缩略图。",
+      "images": [
+        { "src": "media/demo/queue-01.png", "caption": "队列与记录", "note": "可实时查看当前任务队列以及历史创作记录" }
+      ]
+    },
+    {
+      "id": "gallery",
+      "title": "画廊",
+      "body": "本机作品库：预览、收藏、复用参数、分享到展馆。",
+      "images": [
+        { "src": "media/demo/gallery-01.png", "caption": "作品列表", "note": "可预览、收藏、复用参数、分享到展馆" },
+        { "src": "media/demo/gallery-02.png", "caption": "作品详情", "note": "可查看作品详情、收藏、复用参数、分享到展馆" },
+        { "src": "media/demo/gallery-03.png", "caption": "作品分享", "note": "可分享作品到展馆" }
+      ]
+    },
+    {
+      "id": "showcase",
+      "title": "展馆",
+      "body": "浏览账号下公开分享的作品，一键复用提示词与尺寸。",
+      "images": [
+        { "src": "media/demo/showcase-01.png", "caption": "展馆浏览", "note": "可浏览账号下公开分享的作品，一键复用提示词与尺寸" }
+      ]
+    },
+    {
+      "id": "prompts",
+      "title": "提示词库",
+      "body": "本地 / 官方 / 共享提示词，创作时快速选用与沉淀。",
+      "images": [
+        {
+          "src": "media/demo/prompts-01.png",
+          "caption": "提示词库",
+          "note": "浏览与管理提示词，创作时可一键选用"
+        },
+        {
+          "src": "media/demo/prompts-02.png",
+          "caption": "提示词库管理",
+          "note": "可使用官方提示词库，也可自建提示词库 并共享给其他用户"
+        },
+        {
+          "src": "media/demo/prompts-03.png",
+          "caption": "新建本地模版",
+          "note": "右上角可新建本地模版，方便后续复用"
+        },
+        {
+          "src": "media/demo/prompts-04.png",
+          "caption": "共享模版",
+          "note": "可共享模版给其他用户，方便后续复用"
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "title": "Gateway · 运维",
+      "body": "本机启停 FastAPI / frpc、用户审核、官方提示词库、本地占用 GPU。",
+      "images": []
+    }
+  ],
+  "video": "media/studio-tour.mp4",
+  "videoPoster": "og.svg"
+}

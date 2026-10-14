@@ -116,7 +116,12 @@ function WorkflowCard({ workflow, index }: { workflow: WorkflowItem; index: numb
 }
 
 function ModelRow({ model }: { model: WorkflowModel }) {
-  const links = (model.links || []).filter((l) => hasUrl(l.url))
+  const allLinks = model.links || []
+  const ready = allLinks.filter((l) => hasUrl(l.url))
+  // Prefer 魔搭, then any ready link
+  const primary =
+    ready.find((l) => l.mirror === 'modelscope') || ready[0] || null
+  const extras = ready.filter((l) => l !== primary)
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -133,21 +138,37 @@ function ModelRow({ model }: { model: WorkflowModel }) {
         ) : null}
       </div>
 
-      {links.length > 0 ? (
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {links.map((link) => (
-            <a
-              key={`${model.id}-${link.label}-${link.url}`}
-              href={link.url}
-              className="btn-primary !px-3 !py-1.5 text-xs"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {link.label}
-            </a>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {primary ? (
+          <a
+            href={primary.url}
+            className="btn-primary !px-3 !py-1.5 text-xs"
+            target="_blank"
+            rel="noopener noreferrer"
+            download
+          >
+            下载
+          </a>
+        ) : (
+          <span
+            className="inline-flex cursor-not-allowed items-center rounded-md border border-border px-3 py-1.5 text-xs text-muted/50"
+            aria-disabled="true"
+          >
+            下载
+          </span>
+        )}
+        {extras.map((link) => (
+          <a
+            key={`${model.id}-${link.label}-${link.url}`}
+            href={link.url}
+            className="btn-secondary !px-3 !py-1.5 text-xs"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {link.label}
+          </a>
+        ))}
+      </div>
     </div>
   )
 }

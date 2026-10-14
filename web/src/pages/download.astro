@@ -24,6 +24,25 @@ const releases = { ...FALLBACK_RELEASES, ...releasesJson } as ReleasesManifest
       </p>
     </Reveal>
 
+    <Reveal client:visible className="mt-8">
+      <div class="rounded-xl border border-border bg-panel/50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
+        <div>
+          <h2 class="display text-xl text-text">Web 工作空间</h2>
+          <p class="mt-2 text-sm text-muted">
+            浏览器端 Studio：登录、文生图 / 图编 / 图生视频、画廊与展馆。无需安装，跨系统可用。
+          </p>
+        </div>
+        <a
+          href="https://app.comfy-studio.sharex.team"
+          class="btn-primary mt-4 inline-flex shrink-0 sm:mt-0"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          打开 Web Studio
+        </a>
+      </div>
+    </Reveal>
+
     <div class="mt-10">
       <DownloadCards client:load releases={releases} />
     </div>

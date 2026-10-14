@@ -47,26 +47,45 @@ ComfyUI 不可达时 `503`：
 { "detail": { "status": "not_ready", "comfyui": "down" } }
 ```
 
+### CORS（Web Studio）
+
+- 环境变量 `CORS_ORIGINS`：逗号分隔浏览器 Origin 白名单；空字符串则不挂 CORS 中间件。
+- 默认含官网、`app.comfy-studio.sharex.team`、本地 Vite `5173`。
+- 推荐部署：`app` 同源反代 `/v1`、`/health`（见 `deploy/comfy-studio-app.nginx.conf`），可少依赖 CORS。
+- 鉴权仍为 `X-API-Key`（非 Cookie）；浏览器拉图须 `fetch` + Blob，不可裸 `<img src>`。
+
+### `POST /v1/images/upload`
+
+Header：`X-API-Key`；`multipart/form-data` 字段 `file`。
+
+- 后缀限 png/jpg/jpeg/webp/bmp/gif；大小 ≤ `MAX_UPLOAD_BYTES`（默认 15MB）
+- 成功返回 `{ "filename": "<comfy-input-name>" }`，供 generate 的 `images[]` 使用
+
 ### `POST /v1/images/generate`
 
 全局 **GPU 串行队列**：任意时刻最多 1 个 `running`；后来的请求进入 `queued`，按提交时间 FIFO。队满（`MAX_QUEUE_SIZE`，含排队+运行中）返回 `429 queue_full`。响应与 `GET /v1/tasks/{id}` 含 `queue_position` / `queue_ahead` / `queue_size`。
 
 Header：`X-API-Key`、`Content-Type: application/json`
 
-请求体（仅支持下列字段）：
+请求体：
 
 ```json
 {
+  "mode": "txt2img",
   "prompt": "a red fox in snow",
   "negative_prompt": "",
   "width": 1024,
   "height": 1024,
   "steps": 25,
-  "seed": null
+  "seed": null,
+  "images": [],
+  "length": null
 }
 ```
 
-- `prompt` 必填
+- `prompt` 必填；`mode`：`txt2img` | `image_edit` | `image_to_video`（默认 `txt2img`）
+- `images`：先经 upload 得到的 Comfy 文件名；`image_edit` / `image_to_video` 需要
+- `length`：仅图生视频可选帧长
 - `seed` 省略时由服务端随机
 - 尺寸需为 `SIZE_MULTIPLE`（默认 8）的倍数
 - 文生图 / 图像编辑：每边 ≤ `MAX_WIDTH`/`MAX_HEIGHT`（默认 1024），且像素 ≤ `MAX_IMAGE_PIXELS`（默认 1024²）
@@ -98,7 +117,21 @@ Header：`X-API-Key`、`Content-Type: application/json`
 
 ### `GET /v1/tasks/{task_id}/images/{index}`
 
-返回图片二进制；需 `X-API-Key`
+返回图片/视频二进制；需 `X-API-Key`
+
+### `POST /v1/tasks/{task_id}/purge`
+
+隐私清理：删除服务端任务结果与可选 Comfy 输入输出；需 `X-API-Key`。客户端应先下载再 purge。
+
+### 官方提示词库
+
+- `GET /v1/prompt-library` → `{ version, updated_at, templates[], phrases[] }`（需 Key）
+
+### 展馆（Showcase）
+
+- `GET /v1/showcase` → `{ items[], count }`（含 `image_url` / `thumb_url` / `ref_urls`，拉媒体仍需 Key）
+- `POST /v1/showcase`：`multipart` 主图 `image` + 元数据字段；可选 `refs`
+- `POST /v1/showcase/{id}/unlist`：作者下架
 
 ### `GET /v1/prompt/polish/status`
 
