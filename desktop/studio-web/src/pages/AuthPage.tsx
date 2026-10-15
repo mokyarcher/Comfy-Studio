@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { GlassCard } from '@/components/GlassCard'
+import { SlidingSeg } from '@/components/SlidingSeg'
 import { ToastHost } from '@/components/ToastHost'
 import { WorkspaceBackground } from '@/components/WorkspaceBackground'
 import { authLogin, authRegister, testConnection } from '@/lib/api'
@@ -97,22 +98,16 @@ export function AuthPage() {
           </div>
         </div>
 
-        <div className="seg mb-4 w-full">
-          <button
-            type="button"
-            className={`seg-item flex-1 ${mode === 'login' ? 'seg-item-active' : 'seg-item-idle'}`}
-            onClick={() => setMode('login')}
-          >
-            登录
-          </button>
-          <button
-            type="button"
-            className={`seg-item flex-1 ${mode === 'register' ? 'seg-item-active' : 'seg-item-idle'}`}
-            onClick={() => setMode('register')}
-          >
-            注册
-          </button>
-        </div>
+        <SlidingSeg
+          className="mb-4 w-full"
+          aria-label="登录或注册"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'login', label: '登录' },
+            { value: 'register', label: '注册' }
+          ]}
+        />
 
         <form className="space-y-3" onSubmit={onSubmit}>
           <div>
@@ -137,9 +132,19 @@ export function AuthPage() {
             />
           </div>
           {mode === 'login' ? (
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              记住账号（写入本机，XSS 风险更高）
+            <label className="flex items-start gap-2 text-sm text-muted">
+              <input
+                className="mt-0.5"
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+              <span>
+                记住账号
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted/80">
+                  会把登录凭证写到本机长期保存；若页面被恶意脚本攻击，比仅会话保存更容易被偷走。公用电脑请勿勾选。
+                </span>
+              </span>
             </label>
           ) : null}
           <button type="submit" className="btn-primary w-full" disabled={busy}>
@@ -154,7 +159,7 @@ export function AuthPage() {
           {healthMsg ? <span className="truncate text-xs text-muted">{healthMsg}</span> : null}
         </div>
         <p className="mt-4 text-[11px] leading-relaxed text-muted">
-          API Key 仅保存在浏览器会话（或可选本地存储），请勿在公用电脑勾选「记住账号」。上游润色密钥只留在服务端。
+          默认只保存在浏览器会话；勾选「记住账号」才会写入本机。上游润色密钥只留在服务端。
         </p>
       </GlassCard>
       <ToastHost />
