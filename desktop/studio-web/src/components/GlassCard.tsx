@@ -8,6 +8,8 @@ type Props = {
   cornerRadius?: number
   mouseContainer?: RefObject<HTMLElement | null> | null
   padding?: string
+  /** Login should use 0 — mouse elasticity can yank the card into a corner. */
+  elasticity?: number
 }
 
 /** Floating liquid-glass panel for hero surfaces (login, etc.). Prefer CSS `.card` for dense scrollable UI. */
@@ -16,8 +18,9 @@ export function GlassCard({
   className = '',
   style,
   cornerRadius = 16,
-  mouseContainer,
-  padding = '0'
+  mouseContainer = null,
+  padding = '0',
+  elasticity = 0.12
 }: Props) {
   return (
     <LiquidGlass
@@ -25,7 +28,7 @@ export function GlassCard({
       blurAmount={0.1}
       saturation={135}
       aberrationIntensity={1.2}
-      elasticity={0.12}
+      elasticity={elasticity}
       cornerRadius={cornerRadius}
       padding={padding}
       mode="standard"

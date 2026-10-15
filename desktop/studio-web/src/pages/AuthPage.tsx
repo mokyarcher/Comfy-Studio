@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { GlassCard } from '@/components/GlassCard'
@@ -24,7 +24,6 @@ export function AuthPage() {
   const [displayName, setDisplayName] = useState('')
   const [busy, setBusy] = useState(false)
   const [healthMsg, setHealthMsg] = useState('')
-  const shellRef = useRef<HTMLDivElement>(null)
 
   if (hydrated && user) {
     return <Navigate to="/create" replace />
@@ -68,14 +67,22 @@ export function AuthPage() {
   }
 
   return (
-    // LiquidGlass centers with top/left 50% + translate(-50%); do not also flex-center.
-    <div ref={shellRef} className="workspace-shell auth-shell relative h-dvh w-full overflow-hidden p-6">
+    <div className="workspace-shell auth-shell relative h-dvh w-full overflow-hidden">
       <WorkspaceBackground backgroundId={backgroundId} />
       <GlassCard
-        mouseContainer={shellRef}
+        // fixed + elasticity 0: library translate(-50%) centers on viewport; mouse follow was yanking it to a corner
+        mouseContainer={null}
+        elasticity={0}
         cornerRadius={18}
-        className="w-full max-w-md"
-        style={{ width: 'min(100%, 28rem)', maxWidth: '28rem' }}
+        className="max-w-md"
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          zIndex: 10,
+          width: 'min(calc(100vw - 3rem), 28rem)',
+          maxWidth: '28rem'
+        }}
         padding="1.5rem"
       >
         <div className="mb-6 flex items-center gap-3">
