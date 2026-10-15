@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fetchGpuStatus, testConnection } from '@/lib/api'
+import { useServerLimits } from '@/store/serverLimits'
 import { useSession } from '@/store/session'
 import { useSettings } from '@/store/settings'
 import { ToastHost } from './ToastHost'
@@ -54,6 +55,7 @@ export function Layout() {
   const user = useSession((s) => s.user)!
   const logout = useSession((s) => s.logout)
   const backgroundId = useSettings((s) => s.backgroundId)
+  const setFromHealth = useServerLimits((s) => s.setFromHealth)
   const location = useLocation()
   const mainRef = useRef<HTMLElement>(null)
   const asideRef = useRef<HTMLElement>(null)
@@ -233,6 +235,13 @@ export function Layout() {
       setConnected(h.ok)
       setHealth(h.ok ? `已连接 · ${h.latencyMs} ms` : h.message)
       setGpu(g.ok ? (g.state === 'idle' ? 'GPU 空闲' : 'GPU 繁忙') : g.message)
+      if (h.ok) {
+        setFromHealth({
+          maxSteps: h.maxSteps,
+          maxWidth: h.maxWidth,
+          maxHeight: h.maxHeight
+        })
+      }
     }
     tick()
     const id = window.setInterval(tick, 12_000)
@@ -240,7 +249,7 @@ export function Layout() {
       alive = false
       clearInterval(id)
     }
-  }, [user.apiKey])
+  }, [user.apiKey, setFromHealth])
 
   useEffect(() => {
     const onVis = () => {

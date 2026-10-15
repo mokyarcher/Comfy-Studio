@@ -2,6 +2,13 @@ import { useState, type FormEvent } from 'react'
 import { GlassSelect } from '@/components/GlassSelect'
 import { BACKGROUNDS } from '@/lib/backgrounds'
 import { authChangePassword, testConnection } from '@/lib/api'
+import {
+  IMAGE_MAX_SIDE,
+  SIZE_MULTIPLE,
+  clampImageSize,
+  clampSteps
+} from '@/lib/limits'
+import { useServerLimits } from '@/store/serverLimits'
 import { useSession, maskedKey } from '@/store/session'
 import {
   GLASS_BLUR_DEFAULT,
@@ -18,6 +25,10 @@ export function SettingsPage() {
   const user = useSession((s) => s.user)!
   const settings = useSettings()
   const patch = useSettings((s) => s.patch)
+  const maxSteps = useServerLimits((s) => s.maxSteps)
+  const maxWidth = useServerLimits((s) => s.maxWidth)
+  const maxHeight = useServerLimits((s) => s.maxHeight)
+  const imageMaxSide = Math.min(IMAGE_MAX_SIDE, maxWidth, maxHeight)
   const push = useToast((s) => s.push)
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -229,8 +240,15 @@ export function SettingsPage() {
           <input
             className="input"
             type="number"
+            min={SIZE_MULTIPLE}
+            max={imageMaxSide}
+            step={SIZE_MULTIPLE}
             value={settings.defaultWidth}
             onChange={(e) => patch({ defaultWidth: Number(e.target.value) })}
+            onBlur={() => {
+              const sized = clampImageSize(settings.defaultWidth, settings.defaultHeight, imageMaxSide)
+              patch({ defaultWidth: sized.width, defaultHeight: sized.height })
+            }}
           />
         </div>
         <div>
@@ -238,8 +256,15 @@ export function SettingsPage() {
           <input
             className="input"
             type="number"
+            min={SIZE_MULTIPLE}
+            max={imageMaxSide}
+            step={SIZE_MULTIPLE}
             value={settings.defaultHeight}
             onChange={(e) => patch({ defaultHeight: Number(e.target.value) })}
+            onBlur={() => {
+              const sized = clampImageSize(settings.defaultWidth, settings.defaultHeight, imageMaxSide)
+              patch({ defaultWidth: sized.width, defaultHeight: sized.height })
+            }}
           />
         </div>
         <div>
@@ -247,9 +272,13 @@ export function SettingsPage() {
           <input
             className="input"
             type="number"
+            min={1}
+            max={maxSteps}
             value={settings.defaultSteps}
             onChange={(e) => patch({ defaultSteps: Number(e.target.value) })}
+            onBlur={() => patch({ defaultSteps: clampSteps(settings.defaultSteps, maxSteps) })}
           />
+          <p className="mt-1 text-[11px] text-muted">上限 {maxSteps}（服务端）</p>
         </div>
         <div>
           <label className="label">轮询间隔 (ms)</label>

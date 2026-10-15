@@ -5,23 +5,33 @@ import { SlidingSeg } from '@/components/SlidingSeg'
 import { polishViaGateway, translateViaGateway } from '@/lib/api'
 import { listGallery, type GalleryRecord } from '@/lib/gallery-db'
 import { runGenerateJob } from '@/lib/generate'
+import {
+  IMAGE_MAX_SIDE,
+  IMAGE_SIZE_PRESETS,
+  MAX_VIDEO_LENGTH,
+  SIZE_MULTIPLE,
+  VIDEO_MAX_LONG,
+  VIDEO_SIZE_PRESETS,
+  clampImageSize,
+  clampSteps,
+  clampVideoLength,
+  clampVideoSize
+} from '@/lib/limits'
 import type { GenerateMode } from '@/lib/types'
 import { useQueue } from '@/store/queue'
+import { useServerLimits } from '@/store/serverLimits'
 import { useSession } from '@/store/session'
 import { useSettings } from '@/store/settings'
 import { useToast } from '@/store/toast'
-
-const PRESETS = [
-  { w: 1024, h: 1024, label: '1024²' },
-  { w: 768, h: 1024, label: '768×1024' },
-  { w: 1024, h: 768, label: '1024×768' }
-]
 
 type RecentItem = GalleryRecord & { url: string }
 
 export function CreatePage() {
   const user = useSession((s) => s.user)!
   const settings = useSettings()
+  const maxSteps = useServerLimits((s) => s.maxSteps)
+  const maxWidth = useServerLimits((s) => s.maxWidth)
+  const maxHeight = useServerLimits((s) => s.maxHeight)
   const upsert = useQueue((s) => s.upsert)
   const push = useToast((s) => s.push)
 
@@ -82,6 +92,25 @@ export function CreatePage() {
   }, [])
 
   const needsUpload = mode === 'image_edit' || mode === 'image_to_video'
+  const isVideo = mode === 'image_to_video'
+  const imageMaxSide = Math.min(IMAGE_MAX_SIDE, maxWidth, maxHeight)
+  const sizePresets = isVideo ? VIDEO_SIZE_PRESETS : IMAGE_SIZE_PRESETS
+
+  function applySize(nextW: number, nextH: number) {
+    const sized = isVideo
+      ? clampVideoSize(nextW, nextH)
+      : clampImageSize(nextW, nextH, imageMaxSide)
+    setWidth(sized.width)
+    setHeight(sized.height)
+  }
+
+  useEffect(() => {
+    applySize(width, height)
+    setSteps((s) => clampSteps(s, maxSteps))
+    if (isVideo) setLength((n) => clampVideoLength(n))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reclamp when mode / server limits change
+  }, [mode, maxSteps, maxWidth, maxHeight])
+
   const uploadPreviews = useMemo(
     () => files.map((f) => ({ name: f.name, url: URL.createObjectURL(f) })),
     [files]
@@ -149,17 +178,24 @@ export function CreatePage() {
     setPreview(null)
     setPreviewIsVideo(mode === 'image_to_video')
     const localId = crypto.randomUUID()
+    const sized = isVideo ? clampVideoSize(width, height) : clampImageSize(width, height, imageMaxSide)
+    const safeSteps = clampSteps(steps, maxSteps)
+    const safeLength = clampVideoLength(length)
+    setWidth(sized.width)
+    setHeight(sized.height)
+    setSteps(safeSteps)
+    if (isVideo) setLength(safeLength)
     try {
       const result = await runGenerateJob({
         localId,
         mode,
         prompt: prompt.trim(),
         negativePrompt: negative.trim() || undefined,
-        width,
-        height,
-        steps,
+        width: sized.width,
+        height: sized.height,
+        steps: safeSteps,
         seed: seed.trim() ? Number(seed) : null,
-        length: mode === 'image_to_video' ? length : undefined,
+        length: isVideo ? safeLength : undefined,
         files: needsUpload ? files : undefined,
         cb: {
           apiKey: user.apiKey,
@@ -285,43 +321,81 @@ export function CreatePage() {
               <div className="col-span-2">
                 <label className="label">尺寸预设</label>
                 <div className="flex flex-wrap gap-1.5">
-                  {PRESETS.map((p) => (
+                  {sizePresets.map((p) => (
                     <button
-                      key={p.label}
+                      key={p.id}
                       type="button"
                       className={`px-2.5 py-1.5 text-xs ${
-                        width === p.w && height === p.h ? 'btn-primary' : 'btn-secondary'
+                        width === p.width && height === p.height ? 'btn-primary' : 'btn-secondary'
                       }`}
-                      onClick={() => {
-                        setWidth(p.w)
-                        setHeight(p.h)
-                      }}
+                      onClick={() => applySize(p.width, p.height)}
                     >
                       {p.label}
                     </button>
                   ))}
                 </div>
+                <p className="mt-1 text-[11px] text-muted">
+                  {isVideo
+                    ? '图生视频：横版≤800×496 / 竖版≤496×800，边长为 8 的倍数'
+                    : `文生图/图编：每边≤${imageMaxSide}，且为 ${SIZE_MULTIPLE} 的倍数`}
+                </p>
               </div>
               <div>
                 <label className="label">宽</label>
-                <input className="input" type="number" value={width} onChange={(e) => setWidth(Number(e.target.value))} />
+                <input
+                  className="input"
+                  type="number"
+                  min={SIZE_MULTIPLE}
+                  max={isVideo ? VIDEO_MAX_LONG : imageMaxSide}
+                  step={SIZE_MULTIPLE}
+                  value={width}
+                  onChange={(e) => setWidth(Number(e.target.value))}
+                  onBlur={() => applySize(width, height)}
+                />
               </div>
               <div>
                 <label className="label">高</label>
-                <input className="input" type="number" value={height} onChange={(e) => setHeight(Number(e.target.value))} />
+                <input
+                  className="input"
+                  type="number"
+                  min={SIZE_MULTIPLE}
+                  max={isVideo ? VIDEO_MAX_LONG : imageMaxSide}
+                  step={SIZE_MULTIPLE}
+                  value={height}
+                  onChange={(e) => setHeight(Number(e.target.value))}
+                  onBlur={() => applySize(width, height)}
+                />
               </div>
               <div>
                 <label className="label">步数</label>
-                <input className="input" type="number" value={steps} onChange={(e) => setSteps(Number(e.target.value))} />
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={maxSteps}
+                  value={steps}
+                  onChange={(e) => setSteps(Number(e.target.value))}
+                  onBlur={() => setSteps((s) => clampSteps(s, maxSteps))}
+                />
+                <p className="mt-1 text-[11px] text-muted">上限 {maxSteps}（服务端）</p>
               </div>
               <div>
                 <label className="label">种子</label>
                 <input className="input" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="随机" />
               </div>
-              {mode === 'image_to_video' ? (
+              {isVideo ? (
                 <div className="col-span-2">
                   <label className="label">视频帧长</label>
-                  <input className="input" type="number" value={length} onChange={(e) => setLength(Number(e.target.value))} />
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={MAX_VIDEO_LENGTH}
+                    value={length}
+                    onChange={(e) => setLength(Number(e.target.value))}
+                    onBlur={() => setLength((n) => clampVideoLength(n))}
+                  />
+                  <p className="mt-1 text-[11px] text-muted">上限 {MAX_VIDEO_LENGTH}</p>
                 </div>
               ) : null}
             </div>
