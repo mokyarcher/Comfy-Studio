@@ -27,6 +27,7 @@ from app.schemas import (
     AdminPatchUserRequest,
     AdminStatsResponse,
     AdminUserResponse,
+    AdminDeleteUserResponse,
     AdminResetPasswordRequest,
     AdminResetPasswordResponse,
     AuthChangePasswordRequest,
@@ -1486,6 +1487,48 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return AdminUserResponse(**state.user_store.user_public_dict(user))
+
+    @app.delete(
+        "/v1/admin/users/{user_id}",
+        response_model=AdminDeleteUserResponse,
+        tags=["admin"],
+    )
+    async def admin_delete_user(
+        user_id: str,
+        auth: AuthContext = Depends(admin_auth),
+    ) -> AdminDeleteUserResponse:
+        _ = auth
+        # Purge related data first; then remove the account row.
+        try:
+            user = state.user_store.get_user(user_id)
+            if user is None:
+                raise LookupError("User not found")
+            if user.is_admin:
+                raise ValueError("不能注销管理员账号")
+            cloud_n = state.cloud_gallery.delete_all_by_owner(user_id)
+            showcase_n = state.showcase.delete_all_by_author(user_id)
+            shared_n = state.shared_prompts.delete_all_by_author(user_id)
+            state.polish_quota.delete_key(user_id)
+            state.user_store.delete_user(user_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="User not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.info(
+            "admin deleted user id=%s username=%s cloud=%s showcase=%s shared=%s",
+            user.id,
+            user.username,
+            cloud_n,
+            showcase_n,
+            shared_n,
+        )
+        return AdminDeleteUserResponse(
+            id=user.id,
+            username=user.username or user.name,
+            cloud_gallery_deleted=cloud_n,
+            showcase_deleted=showcase_n,
+            shared_prompts_deleted=shared_n,
+        )
 
     @app.post(
         "/v1/admin/users/{user_id}/reset-password",

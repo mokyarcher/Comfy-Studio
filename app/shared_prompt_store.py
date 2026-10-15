@@ -149,6 +149,14 @@ class SharedPromptStore:
             cur = conn.execute("DELETE FROM shared_prompts WHERE id = ?", (item_id,))
             return cur.rowcount > 0
 
+    def delete_all_by_author(self, author_user_id: str) -> int:
+        with self._lock, self.connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM shared_prompts WHERE author_user_id = ?",
+                (author_user_id,),
+            )
+            return int(cur.rowcount or 0)
+
     @staticmethod
     def _row(row: sqlite3.Row) -> SharedPromptItem:
         try:

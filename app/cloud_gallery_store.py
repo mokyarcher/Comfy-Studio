@@ -217,6 +217,21 @@ class CloudGalleryStore:
             shutil.rmtree(directory, ignore_errors=True)
         return True
 
+    def delete_all_by_owner(self, owner_user_id: str) -> int:
+        items = self.list_by_owner(owner_user_id, limit=200)
+        # Drain in pages until empty (hard cap via loops)
+        deleted = 0
+        while items:
+            for item in items:
+                with self._lock, self.connect() as conn:
+                    conn.execute("DELETE FROM cloud_gallery_items WHERE id = ?", (item.id,))
+                directory = self.item_dir(item.id)
+                if directory.exists():
+                    shutil.rmtree(directory, ignore_errors=True)
+                deleted += 1
+            items = self.list_by_owner(owner_user_id, limit=200)
+        return deleted
+
     def resolve_result_path(self, item: CloudGalleryItem) -> Path | None:
         base = self.item_dir(item.id).resolve()
         path = (base / item.result_filename).resolve()

@@ -288,6 +288,21 @@ class ShowcaseStore:
             return None
         return self._set_unlisted(item_id)
 
+    def delete_all_by_author(self, author_user_id: str) -> int:
+        deleted = 0
+        while True:
+            items = self.list_by_author(author_user_id, limit=100)
+            if not items:
+                break
+            for item in items:
+                with self._lock, self.connect() as conn:
+                    conn.execute("DELETE FROM showcase_items WHERE id = ?", (item.id,))
+                directory = self.item_dir(item.id)
+                if directory.exists():
+                    shutil.rmtree(directory, ignore_errors=True)
+                deleted += 1
+        return deleted
+
     def _set_unlisted(self, item_id: str) -> ShowcaseItem | None:
         item = self.get(item_id)
         if item is None:

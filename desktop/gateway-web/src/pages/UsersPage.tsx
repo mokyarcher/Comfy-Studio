@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   approveUser,
+  deleteUser,
   listUsers,
   patchUser,
   rejectUser,
@@ -89,6 +90,24 @@ export function UsersPage() {
                 >
                   拒绝
                 </button>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1.5 text-xs text-danger"
+                  disabled={busyId === u.id}
+                  onClick={() => {
+                    const label = u.username || u.name || u.id
+                    if (
+                      !window.confirm(
+                        `确定注销用户 ${label}？将永久删除账号及相关数据，不可恢复。`
+                      )
+                    ) {
+                      return
+                    }
+                    void run(u.id, () => deleteUser(u.id))
+                  }}
+                >
+                  注销
+                </button>
               </>
             }
           />
@@ -129,6 +148,24 @@ export function UsersPage() {
                     }
                   >
                     重置密码
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-danger !py-1.5 text-xs"
+                    disabled={busyId === u.id}
+                    onClick={() => {
+                      const label = u.username || u.name || u.id
+                      if (
+                        !window.confirm(
+                          `确定注销用户 ${label}？将永久删除账号及云端画廊、展馆、共享提示词等数据，不可恢复。`
+                        )
+                      ) {
+                        return
+                      }
+                      void run(u.id, () => deleteUser(u.id))
+                    }}
+                  >
+                    注销
                   </button>
                 </>
               )

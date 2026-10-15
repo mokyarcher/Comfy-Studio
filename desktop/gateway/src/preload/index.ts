@@ -52,6 +52,7 @@ const gateway = {
   adminListUsers: () => ipcRenderer.invoke('gateway:adminListUsers'),
   adminApproveUser: (userId: string) => ipcRenderer.invoke('gateway:adminApproveUser', userId),
   adminRejectUser: (userId: string) => ipcRenderer.invoke('gateway:adminRejectUser', userId),
+  adminDeleteUser: (userId: string) => ipcRenderer.invoke('gateway:adminDeleteUser', userId),
   adminPatchUser: (userId: string, body: Record<string, unknown>) =>
     ipcRenderer.invoke('gateway:adminPatchUser', userId, body),
   adminRotateKey: (userId: string) => ipcRenderer.invoke('gateway:adminRotateKey', userId),

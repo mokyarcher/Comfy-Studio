@@ -388,6 +388,20 @@ class UserStore:
         assert updated is not None
         return updated
 
+    def delete_user(self, user_id: str) -> ApiUser:
+        """Hard-delete account row and usage events. Caller purges related stores."""
+        user = self.get_user(user_id)
+        if user is None:
+            raise LookupError("User not found")
+        if user.is_admin:
+            raise ValueError("不能注销管理员账号")
+        with self._lock, self.connect() as conn:
+            conn.execute("DELETE FROM usage_events WHERE user_id = ?", (user_id,))
+            cur = conn.execute("DELETE FROM api_users WHERE id = ?", (user_id,))
+            if cur.rowcount < 1:
+                raise LookupError("User not found")
+        return user
+
     def get_user(self, user_id: str) -> ApiUser | None:
         with self._lock, self.connect() as conn:
             row = conn.execute("SELECT * FROM api_users WHERE id = ?", (user_id,)).fetchone()

@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { GatewayConfig } from '../shared/types'
 import {
   adminApproveUser,
+  adminDeleteUser,
   adminGetLocalHold,
   adminDeleteSharedPrompt,
   adminGetPromptLibrary,
@@ -141,6 +142,11 @@ export function registerIpc(services: ServiceManager, getWindow: () => BrowserWi
   ipcMain.handle('gateway:adminRejectUser', async (_e, userId: string) => {
     const cfg = services.getConfig()
     return adminRejectUser(cfg, services.getApiKeyRaw(), userId)
+  })
+
+  ipcMain.handle('gateway:adminDeleteUser', async (_e, userId: string) => {
+    const cfg = services.getConfig()
+    return adminDeleteUser(cfg, services.getApiKeyRaw(), userId)
   })
 
   ipcMain.handle('gateway:adminPatchUser', async (_e, userId: string, body) => {

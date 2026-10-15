@@ -218,6 +218,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
   - `GET /v1/admin/users`
   - `POST /v1/admin/users/{id}/approve` → 自动生成 Key（受 `MAX_APPROVED_USERS` 限制）
   - `POST /v1/admin/users/{id}/reject`
+  - `DELETE /v1/admin/users/{id}` → 注销用户：删除账号及云端画廊 / 展馆投稿 / 共享提示词 / 用量记录（不可删管理员）
   - `POST /v1/admin/users/{id}/reset-password` → 返回临时密码（忘密时由管理员重置）
   - `PATCH /v1/admin/users/{id}`、`POST .../rotate-key`
   - `GET|POST /v1/admin/local-hold`

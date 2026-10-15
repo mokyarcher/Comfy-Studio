@@ -186,6 +186,30 @@ export async function adminRejectUser(
   }
 }
 
+export async function adminDeleteUser(
+  cfg: GatewayConfig,
+  apiKey: string,
+  userId: string
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const res = await fetchJson(
+      `${localBase(cfg)}/v1/admin/users/${userId}`,
+      apiKey,
+      { method: 'DELETE' }
+    )
+    if (!res.ok) {
+      return { ok: false, message: failDetail(res.status, res.data) || `注销失败 HTTP ${res.status}` }
+    }
+    const data = res.data as { message?: string; username?: string } | null
+    return {
+      ok: true,
+      message: data?.message || `已注销用户 ${data?.username || userId}`
+    }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : '注销失败' }
+  }
+}
+
 export async function adminPatchUser(
   cfg: GatewayConfig,
   apiKey: string,

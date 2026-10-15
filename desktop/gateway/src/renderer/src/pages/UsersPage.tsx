@@ -197,6 +197,24 @@ export function UsersPage() {
                       >
                         拒绝
                       </button>
+                      <button
+                        className="btn-ghost !px-2 !py-1 text-[11px] text-danger"
+                        onClick={async () => {
+                          const label = u.username || u.name
+                          if (
+                            !window.confirm(
+                              `确定注销用户 ${label}？将永久删除账号及相关数据，不可恢复。`
+                            )
+                          ) {
+                            return
+                          }
+                          const res = await window.gateway.adminDeleteUser(u.id)
+                          showToast(res.ok ? 'success' : 'error', res.message)
+                          void refresh()
+                        }}
+                      >
+                        注销
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -297,6 +315,24 @@ export function UsersPage() {
                             </button>
                           </>
                         )}
+                        <button
+                          className="btn-ghost !px-2 !py-1 text-[11px] text-danger"
+                          onClick={async () => {
+                            const label = u.username || u.name
+                            if (
+                              !window.confirm(
+                                `确定注销用户 ${label}？将永久删除账号及云端画廊、展馆、共享提示词等数据，不可恢复。`
+                              )
+                            ) {
+                              return
+                            }
+                            const res = await window.gateway.adminDeleteUser(u.id)
+                            showToast(res.ok ? 'success' : 'error', res.message)
+                            void refresh()
+                          }}
+                        >
+                          注销
+                        </button>
                       </div>
                     )}
                   </td>

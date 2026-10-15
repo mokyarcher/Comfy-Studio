@@ -67,3 +67,28 @@ def test_approve_user_and_disable(client: TestClient):
         headers={"X-API-Key": user_key},
     )
     assert banned.status_code == 403
+
+
+def test_admin_delete_user(client: TestClient):
+    created = client.post(
+        "/v1/auth/register",
+        json={"username": "todelete", "password": "secret12", "display_name": "待删"},
+    )
+    assert created.status_code == 200
+    user_id = created.json()["user_id"]
+
+    deleted = client.delete(f"/v1/admin/users/{user_id}", headers=_h())
+    assert deleted.status_code == 200
+    body = deleted.json()
+    assert body["ok"] is True
+    assert body["username"] == "todelete"
+
+    users = client.get("/v1/admin/users", headers=_h()).json()
+    assert all(u["id"] != user_id for u in users)
+
+    again = client.delete(f"/v1/admin/users/{user_id}", headers=_h())
+    assert again.status_code == 404
+
+    admin = next(u for u in users if u.get("is_admin"))
+    forbid = client.delete(f"/v1/admin/users/{admin['id']}", headers=_h())
+    assert forbid.status_code == 400

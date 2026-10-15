@@ -141,6 +141,18 @@ export function rejectUser(userId: string) {
   return api<AdminUser>(`/v1/admin/users/${userId}/reject`, { method: 'POST' })
 }
 
+export function deleteUser(userId: string) {
+  return api<{
+    ok: boolean
+    id: string
+    username: string
+    message: string
+    cloud_gallery_deleted: number
+    showcase_deleted: number
+    shared_prompts_deleted: number
+  }>(`/v1/admin/users/${userId}`, { method: 'DELETE' })
+}
+
 export function patchUser(userId: string, body: { enabled?: boolean; note?: string }) {
   return api<AdminUser>(`/v1/admin/users/${userId}`, {
     method: 'PATCH',

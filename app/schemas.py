@@ -479,6 +479,16 @@ class AdminResetPasswordResponse(BaseModel):
     message: str
 
 
+class AdminDeleteUserResponse(BaseModel):
+    ok: bool = True
+    id: str
+    username: str
+    message: str = "已注销用户并清除相关数据"
+    cloud_gallery_deleted: int = 0
+    showcase_deleted: int = 0
+    shared_prompts_deleted: int = 0
+
+
 class AdminPatchUserRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -69,6 +69,12 @@ class PolishQuotaStore:
         )
         return self._get_count(conn, key_fp, bucket)
 
+    def delete_key(self, key_fp: str) -> int:
+        with self._lock, self._connect() as conn:
+            cur = conn.execute("DELETE FROM polish_usage WHERE key_fp = ?", (key_fp,))
+            conn.commit()
+            return int(cur.rowcount or 0)
+
     def snapshot(self, key_fp: str, daily_limit: int, per_minute_limit: int) -> QuotaSnapshot:
         day = f"d:{_utc_day()}"
         minute = f"m:{_utc_minute()}"
