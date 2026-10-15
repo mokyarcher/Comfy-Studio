@@ -111,6 +111,14 @@ body {
   background-color: var(--bg);
 }
 
+/* Login: fill viewport so liquid-glass-react top/left 50% centers correctly */
+.auth-shell {
+  min-height: 100dvh;
+  height: 100dvh;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .workspace-main {
   min-height: 0;
   flex: 1 1 0%;

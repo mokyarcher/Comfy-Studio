@@ -68,13 +68,14 @@ export function AuthPage() {
   }
 
   return (
-    <div ref={shellRef} className="workspace-shell flex min-h-full items-center justify-center p-6">
+    // LiquidGlass centers with top/left 50% + translate(-50%); do not also flex-center.
+    <div ref={shellRef} className="workspace-shell auth-shell relative h-dvh w-full overflow-hidden p-6">
       <WorkspaceBackground backgroundId={backgroundId} />
       <GlassCard
         mouseContainer={shellRef}
         cornerRadius={18}
         className="w-full max-w-md"
-        style={{ width: '100%', maxWidth: '28rem' }}
+        style={{ width: 'min(100%, 28rem)', maxWidth: '28rem' }}
         padding="1.5rem"
       >
         <div className="mb-6 flex items-center gap-3">
