@@ -622,3 +622,68 @@ export async function unlistShowcase(opts: { apiKey: string; itemId: string }) {
     throw new Error(mapHttpError(res.status, data))
   }
 }
+
+export async function listCloudGallery(opts: {
+  apiKey: string
+  limit?: number
+}): Promise<{ items: import('./types').CloudGalleryItem[]; count: number }> {
+  const q = opts.limit != null ? `?limit=${opts.limit}` : ''
+  const url = joinUrl(apiBase(), `/v1/cloud-gallery${q}`)
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey)
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as { items: import('./types').CloudGalleryItem[]; count: number }
+}
+
+export async function uploadCloudGallery(opts: {
+  apiKey: string
+  prompt: string
+  negativePrompt?: string
+  mode: string
+  width: number
+  height: number
+  steps: number
+  seed?: number | null
+  image: Blob
+  filename?: string
+}): Promise<import('./types').CloudGalleryItem> {
+  const url = joinUrl(apiBase(), '/v1/cloud-gallery')
+  const form = new FormData()
+  form.set('prompt', opts.prompt)
+  form.set('negative_prompt', opts.negativePrompt || '')
+  form.set('mode', opts.mode || 'txt2img')
+  form.set('width', String(opts.width))
+  form.set('height', String(opts.height))
+  form.set('steps', String(opts.steps))
+  if (opts.seed != null) form.set('seed', String(opts.seed))
+  const name =
+    opts.filename ||
+    (opts.image.type.includes('video') ? 'result.mp4' : 'result.png')
+  form.set('image', opts.image, name)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: 180_000,
+    headers: { Accept: 'application/json', 'X-API-Key': opts.apiKey },
+    body: form
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as import('./types').CloudGalleryItem
+}
+
+export async function deleteCloudGallery(opts: { apiKey: string; itemId: string }) {
+  const url = joinUrl(apiBase(), `/v1/cloud-gallery/${opts.itemId}`)
+  const res = await fetchWithTimeout(url, {
+    method: 'DELETE',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey)
+  })
+  if (!res.ok && res.status !== 204) {
+    const data = await parseJsonSafe(res)
+    throw new Error(mapHttpError(res.status, data))
+  }
+}

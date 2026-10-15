@@ -133,6 +133,15 @@ Header：`X-API-Key`、`Content-Type: application/json`
 - `POST /v1/showcase`：`multipart` 主图 `image` + 元数据字段；可选 `refs`
 - `POST /v1/showcase/{id}/unlist`：作者下架
 
+### 私有云端画廊（Gateway 本机）
+
+跨设备同步用，仅本人可见，存在 FastAPI 宿主机 `data/cloud_gallery/`（不是公网 VPS）。
+
+- `GET /v1/cloud-gallery` → `{ items[], count }`
+- `POST /v1/cloud-gallery`：`multipart` 字段同展馆（`image` + prompt/mode/尺寸等），支持图/视频
+- `GET /v1/cloud-gallery/{id}/image` · `/thumb`（需 Key，且仅 owner）
+- `DELETE /v1/cloud-gallery/{id}`
+
 ### `GET /v1/prompt/polish/status`
 
 需 `X-API-Key`。查询网关 AI 润色是否启用、配额剩余。
@@ -204,14 +213,31 @@ Header：`X-API-Key`、`Content-Type: application/json`
   - `POST /v1/auth/register` `{username, password, display_name?}` → `pending`（尚无 Key）
   - `POST /v1/auth/login` → 仅 `active` 返回 `api_key`；pending/rejected/disabled 返回 403
   - `POST /v1/auth/change-password`（需用户自己的 `X-API-Key`）`{old_password, new_password}`
-- 管理员（Header `X-API-Key` = 管理员 Key）：
+- 管理员（Header `X-API-Key` = 管理员 Key，**或** Gateway Admin Web 的 `admin_session` Cookie）：
   - `GET /v1/admin/stats`（含 `pending_users`、`pool_remaining`、`max_approved_users`）
   - `GET /v1/admin/users`
   - `POST /v1/admin/users/{id}/approve` → 自动生成 Key（受 `MAX_APPROVED_USERS` 限制）
   - `POST /v1/admin/users/{id}/reject`
   - `POST /v1/admin/users/{id}/reset-password` → 返回临时密码（忘密时由管理员重置）
   - `PATCH /v1/admin/users/{id}`、`POST .../rotate-key`
+  - `GET|POST /v1/admin/local-hold`
 - 业务接口仍用 `X-API-Key`；按用户计日限额。全局队列受 `MAX_QUEUE_SIZE` 限制。
+
+### 管理员登录（Gateway Admin Web）
+
+浏览器**不存**主 API Key；会话 Cookie `admin_session`（HttpOnly）。
+
+默认 `ADMIN_LOGIN_MODE=totp`（密码 + Authenticator，无需短信资质）：
+
+- `POST /v1/auth/admin/login` `{ password, totp_code }` → Set-Cookie
+- `POST /v1/auth/admin/logout` → 清除会话
+- `GET /v1/auth/me` → 需管理员会话或管理员 Key
+
+可选 `ADMIN_LOGIN_MODE=sms`（需 `ADMIN_PHONE` + 腾讯云/阿里云签名模板）：
+
+- `POST /v1/auth/sms/send` `{ phone }` / `POST /v1/auth/sms/verify` `{ phone, code }`
+
+配置见根目录 `.env.example`。前端：`desktop/gateway-web/`；域名：`https://comfy-gateway.sharex.team`。
 
 ## 本地启动（Gateway 应复用）
 

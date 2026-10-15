@@ -7,6 +7,7 @@
 | **Comfy Gateway** | `desktop/gateway` | 服务端控制台：启动/停止 API 与 frpc、健康检查、密钥、日志 |
 | **Comfy Studio** | `desktop/studio` | 远程生图客户端：提示词、出图、任务队列、画廊 |
 | **Comfy Studio Web** | `desktop/studio-web` | 浏览器工作空间（跨系统）；说明见 [`studio-web/README.md`](./studio-web/README.md) |
+| **Comfy Gateway Admin Web** | `desktop/gateway-web` | 外网管理台（短信登录，审用户 / hold）；见 [`gateway-web/README.md`](./gateway-web/README.md) |
 
 API 契约见 [`docs/api-contract.md`](./docs/api-contract.md)。
 

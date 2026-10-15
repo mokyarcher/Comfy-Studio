@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     image_output_dir: Path = PROJECT_ROOT / "data" / "images"
     showcase_db_path: Path = PROJECT_ROOT / "data" / "showcase.db"
     showcase_files_dir: Path = PROJECT_ROOT / "data" / "showcase"
+    cloud_gallery_db_path: Path = PROJECT_ROOT / "data" / "cloud_gallery.db"
+    cloud_gallery_files_dir: Path = PROJECT_ROOT / "data" / "cloud_gallery"
     prompt_library_path: Path = PROJECT_ROOT / "data" / "prompt_library.json"
     shared_prompts_db_path: Path = PROJECT_ROOT / "data" / "shared_prompts.db"
     translate_cache_db_path: Path = PROJECT_ROOT / "data" / "translate_cache.db"
@@ -104,9 +106,41 @@ class Settings(BaseSettings):
     cors_origins: str = (
         "https://comfy-studio.sharex.team,"
         "https://app.comfy-studio.sharex.team,"
+        "https://comfy-gateway.sharex.team,"
         "http://localhost:5173,"
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173,"
+        "http://localhost:5174,"
+        "http://127.0.0.1:5174"
     )
+
+    # --- Gateway admin login (remote console) ---
+    # totp = password + Authenticator (recommended; no SMS vendor)
+    # sms = phone OTP via tencent/aliyun
+    admin_login_mode: str = "totp"
+    admin_password: str = ""
+    admin_totp_secret: str = ""
+    admin_phone: str = ""
+    admin_session_secret: str = Field(default="")
+    admin_session_ttl_seconds: int = 12 * 3600
+    admin_sms_db_path: Path = PROJECT_ROOT / "data" / "admin_sms.db"
+    sms_cooldown_seconds: int = 60
+    sms_daily_limit: int = 10
+    sms_otp_ttl_seconds: int = 300
+    # SMS provider when admin_login_mode=sms: tencent | aliyun
+    sms_provider: str = "tencent"
+    sms_dry_run: bool = False
+    sms_sign_name: str = ""
+    # Tencent Cloud SMS (https://console.cloud.tencent.com/smsv2)
+    sms_secret_id: str = ""
+    sms_secret_key: str = ""
+    sms_sdk_app_id: str = ""
+    sms_template_id: str = ""
+    sms_region: str = "ap-guangzhou"
+    # Aliyun Dysmsapi (optional)
+    sms_access_key_id: str = ""
+    sms_access_key_secret: str = ""
+    sms_template_code: str = ""
+    sms_region_id: str = "cn-hangzhou"
 
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -132,6 +166,9 @@ class Settings(BaseSettings):
         "image_to_video_workflow_mapping_path",
         "polish_quota_db_path",
         "users_db_path",
+        "cloud_gallery_db_path",
+        "cloud_gallery_files_dir",
+        "admin_sms_db_path",
         mode="before",
     )
     @classmethod

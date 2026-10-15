@@ -206,6 +206,27 @@ class ShowcaseListResponse(BaseModel):
     count: int
 
 
+class CloudGalleryItemResponse(BaseModel):
+    id: str
+    prompt: str
+    negative_prompt: str | None = None
+    mode: str = "txt2img"
+    width: int
+    height: int
+    steps: int
+    seed: int | None = None
+    mime_type: str = "image/png"
+    created_at: str
+    updated_at: str
+    image_url: str
+    thumb_url: str = ""
+
+
+class CloudGalleryListResponse(BaseModel):
+    items: list[CloudGalleryItemResponse]
+    count: int
+
+
 class GenerateImageResponse(BaseModel):
     task_id: str
     status: TaskStatus
@@ -396,6 +417,52 @@ class AuthChangePasswordRequest(BaseModel):
 class AuthChangePasswordResponse(BaseModel):
     ok: bool = True
     message: str = "密码已修改"
+
+
+class AdminTotpLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(..., min_length=1, max_length=128)
+    totp_code: str = Field(..., min_length=6, max_length=8)
+
+
+class AdminTotpLoginResponse(BaseModel):
+    ok: bool = True
+    message: str = "登录成功"
+    via: str = "totp"
+
+
+class SmsSendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    phone: str = Field(..., min_length=11, max_length=20)
+
+
+class SmsSendResponse(BaseModel):
+    ok: bool = True
+    message: str = "验证码已发送"
+    cooldown_seconds: int = 60
+
+
+class SmsVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    phone: str = Field(..., min_length=11, max_length=20)
+    code: str = Field(..., min_length=4, max_length=8)
+
+
+class SmsVerifyResponse(BaseModel):
+    ok: bool = True
+    message: str = "登录成功"
+    phone_masked: str = ""
+
+
+class AuthMeResponse(BaseModel):
+    ok: bool = True
+    role: str = "admin"
+    phone_masked: str = ""
+    username: str = ""
+    via: str = "session"
 
 
 class AdminResetPasswordRequest(BaseModel):

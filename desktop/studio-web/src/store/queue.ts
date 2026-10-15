@@ -9,11 +9,21 @@ type QueueState = {
   upsert: (task: LocalTask) => void
   remove: (id: string) => void
   clearFinished: () => void
+  clearHistory: () => void
+}
+
+function isActive(status: LocalTask['status']): boolean {
+  return (
+    status === 'waiting' ||
+    status === 'submitting' ||
+    status === 'queued' ||
+    status === 'running'
+  )
 }
 
 function persist(tasks: LocalTask[]) {
   try {
-    const slim = tasks.slice(0, 40).map((t) => {
+    const slim = tasks.slice(0, 80).map((t) => {
       const rest = { ...t }
       delete rest.previewUrl
       return rest
@@ -49,7 +59,12 @@ export const useQueue = create<QueueState>((set, get) => ({
     set({ tasks })
   },
   clearFinished: () => {
-    const tasks = get().tasks.filter((t) => t.status === 'queued' || t.status === 'running' || t.status === 'submitting' || t.status === 'waiting')
+    const tasks = get().tasks.filter((t) => isActive(t.status))
+    persist(tasks)
+    set({ tasks })
+  },
+  clearHistory: () => {
+    const tasks = get().tasks.filter((t) => isActive(t.status))
     persist(tasks)
     set({ tasks })
   }

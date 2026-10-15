@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { LogOut } from 'lucide-react'
 import { GlassSelect } from '@/components/GlassSelect'
+import { GlassSwitch } from '@/components/GlassSwitch'
 import { BACKGROUNDS } from '@/lib/backgrounds'
 import { authChangePassword, testConnection } from '@/lib/api'
 import {
@@ -318,14 +319,12 @@ export function SettingsPage() {
             onChange={(e) => patch({ defaultNegativePrompt: e.target.value })}
           />
         </div>
-        <label className="flex items-center gap-2 text-sm text-muted sm:col-span-2 lg:col-span-3">
-          <input
-            type="checkbox"
-            checked={settings.autoPurge}
-            onChange={(e) => patch({ autoPurge: e.target.checked })}
-          />
-          下载到画廊后自动 purge 服务端任务
-        </label>
+        <GlassSwitch
+          className="sm:col-span-2 lg:col-span-3"
+          label="保存到画廊后，清理服务器上的临时图"
+          checked={settings.autoPurge}
+          onChange={(v) => patch({ autoPurge: v })}
+        />
       </section>
     </div>
   )

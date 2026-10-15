@@ -101,8 +101,21 @@ export async function saveFromTask(opts: {
     mode: opts.mode,
     createdAt: new Date().toISOString(),
     favorite: false,
-    showcaseId: null
+    showcaseId: null,
+    cloudId: null
   }
   await putGallery(item)
   return item
+}
+
+export async function setGalleryCloudId(id: string, cloudId: string): Promise<void> {
+  const item = await getGallery(id)
+  if (!item) return
+  item.cloudId = cloudId
+  await putGallery(item)
+}
+
+export async function findByCloudId(cloudId: string): Promise<GalleryRecord | null> {
+  const rows = await listGallery()
+  return rows.find((r) => r.cloudId === cloudId) || null
 }

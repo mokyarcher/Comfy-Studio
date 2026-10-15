@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { GlassCard } from '@/components/GlassCard'
+import { GlassSwitch } from '@/components/GlassSwitch'
 import { SlidingSeg } from '@/components/SlidingSeg'
 import { ToastHost } from '@/components/ToastHost'
 import { WorkspaceBackground } from '@/components/WorkspaceBackground'
@@ -132,20 +133,12 @@ export function AuthPage() {
             />
           </div>
           {mode === 'login' ? (
-            <label className="flex items-start gap-2 text-sm text-muted">
-              <input
-                className="mt-0.5"
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-              />
-              <span>
-                记住账号
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted/80">
-                  会把登录凭证写到本机长期保存；若页面被恶意脚本攻击，比仅会话保存更容易被偷走。公用电脑请勿勾选。
-                </span>
-              </span>
-            </label>
+            <GlassSwitch
+              label="记住账号"
+              description="公用电脑请勿开启；凭证会写到本机长期保存。"
+              checked={remember}
+              onChange={setRemember}
+            />
           ) : null}
           <button type="submit" className="btn-primary w-full" disabled={busy}>
             {busy ? '处理中…' : mode === 'login' ? '登录' : '提交注册'}

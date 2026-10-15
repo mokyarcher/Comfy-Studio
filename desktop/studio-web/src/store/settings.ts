@@ -10,6 +10,8 @@ export type AppSettings = {
   pollIntervalMs: number
   jobTimeoutMs: number
   autoPurge: boolean
+  /** Upload result to Gateway private cloud gallery after success. */
+  saveToCloud: boolean
   polishLanguage: 'match_input' | 'zh' | 'en'
   polishDetail: 'concise' | 'standard' | 'detailed'
   polishProfile: 'sdxl' | 'flux' | 'unknown' | 'wan'
@@ -49,6 +51,7 @@ const defaults: AppSettings = {
   pollIntervalMs: 2000,
   jobTimeoutMs: 900_000,
   autoPurge: true,
+  saveToCloud: true,
   polishLanguage: 'match_input',
   polishDetail: 'standard',
   polishProfile: 'unknown',

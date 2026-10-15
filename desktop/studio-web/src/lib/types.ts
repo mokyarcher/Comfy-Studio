@@ -67,6 +67,23 @@ export interface GalleryItem {
   mimeType: string
   blob: Blob
   showcaseId?: string | null
+  cloudId?: string | null
+}
+
+export interface CloudGalleryItem {
+  id: string
+  prompt: string
+  negative_prompt?: string | null
+  mode: string
+  width: number
+  height: number
+  steps: number
+  seed?: number | null
+  mime_type: string
+  created_at: string
+  updated_at: string
+  image_url: string
+  thumb_url?: string
 }
 
 export interface ShowcaseItem {

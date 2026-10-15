@@ -188,7 +188,6 @@ export function ShowcasePage() {
                 {active.seed != null ? ` · seed ${active.seed}` : ''}
               </p>
               {loadingFull ? <p className="text-[11px] text-muted">正在加载原图…</p> : null}
-              <p className="text-[11px] text-muted">点击左侧图片或按 Esc 关闭</p>
               {active.mine ? (
                 <div className="mt-auto flex flex-wrap gap-2 pt-2">
                   <button

@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
-import { deleteGallery, listGallery, toggleFavorite, type GalleryRecord } from '@/lib/gallery-db'
-import { shareToShowcase } from '@/lib/api'
+import {
+  deleteGallery,
+  findByCloudId,
+  listGallery,
+  newGalleryId,
+  putGallery,
+  toggleFavorite,
+  type GalleryRecord
+} from '@/lib/gallery-db'
+import { fetchAuthedBlob, listCloudGallery, shareToShowcase } from '@/lib/api'
+import type { GenerateMode } from '@/lib/types'
 import { useSession } from '@/store/session'
 import { useToast } from '@/store/toast'
 
@@ -12,16 +21,53 @@ export function GalleryPage() {
 
   async function reload() {
     const rows = await listGallery()
-    setItems(rows.map((r) => ({ ...r, url: URL.createObjectURL(r.blob) })))
+    setItems((prev) => {
+      prev.forEach((i) => URL.revokeObjectURL(i.url))
+      return rows.map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }))
+    })
+  }
+
+  async function syncCloud() {
+    try {
+      const { items: cloud } = await listCloudGallery({ apiKey, limit: 100 })
+      for (const c of cloud) {
+        const existing = await findByCloudId(c.id)
+        if (existing) continue
+        const blob = await fetchAuthedBlob({ apiKey, path: c.image_url })
+        await putGallery({
+          id: newGalleryId(),
+          taskId: `cloud:${c.id}`,
+          blob,
+          mimeType: c.mime_type || blob.type || 'image/png',
+          prompt: c.prompt,
+          negativePrompt: c.negative_prompt || undefined,
+          width: c.width,
+          height: c.height,
+          steps: c.steps,
+          seed: c.seed,
+          mode: (c.mode as GenerateMode) || 'txt2img',
+          createdAt: c.created_at,
+          favorite: false,
+          showcaseId: null,
+          cloudId: c.id
+        })
+      }
+      await reload()
+    } catch {
+      /* offline / API down — local gallery still works */
+    }
   }
 
   useEffect(() => {
-    reload()
+    void reload().then(() => syncCloud())
     return () => {
-      items.forEach((i) => URL.revokeObjectURL(i.url))
+      setItems((prev) => {
+        prev.forEach((i) => URL.revokeObjectURL(i.url))
+        return []
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [apiKey])
 
   useEffect(() => {
     if (!active) return
@@ -62,10 +108,7 @@ export function GalleryPage() {
   return (
     <div className="page space-y-4">
       <div className="page-header mb-0">
-        <div>
-          <h1 className="page-title">作品画廊</h1>
-          <p className="page-sub">保存在本机浏览器 IndexedDB，换设备不会同步。</p>
-        </div>
+        <h1 className="page-title">作品画廊</h1>
         <span className="status-chip">{items.length} 件</span>
       </div>
 
@@ -132,7 +175,6 @@ export function GalleryPage() {
                 {active.width}×{active.height} · steps {active.steps}
                 {active.seed != null ? ` · seed ${active.seed}` : ''}
               </p>
-              <p className="text-[11px] text-muted">点击左侧图片或按 Esc 关闭</p>
               <div className="mt-auto flex flex-wrap gap-2 pt-2">
                 <button type="button" className="btn-secondary" onClick={() => download(active)}>
                   下载

@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0c0e14;
+  --panel: #1a1d27;
+  --border: #2e3444;
+  --text: #e8eaf0;
+  --muted: #c2c8d6;
+  --primary: #8b5cf6;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --glass-bg: color-mix(in srgb, #10131c 52%, transparent);
+  --glass-filter: blur(28px) saturate(160%);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 10%, color-mix(in srgb, var(--success) 12%, transparent), transparent 50%),
+    var(--bg);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.card {
+  border-radius: 1rem;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.22) inset,
+    0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.input {
+  @apply w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2.5 text-sm text-text outline-none;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.08) inset;
+}
+
+.input:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white transition;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 88%, #fff), var(--primary));
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.25) inset;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-text transition hover:bg-white/10;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-muted transition hover:bg-white/10 hover:text-text;
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm transition;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.label {
+  @apply mb-1.5 block text-xs text-muted;
+}
+
+.glass-switch {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.glass-switch-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.55rem;
+  margin-top: 0.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #ffffff 14%, transparent);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.22) inset;
+  transition: background 0.22s ease;
+}
+
+.glass-switch-on .glass-switch-track {
+  background: color-mix(in srgb, var(--success) 72%, #1a2e24);
+}
+
+.glass-switch-knob {
+  position: absolute;
+  top: 0.16rem;
+  left: 0.16rem;
+  width: 1.22rem;
+  height: 1.22rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff 0%, #e8ecf2 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.glass-switch-on .glass-switch-knob {
+  transform: translateX(1.2rem);
+}
+
+.glass-switch-label {
+  font-size: 0.875rem;
+  color: color-mix(in srgb, var(--text) 85%, transparent);
+}

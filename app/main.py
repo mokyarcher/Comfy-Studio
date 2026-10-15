@@ -5,14 +5,14 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import mimetypes
 import uuid
 from pathlib import PurePosixPath, Path
 
-from app.auth import AuthContext, require_admin, require_auth, verify_api_key
+from app.auth import AuthContext, normalize_admin_phone, require_admin_access, require_auth, verify_api_key
 from app.comfy_client import ComfyClient, ComfyClientError
 from app.config import Settings, get_settings
 from app.database import Database
@@ -33,8 +33,15 @@ from app.schemas import (
     AuthChangePasswordResponse,
     AuthLoginRequest,
     AuthLoginResponse,
+    AuthMeResponse,
     AuthRegisterRequest,
     AuthRegisterResponse,
+    AdminTotpLoginRequest,
+    AdminTotpLoginResponse,
+    SmsSendRequest,
+    SmsSendResponse,
+    SmsVerifyRequest,
+    SmsVerifyResponse,
     GenerateImageRequest,
     GenerateImageResponse,
     GpuStatusResponse,
@@ -52,6 +59,8 @@ from app.schemas import (
     UploadImageResponse,
     WorkflowModesResponse,
     PurgeTaskResponse,
+    CloudGalleryItemResponse,
+    CloudGalleryListResponse,
     ShowcaseItemResponse,
     ShowcaseListResponse,
     PromptPolishQuota,
@@ -68,12 +77,24 @@ from app.shared_prompt_store import SharedPromptStore
 from app.user_store import STATUS_ACTIVE, STATUS_DISABLED, STATUS_PENDING, STATUS_REJECTED
 from app.task_service import QueueFullError, TaskService, UnsupportedModeError
 from app.user_store import UserStore
+from app.cloud_gallery_store import CloudGalleryStore
 from app.showcase_store import ShowcaseStore
+from app.sms_auth import (
+    COOKIE_NAME,
+    SmsAuthStore,
+    generate_otp_code,
+    normalize_cn_phone,
+    send_aliyun_sms,
+    send_tencent_sms,
+)
+from app.totp import verify_totp
+import secrets as _secrets
 from app.workflow import WorkflowError, WorkflowRegistry, load_workflow_registry
 from app.worker import TaskWorker
 
 _ALLOWED_UPLOAD_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 _SHOWCASE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+_CLOUD_GALLERY_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm"}
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +109,8 @@ class AppState:
     polish_quota: PolishQuotaStore
     user_store: UserStore
     showcase: ShowcaseStore
+    cloud_gallery: CloudGalleryStore
+    sms_auth: SmsAuthStore
     prompt_library: PromptLibraryStore
     shared_prompts: SharedPromptStore
     translate_cache: TranslateCacheStore
@@ -138,6 +161,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.polish_quota = PolishQuotaStore(settings.polish_quota_db_path)
     state.user_store = UserStore(settings.users_db_path)
     state.showcase = ShowcaseStore(settings.showcase_db_path, settings.showcase_files_dir)
+    state.cloud_gallery = CloudGalleryStore(
+        settings.cloud_gallery_db_path, settings.cloud_gallery_files_dir
+    )
+    state.sms_auth = SmsAuthStore(settings.admin_sms_db_path)
     state.prompt_library = PromptLibraryStore(settings.prompt_library_path)
     state.shared_prompts = SharedPromptStore(settings.shared_prompts_db_path)
     state.translate_cache = TranslateCacheStore(settings.translate_cache_db_path)
@@ -146,6 +173,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Bootstrapped admin user id=%s from .env API_KEY", boot.id)
     app.state.user_store = state.user_store
     app.state.settings = settings
+    app.state.sms_auth = state.sms_auth
     await state.worker.start()
     state.retention_task = None
     if settings.image_retention_days > 0:
@@ -189,8 +217,8 @@ def create_app() -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=cors_origins,
-            allow_credentials=False,
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key"],
             expose_headers=["Content-Type", "Content-Length"],
             max_age=600,
@@ -598,6 +626,122 @@ def create_app() -> FastAPI:
         media = mimetypes.guess_type(path.name)[0] or "image/png"
         return FileResponse(path, media_type=media, filename=path.name)
 
+    @app.get(
+        "/v1/cloud-gallery",
+        response_model=CloudGalleryListResponse,
+        tags=["cloud-gallery"],
+    )
+    async def list_cloud_gallery(
+        auth: AuthContext = Depends(require_auth),
+        limit: int = 100,
+    ) -> CloudGalleryListResponse:
+        items = state.cloud_gallery.list_by_owner(auth.user.id, limit=limit)
+        return CloudGalleryListResponse(
+            items=[CloudGalleryItemResponse(**it.to_dict()) for it in items],
+            count=len(items),
+        )
+
+    @app.post(
+        "/v1/cloud-gallery",
+        response_model=CloudGalleryItemResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["cloud-gallery"],
+    )
+    async def upload_cloud_gallery(
+        auth: AuthContext = Depends(require_auth),
+        prompt: str = Form(...),
+        negative_prompt: str = Form(""),
+        mode: str = Form("txt2img"),
+        width: int = Form(...),
+        height: int = Form(...),
+        steps: int = Form(...),
+        seed: int | None = Form(None),
+        image: UploadFile = File(...),
+    ) -> CloudGalleryItemResponse:
+        prompt = prompt.strip()
+        if not prompt:
+            raise HTTPException(status_code=400, detail="prompt required")
+        if mode not in ("txt2img", "image_edit", "image_to_video"):
+            raise HTTPException(status_code=400, detail="invalid mode")
+        result_name = image.filename or "result.png"
+        result_suffix = PurePosixPath(result_name).suffix.lower() or ".png"
+        if result_suffix not in _CLOUD_GALLERY_SUFFIXES:
+            raise HTTPException(status_code=400, detail="unsupported media type")
+        result_bytes = await image.read()
+        if not result_bytes:
+            raise HTTPException(status_code=400, detail="empty file")
+        max_bytes = state.settings.max_upload_bytes * (
+            4 if result_suffix in {".mp4", ".webm"} else 1
+        )
+        if len(result_bytes) > max_bytes:
+            raise HTTPException(status_code=413, detail="file too large")
+        mime = image.content_type or (
+            "video/mp4" if result_suffix == ".mp4" else "image/png"
+        )
+        item = state.cloud_gallery.create(
+            owner_user_id=auth.user.id,
+            prompt=prompt,
+            negative_prompt=negative_prompt.strip(),
+            mode=mode,
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed,
+            result_bytes=result_bytes,
+            result_suffix=result_suffix,
+            mime_type=mime,
+        )
+        logger.info("cloud gallery save user=%s id=%s mode=%s", auth.user.id, item.id, mode)
+        return CloudGalleryItemResponse(**item.to_dict())
+
+    @app.delete(
+        "/v1/cloud-gallery/{item_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["cloud-gallery"],
+    )
+    async def delete_cloud_gallery(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> None:
+        try:
+            ok = state.cloud_gallery.delete(item_id, auth.user.id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if not ok:
+            raise HTTPException(status_code=404, detail="Cloud gallery item not found")
+
+    @app.get(
+        "/v1/cloud-gallery/{item_id}/thumb",
+        tags=["cloud-gallery"],
+    )
+    async def get_cloud_gallery_thumb(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> FileResponse:
+        item = state.cloud_gallery.get(item_id)
+        if item is None or item.owner_user_id != auth.user.id:
+            raise HTTPException(status_code=404, detail="Image not found")
+        path = state.cloud_gallery.resolve_thumb_path(item)
+        if path is None:
+            raise HTTPException(status_code=404, detail="Image not found")
+        return FileResponse(path, media_type="image/jpeg", filename=path.name)
+
+    @app.get(
+        "/v1/cloud-gallery/{item_id}/image",
+        tags=["cloud-gallery"],
+    )
+    async def get_cloud_gallery_image(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> FileResponse:
+        item = state.cloud_gallery.get(item_id)
+        if item is None or item.owner_user_id != auth.user.id:
+            raise HTTPException(status_code=404, detail="Image not found")
+        path = state.cloud_gallery.resolve_result_path(item)
+        if path is None:
+            raise HTTPException(status_code=404, detail="Image not found")
+        return FileResponse(path, media_type=item.mime_type, filename=path.name)
+
     def _polish_quota_for_user(user_id: str, daily_limit: int) -> PromptPolishQuota:
         counts = state.user_store.counts_today(user_id)
         used = counts.polish_today
@@ -752,8 +896,223 @@ def create_app() -> FastAPI:
             translation=out, source=text, direction=direction
         )
 
-    def admin_auth(auth: AuthContext = Depends(require_auth)) -> AuthContext:
-        return require_admin(auth)
+    def admin_auth(auth: AuthContext = Depends(require_admin_access)) -> AuthContext:
+        return auth
+
+    def _session_secret() -> str:
+        return (state.settings.admin_session_secret or state.settings.api_key).strip()
+
+    def _mask_phone(phone: str) -> str:
+        if len(phone) < 7:
+            return phone
+        return f"{phone[:3]}****{phone[-4:]}"
+
+    def _cookie_secure(request: Request) -> bool:
+        proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+        return proto == "https"
+
+    def _set_admin_cookie(
+        response: Response, token: str, max_age: int, *, request: Request
+    ) -> None:
+        response.set_cookie(
+            key=COOKIE_NAME,
+            value=token,
+            max_age=max_age,
+            httponly=True,
+            secure=_cookie_secure(request),
+            samesite="lax",
+            path="/",
+        )
+
+    def _clear_admin_cookie(response: Response, *, request: Request) -> None:
+        response.delete_cookie(
+            COOKIE_NAME,
+            path="/",
+            secure=_cookie_secure(request),
+            samesite="lax",
+        )
+
+    @app.post("/v1/auth/admin/login", response_model=AdminTotpLoginResponse, tags=["auth"])
+    async def auth_admin_login(
+        body: AdminTotpLoginRequest, request: Request, response: Response
+    ) -> AdminTotpLoginResponse:
+        mode = (state.settings.admin_login_mode or "totp").strip().lower()
+        if mode not in {"totp", "password_totp"}:
+            raise HTTPException(
+                status_code=503,
+                detail="当前登录模式不是密码+动态码，请改用短信或调整 ADMIN_LOGIN_MODE",
+            )
+        password = (state.settings.admin_password or "").strip()
+        secret = (state.settings.admin_totp_secret or "").strip()
+        if not password or not secret:
+            raise HTTPException(
+                status_code=503,
+                detail="未配置 ADMIN_PASSWORD / ADMIN_TOTP_SECRET",
+            )
+        pw_ok = len(body.password) == len(password) and _secrets.compare_digest(
+            body.password, password
+        )
+        if not pw_ok or not verify_totp(secret, body.totp_code):
+            raise HTTPException(status_code=401, detail="密码或动态码错误")
+
+        token, _exp = state.sms_auth.create_session(
+            "admin", ttl_seconds=state.settings.admin_session_ttl_seconds
+        )
+        _set_admin_cookie(
+            response, token, state.settings.admin_session_ttl_seconds, request=request
+        )
+        logger.info("admin TOTP login ok")
+        return AdminTotpLoginResponse()
+
+    @app.post("/v1/auth/admin/logout", tags=["auth"])
+    async def auth_admin_logout(request: Request, response: Response) -> dict[str, bool]:
+        token = request.cookies.get(COOKIE_NAME)
+        state.sms_auth.revoke_session(token)
+        _clear_admin_cookie(response, request=request)
+        return {"ok": True}
+
+    @app.post("/v1/auth/sms/send", response_model=SmsSendResponse, tags=["auth"])
+    async def auth_sms_send(body: SmsSendRequest, request: Request) -> SmsSendResponse:
+        mode = (state.settings.admin_login_mode or "totp").strip().lower()
+        if mode != "sms":
+            raise HTTPException(
+                status_code=503,
+                detail="短信登录未启用（ADMIN_LOGIN_MODE=sms 时可用）",
+            )
+        _ = request
+        phone = normalize_cn_phone(body.phone)
+        if not phone:
+            raise HTTPException(status_code=400, detail="手机号格式不正确")
+        allowed = normalize_admin_phone(state.settings.admin_phone)
+        if not allowed:
+            raise HTTPException(status_code=503, detail="未配置管理员手机号")
+        if phone != allowed:
+            # Do not leak whether the number is the admin phone.
+            raise HTTPException(status_code=403, detail="该手机号无权登录管理台")
+
+        ok, msg = state.sms_auth.can_send(
+            phone,
+            cooldown_seconds=state.settings.sms_cooldown_seconds,
+            daily_limit=state.settings.sms_daily_limit,
+        )
+        if not ok:
+            raise HTTPException(status_code=429, detail=msg)
+
+        code = generate_otp_code()
+        secret = _session_secret()
+        provider = (state.settings.sms_provider or "tencent").strip().lower()
+        tencent_ready = bool(
+            state.settings.sms_secret_id
+            and state.settings.sms_secret_key
+            and state.settings.sms_sdk_app_id
+            and state.settings.sms_sign_name
+            and state.settings.sms_template_id
+        )
+        aliyun_ready = bool(
+            state.settings.sms_access_key_id
+            and state.settings.sms_access_key_secret
+            and state.settings.sms_sign_name
+            and state.settings.sms_template_code
+        )
+        dry = state.settings.sms_dry_run or (
+            provider == "tencent" and not tencent_ready
+        ) or (provider == "aliyun" and not aliyun_ready)
+        try:
+            if dry:
+                logger.warning(
+                    "SMS dry-run provider=%s phone=%s code=%s",
+                    provider,
+                    _mask_phone(phone),
+                    code,
+                )
+            elif provider == "tencent":
+                send_tencent_sms(
+                    phone=phone,
+                    code=code,
+                    secret_id=state.settings.sms_secret_id,
+                    secret_key=state.settings.sms_secret_key,
+                    sdk_app_id=state.settings.sms_sdk_app_id,
+                    sign_name=state.settings.sms_sign_name,
+                    template_id=state.settings.sms_template_id,
+                    region=state.settings.sms_region or "ap-guangzhou",
+                )
+            elif provider == "aliyun":
+                send_aliyun_sms(
+                    phone=phone,
+                    code=code,
+                    access_key_id=state.settings.sms_access_key_id,
+                    access_key_secret=state.settings.sms_access_key_secret,
+                    sign_name=state.settings.sms_sign_name,
+                    template_code=state.settings.sms_template_code,
+                    region_id=state.settings.sms_region_id,
+                )
+            else:
+                raise RuntimeError(f"unsupported SMS provider: {provider}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("SMS send failed")
+            raise HTTPException(status_code=502, detail=f"短信发送失败：{exc}") from exc
+
+        state.sms_auth.save_otp(
+            phone,
+            code,
+            ttl_seconds=state.settings.sms_otp_ttl_seconds,
+            secret=secret,
+        )
+        return SmsSendResponse(
+            message="验证码已发送" if not dry else "验证码已发送（调试模式见服务端日志）",
+            cooldown_seconds=state.settings.sms_cooldown_seconds,
+        )
+
+    @app.post("/v1/auth/sms/verify", response_model=SmsVerifyResponse, tags=["auth"])
+    async def auth_sms_verify(
+        body: SmsVerifyRequest, request: Request, response: Response
+    ) -> SmsVerifyResponse:
+        mode = (state.settings.admin_login_mode or "totp").strip().lower()
+        if mode != "sms":
+            raise HTTPException(
+                status_code=503,
+                detail="短信登录未启用（ADMIN_LOGIN_MODE=sms 时可用）",
+            )
+        phone = normalize_cn_phone(body.phone)
+        if not phone:
+            raise HTTPException(status_code=400, detail="手机号格式不正确")
+        allowed = normalize_admin_phone(state.settings.admin_phone)
+        if not allowed or phone != allowed:
+            raise HTTPException(status_code=403, detail="该手机号无权登录管理台")
+
+        code = "".join(ch for ch in body.code.strip() if ch.isdigit())
+        ok, msg = state.sms_auth.verify_otp(
+            phone, code, secret=_session_secret()
+        )
+        if not ok:
+            raise HTTPException(status_code=401, detail=msg)
+
+        token, _exp = state.sms_auth.create_session(
+            phone, ttl_seconds=state.settings.admin_session_ttl_seconds
+        )
+        _set_admin_cookie(
+            response, token, state.settings.admin_session_ttl_seconds, request=request
+        )
+        logger.info("admin SMS login phone=%s", _mask_phone(phone))
+        return SmsVerifyResponse(phone_masked=_mask_phone(phone))
+
+    @app.post("/v1/auth/sms/logout", tags=["auth"])
+    async def auth_sms_logout(request: Request, response: Response) -> dict[str, bool]:
+        return await auth_admin_logout(request, response)
+
+    @app.get("/v1/auth/me", response_model=AuthMeResponse, tags=["auth"])
+    async def auth_me(auth: AuthContext = Depends(require_admin_access)) -> AuthMeResponse:
+        phone = normalize_admin_phone(state.settings.admin_phone) or ""
+        mode = (state.settings.admin_login_mode or "totp").strip().lower()
+        via = "api_key"
+        if auth.via_sms_session:
+            via = "sms" if mode == "sms" else "totp"
+        return AuthMeResponse(
+            role="admin",
+            phone_masked=_mask_phone(phone) if phone else "",
+            username=auth.user.username or auth.user.name,
+            via=via,
+        )
 
     @app.post("/v1/auth/register", response_model=AuthRegisterResponse, tags=["auth"])
     async def auth_register(body: AuthRegisterRequest) -> AuthRegisterResponse:

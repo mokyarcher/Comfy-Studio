@@ -57,7 +57,6 @@ export function PromptsPage() {
       JSON.stringify({ prompt, negative: negative || '' })
     )
     navigate('/create')
-    push('已带到创作页（刷新后请重新选用）', 'success')
   }
 
   function saveLocal() {
@@ -87,10 +86,7 @@ export function PromptsPage() {
   return (
     <div className="page space-y-4">
       <div className="page-header mb-0">
-        <div>
-          <h1 className="page-title">提示词库</h1>
-          <p className="page-sub">选用后带回创作页。</p>
-        </div>
+        <h1 className="page-title">提示词库</h1>
         <SlidingSeg
           aria-label="提示词库来源"
           value={tab}
@@ -168,21 +164,26 @@ export function PromptsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((item) => (
-            <div key={item.id} className="card flex flex-col p-4">
+            <div
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              className="card flex cursor-pointer flex-col p-4 text-left transition hover:border-white/30"
+              onClick={() => usePrompt(item.prompt, item.negative_prompt)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  usePrompt(item.prompt, item.negative_prompt)
+                }
+              }}
+            >
               <h3 className="text-sm font-medium text-text">{item.title}</h3>
               {'author_name' in item && item.author_name ? (
                 <p className="mt-0.5 text-[11px] text-muted">来自 {item.author_name}</p>
               ) : null}
               <p className="mt-2 line-clamp-4 flex-1 text-xs leading-relaxed text-muted">{item.prompt}</p>
-              <PromptTranslateButton text={item.prompt} className="mt-1.5" stopPropagation />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary text-xs"
-                  onClick={() => usePrompt(item.prompt, item.negative_prompt)}
-                >
-                  选用
-                </button>
+              <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <PromptTranslateButton text={item.prompt} stopPropagation />
                 {'mine' in item && item.mine ? (
                   <button
                     type="button"

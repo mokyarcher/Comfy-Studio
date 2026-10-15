@@ -22,6 +22,7 @@ Gateway（本机控制台）
 | `app/` | FastAPI：任务队列、鉴权、工作流注入、润色代理、展馆、提示词库 |
 | `llm_workflow/` | ComfyUI API/UI 工作流与 `*_mapping.json`（**运行时路径默认在这里**） |
 | `desktop/gateway` | Electron 服务端控制台 |
+| `desktop/gateway-web` | 浏览器端 Gateway 管理台（密码+TOTP，审用户 / hold） |
 | `desktop/studio` | Electron 远程创作客户端 |
 | `desktop/studio-web` | 浏览器端 Studio 工作空间（Vite + React） |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
@@ -99,12 +100,14 @@ npm run dist:dir   # → release\win-unpacked\Comfy Gateway.exe
 ### 开发
 
 ```powershell
-cd desktop\gateway   # 或 studio / studio-web
+cd desktop\gateway   # 或 studio / studio-web / gateway-web
 npm install
 npm run dev
 ```
 
-Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
+Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。  
+Gateway Admin Web：`desktop/gateway-web`（默认端口 5174）；部署见 `deploy/comfy-gateway-admin.nginx.conf`。本机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（Authenticator）；短信模式可选。  
+API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 
 契约补充：`desktop/docs/api-contract.md`。
 
@@ -117,6 +120,7 @@ Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app
 | 长篇设计、部署、排障 | `docs/` |
 | 桌面端说明 | `desktop/README.md` |
 | Web Studio | `desktop/studio-web/README.md` |
+| Gateway Admin Web | `desktop/gateway-web/README.md` |
 | 官方网站 | `web/README.md` |
 
 改架构或目录约定时，**同步更新本文**，避免 Agent 按旧路径瞎改。
@@ -128,8 +132,8 @@ Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app
 | 操作 | 说明 |
 |------|------|
 | 云机 `root@111.229.166.216` | `ssh` / `scp` / `rsync` 部署 Web Studio 与相关 nginx |
-| 路径 | `/var/www/comfy-studio-app`、背景图、`app.comfy-studio.sharex.team` 证书与站点 |
-| 本地 | `desktop/studio-web` 的 `npm run build`、pytest、用户已要求的 git commit |
+| 路径 | `/var/www/comfy-studio-app`、`/var/www/comfy-gateway-admin`、背景图、`app.comfy-studio` / `comfy-gateway.sharex.team` 证书与站点 |
+| 本地 | `desktop/studio-web` / `gateway-web` 的 `npm run build`、pytest、用户已要求的 git commit |
 
 配置落点（提交进仓库）：
 

@@ -1,6 +1,7 @@
-import { ImageIcon, ImagePlus, Sparkles } from 'lucide-react'
+import { Eraser, ImageIcon, ImagePlus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { GlassButton } from '@/components/GlassButton'
+import { GlassSwitch } from '@/components/GlassSwitch'
 import { SlidingSeg } from '@/components/SlidingSeg'
 import { polishViaGateway, translateViaGateway } from '@/lib/api'
 import { listGallery, type GalleryRecord } from '@/lib/gallery-db'
@@ -26,52 +27,78 @@ import { useToast } from '@/store/toast'
 
 type RecentItem = GalleryRecord & { url: string }
 
+type ApplyDraft = {
+  prompt?: string
+  negative?: string
+  width?: number
+  height?: number
+  steps?: number
+  seed?: number | string | null
+  mode?: GenerateMode
+}
+
+function readApplyDraft(): ApplyDraft | null {
+  try {
+    const raw = sessionStorage.getItem('comfy-studio-web-apply-prompt')
+    if (!raw) return null
+    return JSON.parse(raw) as ApplyDraft
+  } catch {
+    return null
+  }
+}
+
 export function CreatePage() {
   const user = useSession((s) => s.user)!
   const settings = useSettings()
+  const patchSettings = useSettings((s) => s.patch)
   const maxSteps = useServerLimits((s) => s.maxSteps)
   const maxWidth = useServerLimits((s) => s.maxWidth)
   const maxHeight = useServerLimits((s) => s.maxHeight)
   const upsert = useQueue((s) => s.upsert)
   const push = useToast((s) => s.push)
+  const apply = useMemo(() => readApplyDraft(), [])
 
-  const [mode, setMode] = useState<GenerateMode>('txt2img')
-  const [prompt, setPrompt] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem('comfy-studio-web-apply-prompt')
-      if (!raw) return ''
-      const data = JSON.parse(raw) as { prompt?: string }
-      return data.prompt?.trim() ? data.prompt : ''
-    } catch {
-      return ''
-    }
-  })
-  const [negative, setNegative] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem('comfy-studio-web-apply-prompt')
-      if (!raw) return settings.defaultNegativePrompt
-      const data = JSON.parse(raw) as { negative?: string }
-      if (data.negative != null) return data.negative
-    } catch {
-      /* ignore */
-    }
-    return settings.defaultNegativePrompt
-  })
-  const [width, setWidth] = useState(settings.defaultWidth)
-  const [height, setHeight] = useState(settings.defaultHeight)
-  const [steps, setSteps] = useState(settings.defaultSteps)
-  const [seed, setSeed] = useState('')
+  const [mode, setMode] = useState<GenerateMode>(apply?.mode || 'txt2img')
+  const [prompt, setPrompt] = useState(() => (apply?.prompt?.trim() ? apply.prompt : ''))
+  const [negative, setNegative] = useState(() =>
+    apply?.negative != null ? apply.negative : settings.defaultNegativePrompt
+  )
+  const [width, setWidth] = useState(
+    typeof apply?.width === 'number' ? apply.width : settings.defaultWidth
+  )
+  const [height, setHeight] = useState(
+    typeof apply?.height === 'number' ? apply.height : settings.defaultHeight
+  )
+  const [steps, setSteps] = useState(
+    typeof apply?.steps === 'number' ? apply.steps : settings.defaultSteps
+  )
+  const [seed, setSeed] = useState(() =>
+    apply?.seed != null && apply.seed !== '' ? String(apply.seed) : ''
+  )
   const [length, setLength] = useState(81)
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [previewIsVideo, setPreviewIsVideo] = useState(false)
   const [status, setStatus] = useState('就绪')
+  const [progressPercent, setProgressPercent] = useState<number | null>(null)
   const [recent, setRecent] = useState<RecentItem[]>([])
 
   useEffect(() => {
     sessionStorage.removeItem('comfy-studio-web-apply-prompt')
   }, [])
+
+  function onClear() {
+    if (busy) return
+    setPrompt('')
+    setNegative('')
+    setFiles([])
+    setSeed('')
+    setPreview(null)
+    setPreviewIsVideo(false)
+    setStatus('就绪')
+    setProgressPercent(null)
+  }
 
   async function reloadRecent() {
     const rows = await listGallery()
@@ -203,11 +230,19 @@ export function CreatePage() {
           timeoutMs: settings.timeoutMs,
           jobTimeoutMs: settings.jobTimeoutMs,
           autoPurge: settings.autoPurge,
+          saveToCloud: settings.saveToCloud,
           isHidden: () => document.visibilityState === 'hidden',
           onBackgroundHint: () => push('标签页在后台，轮询可能被浏览器降速', 'info'),
           onUpdate: (t) => {
             upsert(t)
             setStatus(t.progressMessage || t.status)
+            if (t.status === 'running' && t.progress) {
+              setProgressPercent(Math.round(t.progress.percent))
+            } else if (t.progressMessage === '下载中' || t.progressMessage === '同步云端') {
+              setProgressPercent(100)
+            } else if (t.status === 'queued' || t.status === 'submitting') {
+              setProgressPercent(null)
+            }
             if (t.previewUrl) {
               setPreview(t.previewUrl)
               setPreviewIsVideo(t.mode === 'image_to_video' || Boolean(t.previewUrl.includes('video')))
@@ -216,11 +251,12 @@ export function CreatePage() {
         }
       })
       if (result.status === 'succeeded') {
-        push('生成完成，已保存到画廊', 'success')
+        push('生成完成', 'success')
         void reloadRecent().catch(() => undefined)
       } else push(result.error || '生成失败', 'error')
     } finally {
       setBusy(false)
+      setProgressPercent(null)
     }
   }
 
@@ -243,17 +279,28 @@ export function CreatePage() {
     <div className="page-fill">
       <div className="flex min-h-0 flex-col gap-4 lg:flex-row lg:gap-5">
         <section className="card flex min-h-0 w-full shrink-0 flex-col overflow-hidden lg:w-[28rem] xl:w-[30rem]">
-          <div className="border-b border-border px-3.5 py-2.5 sm:px-4">
-            <SlidingSeg
-              aria-label="生成模式"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'txt2img', label: '文生图' },
-                { value: 'image_edit', label: '图编辑' },
-                { value: 'image_to_video', label: '图生视频' }
-              ]}
-            />
+          <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5 sm:px-4">
+            <div className="min-w-0 flex-1">
+              <SlidingSeg
+                aria-label="生成模式"
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'txt2img', label: '文生图' },
+                  { value: 'image_edit', label: '图编辑' },
+                  { value: 'image_to_video', label: '图生视频' }
+                ]}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn-secondary shrink-0 !px-2.5 text-xs"
+              disabled={busy}
+              onClick={onClear}
+            >
+              <Eraser className="h-3.5 w-3.5" />
+              清屏
+            </button>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-3.5 py-3.5 sm:px-4">
@@ -453,7 +500,6 @@ export function CreatePage() {
                 className={`flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-border bg-bg ${
                   status === '历史预览' ? 'cursor-pointer' : ''
                 }`}
-                title={status === '历史预览' ? '点击返回最近作品' : undefined}
                 onClick={status === '历史预览' ? closeHistoryPreview : undefined}
               >
                 {previewIsVideo ? (
@@ -471,19 +517,37 @@ export function CreatePage() {
               <div className="flex min-h-0 flex-1 flex-col gap-4">
                 <div className="empty-state min-h-[10rem] shrink-0 py-8">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
-                    {busy ? <Sparkles className="h-5 w-5 animate-pulse text-white/85" /> : <ImageIcon className="h-5 w-5 text-white/75" />}
+                    {busy ? (
+                      <Sparkles className="h-5 w-5 animate-pulse text-white/85" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-white/75" />
+                    )}
                   </div>
-                  <p className="text-sm text-muted">
-                    {busy ? status : '在左侧输入提示词，开始创作'}
-                  </p>
-                  <p className="max-w-sm text-[11px] leading-relaxed text-muted/80">
-                    {busy
-                      ? '生成中…结果会出现在这里'
-                      : `成功后写入本机画廊${settings.autoPurge ? '，并 purge 服务端任务' : ''}`}
-                  </p>
+                  {busy ? (
+                    <div className="w-full max-w-xs space-y-3 px-2">
+                      <p className="text-sm text-text">
+                        {status}
+                        {progressPercent != null ? ` · ${progressPercent}%` : ''}
+                      </p>
+                      <div className="preview-progress">
+                        <div
+                          className="preview-progress-bar"
+                          style={{
+                            width:
+                              progressPercent != null
+                                ? `${Math.min(100, Math.max(4, progressPercent))}%`
+                                : '28%'
+                          }}
+                          data-indeterminate={progressPercent == null ? '1' : undefined}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted">在左侧输入提示词，开始创作</p>
+                  )}
                 </div>
 
-                {recent.length ? (
+                {!busy && recent.length ? (
                   <div className="min-h-0 flex-1 overflow-auto">
                     <p className="mb-2 text-xs font-medium text-muted">最近作品</p>
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
@@ -492,7 +556,6 @@ export function CreatePage() {
                           key={item.id}
                           type="button"
                           className="group overflow-hidden rounded-lg border border-border bg-bg text-left transition hover:border-white/35"
-                          title={item.prompt}
                           onClick={() => openRecent(item)}
                         >
                           {item.mimeType.startsWith('video/') ? (
@@ -511,14 +574,14 @@ export function CreatePage() {
                 ) : null}
               </div>
             )}
-            {preview && status === '历史预览' ? (
-              <p className="mt-3 text-center text-[11px] text-muted">点击图片返回最近作品</p>
-            ) : null}
-            {preview && status !== '历史预览' ? (
-              <p className="mt-3 text-[11px] leading-relaxed text-muted">
-                已写入本机画廊；{settings.autoPurge ? '随后会请求服务端 purge' : '未开启自动 purge'}。
-              </p>
-            ) : null}
+
+            <GlassSwitch
+              className="mt-3"
+              label="保存至云端"
+              checked={settings.saveToCloud}
+              disabled={busy}
+              onChange={(v) => patchSettings({ saveToCloud: v })}
+            />
           </div>
         </section>
       </div>

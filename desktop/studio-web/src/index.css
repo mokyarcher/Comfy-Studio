@@ -1015,6 +1015,122 @@ body {
     margin-right: 0.35rem;
     font-weight: 500;
   }
+
+  /* iOS-style pill switch */
+  .glass-switch {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .glass-switch-disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .glass-switch-track {
+    position: relative;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 1.55rem;
+    margin-top: 0.1rem;
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 55%),
+      color-mix(in srgb, #ffffff 14%, transparent);
+    box-shadow:
+      0 0 0 0.5px rgba(255, 255, 255, 0.22) inset,
+      0 1px 2px rgba(0, 0, 0, 0.28) inset;
+    transition:
+      background 0.22s ease,
+      box-shadow 0.22s ease;
+  }
+
+  .glass-switch-on .glass-switch-track {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 50%),
+      color-mix(in srgb, var(--success) 72%, #1a2e24);
+    box-shadow:
+      0 0 0 0.5px color-mix(in srgb, var(--success) 55%, rgba(255, 255, 255, 0.35)) inset,
+      0 1px 2px rgba(255, 255, 255, 0.18) inset,
+      0 2px 8px color-mix(in srgb, var(--success) 28%, transparent);
+  }
+
+  .glass-switch-knob {
+    position: absolute;
+    top: 0.16rem;
+    left: 0.16rem;
+    width: 1.22rem;
+    height: 1.22rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #fff 0%, #e8ecf2 100%);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.35),
+      0 0 0 0.5px rgba(255, 255, 255, 0.65) inset;
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .glass-switch-on .glass-switch-knob {
+    transform: translateX(1.2rem);
+  }
+
+  .glass-switch-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .glass-switch-label {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--text) 78%, transparent);
+  }
+
+  .glass-switch-desc {
+    font-size: 0.6875rem;
+    line-height: 1.45;
+    color: color-mix(in srgb, var(--muted) 85%, transparent);
+  }
+
+  .preview-progress {
+    height: 0.35rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, #ffffff 10%, transparent);
+    overflow: hidden;
+    box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.14) inset;
+  }
+
+  .preview-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--primary) 70%, #fff),
+      color-mix(in srgb, var(--primary) 40%, transparent)
+    );
+    transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .preview-progress-bar[data-indeterminate='1'] {
+    width: 32% !important;
+    animation: preview-progress-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes preview-progress-pulse {
+    0%,
+    100% {
+      transform: translateX(-20%);
+      opacity: 0.65;
+    }
+    50% {
+      transform: translateX(120%);
+      opacity: 1;
+    }
+  }
+
   .empty-state {
     @apply flex flex-1 flex-col items-center justify-center gap-2 rounded-xl px-6 py-10 text-center;
     position: relative;

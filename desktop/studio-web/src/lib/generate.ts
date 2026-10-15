@@ -3,9 +3,10 @@ import {
   pollTask,
   purgeTask,
   submitGenerate,
+  uploadCloudGallery,
   uploadImage
 } from './api'
-import { saveFromTask } from './gallery-db'
+import { saveFromTask, setGalleryCloudId } from './gallery-db'
 import type { GenerateMode, GenerateParams, LocalTask } from './types'
 
 export type GenerateCallbacks = {
@@ -14,6 +15,7 @@ export type GenerateCallbacks = {
   timeoutMs: number
   jobTimeoutMs: number
   autoPurge: boolean
+  saveToCloud: boolean
   apiKey: string
   isHidden?: () => boolean
   onBackgroundHint?: () => void
@@ -45,14 +47,14 @@ export async function runGenerateJob(opts: {
     seed: opts.seed,
     createdAt: now(),
     updatedAt: now(),
-    progressMessage: '提交中…'
+    progressMessage: '提交中'
   }
   opts.cb.onUpdate(task)
 
   try {
     let images: string[] | undefined
     if (opts.files?.length) {
-      task = { ...task, progressMessage: '上传参考图…', updatedAt: now() }
+      task = { ...task, progressMessage: '上传参考图', updatedAt: now() }
       opts.cb.onUpdate(task)
       images = []
       for (const file of opts.files) {
@@ -89,7 +91,7 @@ export async function runGenerateJob(opts: {
       remoteTaskId: submitted.taskId,
       status: submitted.status,
       queueAhead: submitted.queueAhead,
-      progressMessage: '排队中…',
+      progressMessage: '排队中',
       updatedAt: now()
     }
     opts.cb.onUpdate(task)
@@ -117,9 +119,7 @@ export async function runGenerateJob(opts: {
           polled.status === 'queued'
             ? `排队中${polled.queueAhead != null ? ` · 前面 ${polled.queueAhead}` : ''}`
             : polled.status === 'running'
-              ? polled.progress
-                ? `生成中 ${Math.round(polled.progress.percent)}%`
-                : '生成中…'
+              ? '生成中'
               : task.progressMessage,
         error: polled.error,
         updatedAt: now()
@@ -140,7 +140,12 @@ export async function runGenerateJob(opts: {
       return task
     }
 
-    task = { ...task, progressMessage: '下载结果…', updatedAt: now() }
+    task = {
+      ...task,
+      progressMessage: '下载中',
+      progress: { value: 100, max: 100, percent: 100 },
+      updatedAt: now()
+    }
     opts.cb.onUpdate(task)
 
     const media = await fetchTaskBlob({
@@ -162,6 +167,28 @@ export async function runGenerateJob(opts: {
       mode: opts.mode
     })
 
+    if (opts.cb.saveToCloud) {
+      task = { ...task, progressMessage: '同步云端', updatedAt: now() }
+      opts.cb.onUpdate(task)
+      try {
+        const cloud = await uploadCloudGallery({
+          apiKey: opts.cb.apiKey,
+          prompt: opts.prompt,
+          negativePrompt: opts.negativePrompt,
+          mode: opts.mode,
+          width: opts.width,
+          height: opts.height,
+          steps: opts.steps,
+          seed: task.seed,
+          image: media.blob,
+          filename: media.contentType.includes('video') ? 'result.mp4' : 'result.png'
+        })
+        await setGalleryCloudId(gallery.id, cloud.id)
+      } catch (err) {
+        console.warn('[studio-web] cloud gallery upload failed', err)
+      }
+    }
+
     if (opts.cb.autoPurge) {
       await purgeTask({
         apiKey: opts.cb.apiKey,
@@ -176,6 +203,7 @@ export async function runGenerateJob(opts: {
       previewUrl,
       galleryId: gallery.id,
       progressMessage: '完成',
+      progress: { value: 100, max: 100, percent: 100 },
       updatedAt: now()
     }
     opts.cb.onUpdate(task)
