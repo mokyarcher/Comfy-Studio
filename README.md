@@ -127,14 +127,14 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/v1/tasks/$taskId/images/0" -Header
 - 公网必须 HTTPS + API Key
 - 生产环境将 `ENABLE_DOCS=false`
 
-## 桌面端（Gateway / Studio）
+## 桌面端与 Web 客户端
 
-两款独立 Electron 应用，**不改动**本仓库 FastAPI 服务：
+- **Comfy Gateway**（Electron）：台式机启动 API + frpc、审用户、hold  
+- **Comfy Studio**（Electron）：远程出图、队列、本地画廊  
+- **Studio Web**：`desktop/studio-web` → https://app.comfy-studio.sharex.team（可「保存至云端」）  
+- **Gateway Admin Web**：`desktop/gateway-web` → https://comfy-gateway.sharex.team（密码 + Authenticator）  
 
-- **Comfy Gateway**：台式机上图形化启动 API + frpc、查状态/日志/密钥  
-- **Comfy Studio**：任意电脑远程出图、任务队列、本地画廊  
-
-详见 [`desktop/README.md`](./desktop/README.md)。
+详见 [`desktop/README.md`](./desktop/README.md)；契约 [`desktop/docs/api-contract.md`](./desktop/docs/api-contract.md)。
 
 ```powershell
 cd desktop\gateway
@@ -152,7 +152,8 @@ npm run dev
 app/                 FastAPI 应用
 scripts/             启动与检查脚本
 tests/               单元测试
-desktop/             Comfy Gateway + Comfy Studio 桌面端
+desktop/             Gateway / Studio（Electron）+ studio-web / gateway-web
+deploy/              云端 Nginx / FRP 模板
 data/                SQLite 与图片（gitignore）
 docs/                设计与部署文档
 llm_workflow/        ComfyUI 工作流与节点映射

@@ -47,11 +47,11 @@ ComfyUI 不可达时 `503`：
 { "detail": { "status": "not_ready", "comfyui": "down" } }
 ```
 
-### CORS（Web Studio）
+### CORS（Web Studio / Gateway Admin）
 
 - 环境变量 `CORS_ORIGINS`：逗号分隔浏览器 Origin 白名单；空字符串则不挂 CORS 中间件。
-- 默认含官网、`app.comfy-studio.sharex.team`、本地 Vite `5173`。
-- 推荐部署：`app` 同源反代 `/v1`、`/health`（见 `deploy/comfy-studio-app.nginx.conf`），可少依赖 CORS。
+- 默认含官网、`app.comfy-studio.sharex.team`、`comfy-gateway.sharex.team`、本地 Vite `5173`（Studio）与 `5174`（Gateway Admin）。
+- 推荐部署：`app` / `comfy-gateway` 同源反代 `/v1`、`/health`（见 `deploy/comfy-studio-app.nginx.conf`、`deploy/comfy-gateway-admin.nginx.conf`），可少依赖 CORS。
 - 鉴权仍为 `X-API-Key`（非 Cookie）；浏览器拉图须 `fetch` + Blob，不可裸 `<img src>`。
 
 ### `POST /v1/images/upload`
@@ -218,7 +218,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
   - `GET /v1/admin/users`
   - `POST /v1/admin/users/{id}/approve` → 自动生成 Key（受 `MAX_APPROVED_USERS` 限制）
   - `POST /v1/admin/users/{id}/reject`
-  - `DELETE /v1/admin/users/{id}` → 注销用户：删除账号及云端画廊 / 展馆投稿 / 共享提示词 / 用量记录（不可删管理员）
+  - `DELETE /v1/admin/users/{id}` → 注销用户：删除账号及云端画廊 / 展馆投稿 / 共享提示词 / 用量记录（不可删管理员）；响应含 `cloud_gallery_deleted` / `showcase_deleted` / `shared_prompts_deleted`
   - `POST /v1/admin/users/{id}/reset-password` → 返回临时密码（忘密时由管理员重置）
   - `PATCH /v1/admin/users/{id}`、`POST .../rotate-key`
   - `GET|POST /v1/admin/local-hold`

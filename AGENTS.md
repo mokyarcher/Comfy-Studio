@@ -22,7 +22,7 @@ Gateway（本机控制台）
 | `app/` | FastAPI：任务队列、鉴权、工作流注入、润色代理、展馆、提示词库 |
 | `llm_workflow/` | ComfyUI API/UI 工作流与 `*_mapping.json`（**运行时路径默认在这里**） |
 | `desktop/gateway` | Electron 服务端控制台 |
-| `desktop/gateway-web` | 浏览器端 Gateway 管理台（密码+TOTP，审用户 / hold） |
+| `desktop/gateway-web` | 浏览器端 Gateway 管理台（密码+TOTP，审用户 / hold / 注销） |
 | `desktop/studio` | Electron 远程创作客户端 |
 | `desktop/studio-web` | 浏览器端 Studio 工作空间（Vite + React） |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
@@ -73,7 +73,7 @@ Gateway（本机控制台）
 ### 分工
 
 - **Gateway**：管本机服务、用户审核、官方提示词库维护、玩家共享库审核删除、hold 开关等
-- **Studio**：登录会话、创作（文生图/图编/图生视频）、队列、画廊、展馆、本地/官方/共享提示词库
+- **Studio**：登录会话、创作（文生图/图编/图生视频）、队列、画廊、展馆、本地/官方/共享提示词库；Web Studio 另可「保存至云端」（私有 cloud gallery）
 
 ### UI / 文案
 

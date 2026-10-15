@@ -126,14 +126,25 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://img-api.example.com/v1/images/
 # 期望 401（缺 Key）
 ```
 
-## 4. 生产配置提醒
+## 4. 同机 SPA 管理台 / Web Studio（可选）
+
+API 仍走 FRP `18000`；静态站可另开子域，同源反代 `/v1` + `/health`：
+
+| 站点 | 配置 | 静态目录 |
+|------|------|----------|
+| Web Studio | `deploy/comfy-studio-app.nginx.conf` | `/var/www/comfy-studio-app` |
+| Gateway Admin | `deploy/comfy-gateway-admin.nginx.conf` | `/var/www/comfy-gateway-admin` |
+
+Gateway Admin 登录：台式机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（见根目录 `.env.example`）。
+
+## 5. 生产配置提醒
 
 - `.env` 中 `ENABLE_DOCS=false`
 - `API_KEY` 与 FRP `auth.token` 使用不同长随机串
 - Key 只放可信后端（Joy 等），不要进 App/前端
 - 本地电脑勿睡眠；断网/关机时公网无法出图，属预期
 
-## 5. 排障顺序
+## 6. 排障顺序
 
 1. `http://127.0.0.1:8188/system_stats` — ComfyUI
 2. `http://127.0.0.1:8000/health/ready` — 本地 API

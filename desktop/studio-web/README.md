@@ -1,6 +1,8 @@
 # Comfy Studio Web
 
-浏览器端远程创作工作空间。与 Electron Studio 共用 FastAPI 契约；密钥默认存 `sessionStorage`，画廊用 IndexedDB。
+浏览器端远程创作工作空间。与 Electron Studio 共用 FastAPI 契约；密钥默认存 `sessionStorage`，本地画廊用 IndexedDB。
+
+创作页可开「保存至云端」：成功出图后上传到 Gateway 本机私有库（`/v1/cloud-gallery`），与本地 IndexedDB 画廊独立；契约见 [`../docs/api-contract.md`](../docs/api-contract.md)。
 
 ## 开发
 
@@ -35,4 +37,4 @@ Nginx 模板：[`deploy/comfy-studio-app.nginx.conf`](../../deploy/comfy-studio-
 
 - 勿在公用电脑勾选「记住账号」
 - 禁止在浏览器配置上游润色 Key；只用网关 `/v1/prompt/polish*`
-- 生成成功后默认 purge；关闭页面前确认画廊已写入
+- 生成成功后默认 purge；关闭页面前确认本地画廊已写入（云端另走「保存至云端」）
