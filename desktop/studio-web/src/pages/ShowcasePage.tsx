@@ -52,6 +52,16 @@ export function ShowcasePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUrl])
 
+  useEffect(() => {
+    if (!active) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePreview()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close when active opens
+  }, [active])
+
   async function openItem(item: Row) {
     setActive(item)
     setActiveUrl(item.thumb || null)
@@ -178,7 +188,7 @@ export function ShowcasePage() {
                 {active.seed != null ? ` · seed ${active.seed}` : ''}
               </p>
               {loadingFull ? <p className="text-[11px] text-muted">正在加载原图…</p> : null}
-              <p className="text-[11px] text-muted">点击左侧图片关闭</p>
+              <p className="text-[11px] text-muted">点击左侧图片或按 Esc 关闭</p>
               {active.mine ? (
                 <div className="mt-auto flex flex-wrap gap-2 pt-2">
                   <button

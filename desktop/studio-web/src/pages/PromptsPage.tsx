@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PromptTranslateButton } from '@/components/PromptTranslateButton'
+import { SlidingSeg } from '@/components/SlidingSeg'
 import {
   deleteSharedPrompt,
   fetchPromptLibrary,
@@ -90,24 +91,16 @@ export function PromptsPage() {
           <h1 className="page-title">提示词库</h1>
           <p className="page-sub">选用后带回创作页。</p>
         </div>
-        <div className="seg">
-          {(
-            [
-              ['official', '官方'],
-              ['local', '本地'],
-              ['shared', '共享库']
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`seg-item ${tab === id ? 'seg-item-active' : 'seg-item-idle'}`}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <SlidingSeg
+          aria-label="提示词库来源"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'official', label: '官方' },
+            { value: 'local', label: '本地' },
+            { value: 'shared', label: '共享库' }
+          ]}
+        />
       </div>
 
       {tab === 'local' ? (

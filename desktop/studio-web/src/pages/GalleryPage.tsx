@@ -23,6 +23,15 @@ export function GalleryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (!active) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActive(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [active])
+
   async function onShare(item: GalleryRecord & { url: string }) {
     try {
       const shared = await shareToShowcase({
@@ -123,7 +132,7 @@ export function GalleryPage() {
                 {active.width}×{active.height} · steps {active.steps}
                 {active.seed != null ? ` · seed ${active.seed}` : ''}
               </p>
-              <p className="text-[11px] text-muted">点击左侧图片关闭</p>
+              <p className="text-[11px] text-muted">点击左侧图片或按 Esc 关闭</p>
               <div className="mt-auto flex flex-wrap gap-2 pt-2">
                 <button type="button" className="btn-secondary" onClick={() => download(active)}>
                   下载

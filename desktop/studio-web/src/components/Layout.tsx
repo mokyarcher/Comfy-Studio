@@ -1,10 +1,9 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Clapperboard,
   Images,
   Library,
   ListOrdered,
-  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -53,7 +52,6 @@ function applyPillBox(el: HTMLDivElement, box: PillBox) {
 
 export function Layout() {
   const user = useSession((s) => s.user)!
-  const logout = useSession((s) => s.logout)
   const backgroundId = useSettings((s) => s.backgroundId)
   const setFromHealth = useServerLimits((s) => s.setFromHealth)
   const location = useLocation()
@@ -85,11 +83,15 @@ export function Layout() {
     const ind = indicatorRef.current
     if (!navEl || !ind) return
 
-    const activePath =
-      nav.find((n) => location.pathname === n.to || location.pathname.startsWith(`${n.to}/`))?.to ??
-      location.pathname
-    const itemEl = itemRefs.current.get(activePath)
-    if (!itemEl) return
+    const activePath = nav.find(
+      (n) => location.pathname === n.to || location.pathname.startsWith(`${n.to}/`)
+    )?.to
+    const itemEl = activePath ? itemRefs.current.get(activePath) : undefined
+    if (!itemEl) {
+      ind.style.opacity = '0'
+      return
+    }
+    ind.style.opacity = '1'
 
     const next = readPillBox(navEl, itemEl)
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -269,15 +271,24 @@ export function Layout() {
           collapsed ? 'w-14' : 'w-52'
         }`}
       >
-        <div className={`flex h-12 select-none items-center border-b border-border ${collapsed ? 'justify-center px-1' : 'gap-2 px-3'}`}>
+        <div
+          className={`flex select-none items-center border-b border-border ${
+            collapsed ? 'h-[4.5rem] flex-col justify-center gap-0.5 px-1 py-1' : 'h-12 gap-2 px-3'
+          }`}
+        >
           {!collapsed ? (
             <>
-              <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-text" aria-label="Comfy Studio">
+              <Link
+                to="/home"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg outline-none transition hover:opacity-90 focus-visible:ring-1 focus-visible:ring-white/30"
+                title="欢迎页"
+                aria-label="Comfy Studio 欢迎页"
+              >
+                <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                <p className="truncate text-sm font-semibold text-text">
                   Comfy <span className="text-primary">Studio</span>
                 </p>
-              </div>
+              </Link>
               <button
                 type="button"
                 className="btn-ghost !h-7 !w-7 !p-0"
@@ -289,15 +300,25 @@ export function Layout() {
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              className="btn-ghost !h-8 !w-8 !p-0"
-              title="展开导航"
-              aria-label="展开导航"
-              onClick={() => setCollapsed(false)}
-            >
-              <PanelLeftOpen className="h-4 w-4" />
-            </button>
+            <>
+              <Link
+                to="/home"
+                className="btn-ghost !h-8 !w-8 !p-0"
+                title="欢迎页"
+                aria-label="Comfy Studio 欢迎页"
+              >
+                <Sparkles className="h-4 w-4 text-primary" />
+              </Link>
+              <button
+                type="button"
+                className="btn-ghost !h-7 !w-7 !p-0"
+                title="展开导航"
+                aria-label="展开导航"
+                onClick={() => setCollapsed(false)}
+              >
+                <PanelLeftOpen className="h-3.5 w-3.5" />
+              </button>
+            </>
           )}
         </div>
 
@@ -327,20 +348,11 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className={`border-t border-border ${collapsed ? 'p-1.5' : 'p-2'}`}>
-          {!collapsed ? (
-            <p className="mb-1 truncate px-2 text-[11px] text-muted">{user.name || user.username}</p>
-          ) : null}
-          <button
-            type="button"
-            className={`btn-ghost h-9 w-full text-xs hover:text-danger ${collapsed ? 'justify-center !px-0' : 'justify-start px-2'}`}
-            title="退出登录"
-            onClick={logout}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            {!collapsed ? '退出登录' : null}
-          </button>
-        </div>
+        {!collapsed ? (
+          <div className="border-t border-border p-2">
+            <p className="truncate px-2 py-1.5 text-[11px] text-muted">{user.name || user.username}</p>
+          </div>
+        ) : null}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { LogOut } from 'lucide-react'
 import { GlassSelect } from '@/components/GlassSelect'
 import { BACKGROUNDS } from '@/lib/backgrounds'
 import { authChangePassword, testConnection } from '@/lib/api'
@@ -23,6 +24,7 @@ import { useToast } from '@/store/toast'
 
 export function SettingsPage() {
   const user = useSession((s) => s.user)!
+  const logout = useSession((s) => s.logout)
   const settings = useSettings()
   const patch = useSettings((s) => s.patch)
   const maxSteps = useServerLimits((s) => s.maxSteps)
@@ -186,6 +188,16 @@ export function SettingsPage() {
               修改密码
             </button>
           </form>
+          <div className="border-t border-border pt-3">
+            <button
+              type="button"
+              className="btn-ghost h-9 w-full justify-start gap-2 px-2 text-xs hover:text-danger"
+              onClick={logout}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              退出登录
+            </button>
+          </div>
         </section>
 
         <section className="card grid gap-3 p-4 sm:grid-cols-2 sm:p-5">

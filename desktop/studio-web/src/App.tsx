@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout'
 import { AuthPage } from '@/pages/AuthPage'
 import { CreatePage } from '@/pages/CreatePage'
 import { GalleryPage } from '@/pages/GalleryPage'
+import { HomePage } from '@/pages/HomePage'
 import { PromptsPage } from '@/pages/PromptsPage'
 import { QueuePage } from '@/pages/QueuePage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -51,7 +52,8 @@ export function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Navigate to="/create" replace />} />
+          <Route index element={<Navigate to="/home" replace />} />
+          <Route path="home" element={<HomePage />} />
           <Route path="create" element={<CreatePage />} />
           <Route path="queue" element={<QueuePage />} />
           <Route path="gallery" element={<GalleryPage />} />

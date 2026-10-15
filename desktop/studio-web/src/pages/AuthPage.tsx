@@ -27,7 +27,7 @@ export function AuthPage() {
   const [healthMsg, setHealthMsg] = useState('')
 
   if (hydrated && user) {
-    return <Navigate to="/create" replace />
+    return <Navigate to="/home" replace />
   }
 
   async function onTest() {
@@ -61,7 +61,7 @@ export function AuthPage() {
         remember
       )
       push('登录成功', 'success')
-      navigate('/create', { replace: true })
+      navigate('/home', { replace: true })
     } finally {
       setBusy(false)
     }
