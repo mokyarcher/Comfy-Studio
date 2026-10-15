@@ -111,7 +111,8 @@ export function Layout() {
     const same =
       Math.abs(from.top - next.top) < 0.5 &&
       Math.abs(from.left - next.left) < 0.5 &&
-      Math.abs(from.width - next.width) < 0.5
+      Math.abs(from.width - next.width) < 0.5 &&
+      Math.abs(from.height - next.height) < 0.5
     if (same) {
       applyPillBox(ind, next)
       return
@@ -123,6 +124,8 @@ export function Layout() {
       width: (from.width + next.width) / 2,
       height: (from.height + next.height) / 2
     }
+    // Collapsed icon rail is smaller — shrink more so the hop reads clearly
+    const midScale = collapsed ? 0.58 : 0.72
 
     const anim = ind.animate(
       [
@@ -138,7 +141,7 @@ export function Layout() {
           left: `${mid.left}px`,
           width: `${mid.width}px`,
           height: `${mid.height}px`,
-          transform: 'scale(0.72)',
+          transform: `scale(${midScale})`,
           offset: 0.48
         },
         {
@@ -150,7 +153,7 @@ export function Layout() {
         }
       ],
       {
-        duration: 460,
+        duration: collapsed ? 480 : 460,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       }
@@ -165,10 +168,10 @@ export function Layout() {
       .catch(() => undefined)
   }
 
-  // Route change: animate pill between items
+  // Route change: animate pill (expanded + collapsed icon rail)
   useLayoutEffect(() => {
     syncNavPill(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync against pathname only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pathname hop only; collapse snaps separately
   }, [location.pathname])
 
   // Collapse/expand: width CSS-transitions; snap pill during + after so it never overflows
@@ -201,11 +204,15 @@ export function Layout() {
   useEffect(() => {
     const navEl = navRef.current
     if (!navEl || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => syncNavPill(false))
+    const ro = new ResizeObserver(() => {
+      // Don't cancel an in-flight route hop (was snapping instantly, worse when collapsed)
+      if (pillAnimRef.current) return
+      syncNavPill(false)
+    })
     ro.observe(navEl)
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [])
 
   useEffect(() => {
     try {

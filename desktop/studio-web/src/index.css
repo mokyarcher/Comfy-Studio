@@ -327,7 +327,8 @@ body {
 /* Sidebar nav: text row + sliding glass indicator */
 .nav-rail {
   position: relative;
-  overflow: hidden;
+  /* Allow pill mid-scale to breathe a little; clip was killing collapsed hop feel */
+  overflow: visible;
 }
 
 .nav-pill {
