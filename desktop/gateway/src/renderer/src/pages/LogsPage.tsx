@@ -5,6 +5,7 @@ import { useAppStore } from '../stores/appStore'
 
 const tabs: { id: LogSource | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
+  { id: 'comfy', label: 'ComfyUI' },
   { id: 'api', label: 'API' },
   { id: 'frp', label: 'FRP' },
   { id: 'system', label: '系统' }

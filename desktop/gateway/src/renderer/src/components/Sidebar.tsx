@@ -17,14 +17,14 @@ import { useAppStore } from '../stores/appStore'
 const items: { id: NavPage; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: '运行总览', icon: LayoutDashboard },
   { id: 'services', label: '服务管理', icon: Server },
-  { id: 'users', label: '用户与监控', icon: Users },
+  { id: 'users', label: '用户监控', icon: Users },
   { id: 'showcase', label: '作品展馆', icon: Landmark },
   { id: 'prompts', label: '提示词库', icon: Library },
-  { id: 'workflow', label: '工作流', icon: FileJson },
+  { id: 'workflow', label: '工作流程', icon: FileJson },
   { id: 'public', label: '公网入口', icon: Globe2 },
   { id: 'apikey', label: '访问密钥', icon: KeyRound },
-  { id: 'logs', label: '日志与诊断', icon: ScrollText },
-  { id: 'settings', label: '设置', icon: Settings }
+  { id: 'logs', label: '日志诊断', icon: ScrollText },
+  { id: 'settings', label: '系统设置', icon: Settings }
 ]
 
 export function Sidebar() {

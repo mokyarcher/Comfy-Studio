@@ -12,6 +12,9 @@ type ArchNode = {
   y: number
 }
 
+const NODE_W = 140
+const NODE_H = 72
+
 const NODES: ArchNode[] = [
   {
     id: 'studio',
@@ -80,8 +83,70 @@ const EDGES: [NodeId, NodeId][] = [
   ['comfy', 'gpu']
 ]
 
-function nodeCenter(n: ArchNode) {
-  return { x: n.x + 70, y: n.y + 36 }
+type Pt = { x: number; y: number }
+type Side = 'left' | 'right' | 'top' | 'bottom'
+
+function portPoint(n: ArchNode, side: Side): Pt {
+  const cx = n.x + NODE_W / 2
+  const cy = n.y + NODE_H / 2
+  switch (side) {
+    case 'left':
+      return { x: n.x, y: cy }
+    case 'right':
+      return { x: n.x + NODE_W, y: cy }
+    case 'top':
+      return { x: cx, y: n.y }
+    case 'bottom':
+      return { x: cx, y: n.y + NODE_H }
+  }
+}
+
+/** Pick Comfy-like output → input sides from relative layout. */
+function edgePorts(a: ArchNode, b: ArchNode): { from: Pt; to: Pt; fromSide: Side; toSide: Side } {
+  const ac = { x: a.x + NODE_W / 2, y: a.y + NODE_H / 2 }
+  const bc = { x: b.x + NODE_W / 2, y: b.y + NODE_H / 2 }
+  const dx = bc.x - ac.x
+  const dy = bc.y - ac.y
+
+  let fromSide: Side
+  let toSide: Side
+  if (Math.abs(dx) >= Math.abs(dy) * 0.85) {
+    fromSide = dx >= 0 ? 'right' : 'left'
+    toSide = dx >= 0 ? 'left' : 'right'
+  } else {
+    fromSide = dy >= 0 ? 'bottom' : 'top'
+    toSide = dy >= 0 ? 'top' : 'bottom'
+  }
+
+  return {
+    from: portPoint(a, fromSide),
+    to: portPoint(b, toSide),
+    fromSide,
+    toSide
+  }
+}
+
+/** Cubic Bézier “noodle” — same idea as ComfyUI link curves. */
+function noodlePath(from: Pt, to: Pt, fromSide: Side, toSide: Side) {
+  const dist = Math.hypot(to.x - from.x, to.y - from.y)
+  const pull = Math.max(dist * 0.45, 48)
+
+  const ctrl = (p: Pt, side: Side, amount: number): Pt => {
+    switch (side) {
+      case 'left':
+        return { x: p.x - amount, y: p.y }
+      case 'right':
+        return { x: p.x + amount, y: p.y }
+      case 'top':
+        return { x: p.x, y: p.y - amount }
+      case 'bottom':
+        return { x: p.x, y: p.y + amount }
+    }
+  }
+
+  const c1 = ctrl(from, fromSide, pull)
+  const c2 = ctrl(to, toSide, pull)
+  return `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${to.x} ${to.y}`
 }
 
 export function ArchDiagram({ autoPlay = true }: { autoPlay?: boolean }) {
@@ -104,33 +169,71 @@ export function ArchDiagram({ autoPlay = true }: { autoPlay?: boolean }) {
   const current = NODES.find((n) => n.id === active)!
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-panel/80">
-      <div className="border-b border-border px-4 py-3 sm:px-5">
+    <div className="glass-panel overflow-hidden rounded-xl">
+      <div className="border-b border-white/10 px-4 py-3 sm:px-5">
         <p className="text-sm font-medium text-text">全链路架构</p>
         <p className="text-xs text-muted">点击节点查看职责 · 推理永不离开本机</p>
       </div>
 
       <div className="relative hidden overflow-x-auto p-4 md:block">
         <svg viewBox="0 0 720 260" className="mx-auto h-auto w-full max-w-3xl">
-          {EDGES.map(([from, to]) => {
-            const a = NODES.find((n) => n.id === from)!
-            const b = NODES.find((n) => n.id === to)!
-            const p1 = nodeCenter(a)
-            const p2 = nodeCenter(b)
-            const lit = active === from || active === to
+          <defs>
+            <filter id="noodle-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {EDGES.map(([fromId, toId]) => {
+            const a = NODES.find((n) => n.id === fromId)!
+            const b = NODES.find((n) => n.id === toId)!
+            const { from, to, fromSide, toSide } = edgePorts(a, b)
+            const d = noodlePath(from, to, fromSide, toSide)
+            const lit = active === fromId || active === toId
             return (
-              <line
-                key={`${from}-${to}`}
-                x1={p1.x}
-                y1={p1.y}
-                x2={p2.x}
-                y2={p2.y}
-                stroke={lit ? '#3ddc97' : '#2a313c'}
-                strokeWidth={lit ? 2 : 1.5}
-                strokeOpacity={lit ? 0.85 : 0.7}
-              />
+              <g key={`${fromId}-${toId}`}>
+                {lit ? (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="#3ddc97"
+                    strokeWidth={6}
+                    strokeOpacity={0.22}
+                    strokeLinecap="round"
+                  />
+                ) : null}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={lit ? '#3ddc97' : '#3a4450'}
+                  strokeWidth={lit ? 3 : 2.25}
+                  strokeOpacity={lit ? 0.95 : 0.75}
+                  strokeLinecap="round"
+                  filter={lit ? 'url(#noodle-glow)' : undefined}
+                />
+                <circle
+                  cx={from.x}
+                  cy={from.y}
+                  r={lit ? 4.5 : 3.5}
+                  fill={lit ? '#3ddc97' : '#1a1f26'}
+                  stroke={lit ? '#9AF5C8' : '#4a5562'}
+                  strokeWidth={1.5}
+                />
+                <circle
+                  cx={to.x}
+                  cy={to.y}
+                  r={lit ? 4.5 : 3.5}
+                  fill={lit ? '#3ddc97' : '#1a1f26'}
+                  stroke={lit ? '#9AF5C8' : '#4a5562'}
+                  strokeWidth={1.5}
+                />
+              </g>
             )
           })}
+
           {NODES.map((node) => {
             const on = node.id === active
             return (
@@ -144,8 +247,8 @@ export function ArchDiagram({ autoPlay = true }: { autoPlay?: boolean }) {
                 }}
               >
                 <rect
-                  width="140"
-                  height="72"
+                  width={NODE_W}
+                  height={NODE_H}
                   rx="8"
                   fill={on ? 'rgba(61,220,151,0.12)' : '#12151a'}
                   stroke={on ? '#3ddc97' : '#2a313c'}
@@ -174,10 +277,10 @@ export function ArchDiagram({ autoPlay = true }: { autoPlay?: boolean }) {
                 setActive(node.id)
                 setStep(i)
               }}
-              className={`rounded-lg border px-3 py-2.5 text-left transition ${
+              className={`rounded-lg px-3 py-2.5 text-left transition ${
                 on
-                  ? 'border-accent/50 bg-accent/10'
-                  : 'border-border bg-bg-elevated hover:border-accent/30'
+                  ? 'bg-accent/15 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_45%,transparent)]'
+                  : 'bg-white/[0.06] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-white/10'
               }`}
             >
               <div className="flex items-baseline justify-between gap-2">
@@ -189,7 +292,7 @@ export function ArchDiagram({ autoPlay = true }: { autoPlay?: boolean }) {
         })}
       </div>
 
-      <div className="border-t border-border bg-bg-elevated/60 px-4 py-4 sm:px-5">
+      <div className="border-t border-white/10 bg-white/[0.04] px-4 py-4 sm:px-5">
         <AnimatePresence mode="wait">
           <motion.div
             key={current.id + String(step)}

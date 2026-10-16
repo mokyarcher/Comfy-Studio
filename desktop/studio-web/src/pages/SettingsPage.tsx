@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react'
-import { LogOut } from 'lucide-react'
+import { useMemo, useState, type FormEvent } from 'react'
+import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { GlassSelect } from '@/components/GlassSelect'
 import { GlassSwitch } from '@/components/GlassSwitch'
-import { BACKGROUNDS } from '@/lib/backgrounds'
+import { BACKGROUNDS, BACKGROUND_PAGE_SIZE, preloadBackground } from '@/lib/backgrounds'
 import { authChangePassword, testConnection } from '@/lib/api'
 import {
   IMAGE_MAX_SIDE,
@@ -35,6 +35,15 @@ export function SettingsPage() {
   const push = useToast((s) => s.push)
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
+  const bgPageCount = Math.max(1, Math.ceil(BACKGROUNDS.length / BACKGROUND_PAGE_SIZE))
+  const [bgPage, setBgPage] = useState(() => {
+    const idx = BACKGROUNDS.findIndex((b) => b.id === settings.backgroundId)
+    return idx >= 0 ? Math.floor(idx / BACKGROUND_PAGE_SIZE) : 0
+  })
+  const bgPageItems = useMemo(() => {
+    const start = bgPage * BACKGROUND_PAGE_SIZE
+    return BACKGROUNDS.slice(start, start + BACKGROUND_PAGE_SIZE)
+  }, [bgPage])
 
   async function onChangePassword(e: FormEvent) {
     e.preventDefault()
@@ -124,15 +133,20 @@ export function SettingsPage() {
         </div>
 
         <div>
-          <p className="label">背景图</p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
-            {BACKGROUNDS.map((bg) => {
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="label mb-0">背景图</p>
+            <span className="text-[11px] tabular-nums text-muted">
+              {bgPage + 1} / {bgPageCount}
+            </span>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {bgPageItems.map((bg) => {
               const active = settings.backgroundId === bg.id
               return (
                 <button
                   key={bg.id}
                   type="button"
-                  className={`overflow-hidden rounded-lg border text-left transition ${
+                  className={`relative overflow-hidden rounded-lg border text-left transition ${
                     active
                       ? 'border-white/45 shadow-[0_0_0_2px_rgba(255,255,255,0.22)]'
                       : 'border-white/10 hover:border-white/35'
@@ -141,14 +155,48 @@ export function SettingsPage() {
                   onClick={() => {
                     if (settings.backgroundId === bg.id) return
                     patch({ backgroundId: bg.id })
+                    void preloadBackground(bg.id)
                   }}
                 >
-                  <img src={bg.url} alt={bg.label} className="aspect-video w-full object-cover" loading="eager" decoding="async" />
+                  {active ? (
+                    <span className="absolute right-1 top-1 z-10 rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                      已选中
+                    </span>
+                  ) : null}
+                  <img
+                    src={bg.previewUrl}
+                    alt={bg.label}
+                    className="aspect-video w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
                   <span className="block truncate px-1.5 py-1 text-[11px] text-muted">{bg.label}</span>
                 </button>
               )
             })}
           </div>
+          {bgPageCount > 1 ? (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                className="btn-ghost inline-flex items-center gap-1 text-xs disabled:opacity-40"
+                disabled={bgPage <= 0}
+                onClick={() => setBgPage((p) => Math.max(0, p - 1))}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                上一页
+              </button>
+              <button
+                type="button"
+                className="btn-ghost inline-flex items-center gap-1 text-xs disabled:opacity-40"
+                disabled={bgPage >= bgPageCount - 1}
+                onClick={() => setBgPage((p) => Math.min(bgPageCount - 1, p + 1))}
+              >
+                下一页
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
 

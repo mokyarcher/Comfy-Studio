@@ -1,5 +1,5 @@
-import { motion } from 'motion/react'
 import type { WorkflowItem, WorkflowModel, WorkflowsManifest } from '../data/workflows'
+import { Reveal } from './Reveal'
 
 type Props = {
   manifest: WorkflowsManifest
@@ -17,22 +17,19 @@ export function MirrorCards({ manifest }: Props) {
       {mirrors.map((m, i) => {
         const primary = m.priority === 1
         return (
-          <motion.article
-            key={m.id}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06, duration: 0.4 }}
-            className={`flex flex-col rounded-xl border p-5 ${
-              primary ? 'border-accent/40 bg-accent/5' : 'border-border bg-panel/70'
+          <Reveal key={m.id} delay={i * 0.06}>
+          <article
+            className={`glass-panel flex flex-col rounded-xl p-5 ${
+              primary ? 'shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_35%,transparent)]' : ''
             }`}
           >
             <div className="flex items-start justify-between gap-3">
               <h2 className="display text-2xl text-text">{m.name}</h2>
               <span
-                className={`rounded-md border px-2 py-0.5 text-xs ${
+                className={`rounded-md px-2 py-0.5 text-xs ${
                   primary
-                    ? 'border-accent/40 bg-accent/15 text-accent'
-                    : 'border-border bg-bg-elevated text-muted'
+                    ? 'bg-accent/15 text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_40%,transparent)]'
+                    : 'bg-white/10 text-muted shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]'
                 }`}
               >
                 {primary ? '首选' : '次选'}
@@ -42,14 +39,15 @@ export function MirrorCards({ manifest }: Props) {
             <div className="mt-auto pt-6">
               <a
                 href={m.url}
-                className={primary ? 'btn-primary' : 'btn-secondary'}
+                className={primary ? 'btn-glass-liquid !rounded-xl' : 'btn-secondary'}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 打开站点
               </a>
             </div>
-          </motion.article>
+          </article>
+          </Reveal>
         )
       })}
     </div>
@@ -61,7 +59,7 @@ export function WorkflowList({ manifest }: Props) {
 
   if (!workflows.length) {
     return (
-      <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted">
+      <div className="glass-soft rounded-xl px-6 py-12 text-center text-sm text-muted">
         暂无工作流清单
       </div>
     )
@@ -78,23 +76,18 @@ export function WorkflowList({ manifest }: Props) {
 
 function WorkflowCard({ workflow, index }: { workflow: WorkflowItem; index: number }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 12 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-20px' }}
-      transition={{ delay: Math.min(index * 0.05, 0.2), duration: 0.4 }}
-      className="overflow-hidden rounded-xl border border-border bg-panel/70"
-    >
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+    <Reveal delay={Math.min(index * 0.05, 0.2)}>
+    <section className="glass-panel overflow-hidden rounded-xl">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="display text-xl text-text">{workflow.name}</h3>
             {workflow.required ? (
-              <span className="rounded border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent">
+              <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_35%,transparent)]">
                 必需
               </span>
             ) : (
-              <span className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted">
+              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-muted shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]">
                 可选
               </span>
             )}
@@ -104,14 +97,15 @@ function WorkflowCard({ workflow, index }: { workflow: WorkflowItem; index: numb
         <span className="font-mono text-[11px] text-muted">{workflow.mode}</span>
       </header>
 
-      <ul className="divide-y divide-border">
+      <ul className="divide-y divide-white/10">
         {(workflow.models || []).map((model) => (
           <li key={model.id} className="px-5 py-4">
             <ModelRow model={model} />
           </li>
         ))}
       </ul>
-    </motion.section>
+    </section>
+    </Reveal>
   )
 }
 
@@ -142,7 +136,7 @@ function ModelRow({ model }: { model: WorkflowModel }) {
         {primary ? (
           <a
             href={primary.url}
-            className="btn-primary !px-3 !py-1.5 text-xs"
+            className="btn-glass-liquid !rounded-lg !px-3 !py-1.5 text-xs"
             target="_blank"
             rel="noopener noreferrer"
             download
@@ -151,7 +145,7 @@ function ModelRow({ model }: { model: WorkflowModel }) {
           </a>
         ) : (
           <span
-            className="inline-flex cursor-not-allowed items-center rounded-md border border-border px-3 py-1.5 text-xs text-muted/50"
+            className="inline-flex cursor-not-allowed items-center rounded-md bg-white/5 px-3 py-1.5 text-xs text-muted/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
             aria-disabled="true"
           >
             下载

@@ -21,7 +21,7 @@ import { withBase } from '../lib/paths'
     <div class="mt-10 grid gap-4 sm:grid-cols-2">
       <a
         href="#local"
-        class="rounded-xl border border-border bg-panel/60 p-5 transition hover:border-accent/40"
+        class="glass-panel rounded-xl p-5 transition hover:shadow-[0_16px_40px_rgba(0,0,0,0.32)]"
       >
         <p class="eyebrow">路径 A</p>
         <h2 class="display mt-2 text-2xl text-text">本机自用</h2>
@@ -29,7 +29,7 @@ import { withBase } from '../lib/paths'
       </a>
       <a
         href="#remote"
-        class="rounded-xl border border-border bg-panel/60 p-5 transition hover:border-accent/40"
+        class="glass-panel rounded-xl p-5 transition hover:shadow-[0_16px_40px_rgba(0,0,0,0.32)]"
       >
         <p class="eyebrow">路径 B</p>
         <h2 class="display mt-2 text-2xl text-text">远程创作</h2>
@@ -42,7 +42,7 @@ import { withBase } from '../lib/paths'
     </div>
 
     <div
-      class="mt-6 rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--color-warn)_8%,var(--color-panel))] px-4 py-3 text-sm text-text"
+      class="glass-soft mt-6 rounded-lg px-4 py-3 text-sm text-text shadow-[inset_3px_0_0_0_var(--color-warn)]"
     >
       <strong class="text-warn">安全红线：</strong>
       不要把 ComfyUI <code class="font-mono text-accent">8188</code> 暴露到公网。
@@ -50,13 +50,13 @@ import { withBase } from '../lib/paths'
   </section>
 
   <section id="local" class="container-page scroll-mt-24 pb-12">
-    <div class="prose-deploy rounded-xl border border-border bg-panel/40 p-6 sm:p-8">
+    <div class="prose-deploy glass-panel rounded-xl p-6 sm:p-8">
       <LocalGuide />
     </div>
   </section>
 
-  <section id="remote" class="container-page scroll-mt-24 pb-20">
-    <div class="prose-deploy rounded-xl border border-border bg-panel/40 p-6 sm:p-8">
+  <section id="remote" class="container-page scroll-mt-24 pb-6">
+    <div class="prose-deploy glass-panel rounded-xl p-6 sm:p-8">
       <RemoteGuide />
     </div>
     <div class="mt-8 flex flex-wrap gap-3">

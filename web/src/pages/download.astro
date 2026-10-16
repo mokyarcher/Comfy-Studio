@@ -13,10 +13,10 @@ const releases = { ...FALLBACK_RELEASES, ...releasesJson } as ReleasesManifest
   title="下载"
   description="下载 Comfy Studio 与 Comfy Gateway Windows 客户端，或前往 GitHub Releases。"
 >
-  <section class="container-page py-16 sm:py-20">
+  <section class="container-page pb-6 pt-16 sm:pt-20">
     <Reveal client:visible>
       <p class="eyebrow">下载</p>
-      <h1 class="section-title mt-3">客户端与控制台</h1>
+      <h1 class="section-title hero-glass-title mt-3">客户端与控制台</h1>
       <p class="section-lead">
         构建时可通过
         <code class="font-mono text-accent">npm run sync:releases</code>
@@ -25,7 +25,7 @@ const releases = { ...FALLBACK_RELEASES, ...releasesJson } as ReleasesManifest
     </Reveal>
 
     <Reveal client:visible className="mt-8">
-      <div class="rounded-xl border border-border bg-panel/50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <div class="glass-panel rounded-xl p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
         <div>
           <h2 class="display text-xl text-text">Web 工作空间</h2>
           <p class="mt-2 text-sm text-muted">
@@ -34,7 +34,7 @@ const releases = { ...FALLBACK_RELEASES, ...releasesJson } as ReleasesManifest
         </div>
         <a
           href="https://app.comfy-studio.sharex.team"
-          class="btn-primary mt-4 inline-flex shrink-0 sm:mt-0"
+          class="btn-glass-liquid mt-4 inline-flex shrink-0 !rounded-xl sm:mt-0"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -50,7 +50,7 @@ const releases = { ...FALLBACK_RELEASES, ...releasesJson } as ReleasesManifest
     {
       releases.notes ? (
         <Reveal client:visible className="mt-12">
-          <div class="rounded-xl border border-border bg-panel/50 p-5">
+          <div class="glass-panel rounded-xl p-5">
             <h2 class="text-sm font-medium text-text">Release 摘要</h2>
             <p class="mt-2 whitespace-pre-wrap text-sm text-muted">{releases.notes}</p>
             {releases.publishedAt ? (

@@ -1,50 +1,58 @@
 [
   {
     "id": "s1",
-    "prompt": "雪地里的红狐，柔和侧光，电影感构图",
+    "prompt": "婚纱写真，柔光侧影，花束与蕾丝细节",
     "modeLabel": "文生图",
-    "tint": "#1a3d2e"
+    "thumb": "/media/showcase/thumbs/s1-bridal.jpg",
+    "image": "/media/showcase/s1-bridal.jpg"
   },
   {
     "id": "s2",
-    "prompt": "把人物换成赛博夹克，保留姿态与光线 <image1>",
-    "modeLabel": "图编辑",
-    "tint": "#1e2f3d"
+    "prompt": "护肤产品静物，冷灰背景，金属与玻璃质感",
+    "modeLabel": "文生图",
+    "thumb": "/media/showcase/thumbs/s2-product.jpg",
+    "image": "/media/showcase/s2-product.jpg"
   },
   {
     "id": "s3",
-    "prompt": "镜头缓慢推进，薄雾从林间升起",
-    "modeLabel": "图生视频",
-    "tint": "#2a2438"
+    "prompt": "赛博朋克雨夜都市，霓虹倒影，航拍公路",
+    "modeLabel": "文生图",
+    "thumb": "/media/showcase/thumbs/s3-cybercity.jpg",
+    "image": "/media/showcase/s3-cybercity.jpg"
   },
   {
     "id": "s4",
-    "prompt": "夜色港湾，霓虹倒影，35mm",
+    "prompt": "战场机甲，低机位仰拍，废墟与蓝光核心",
     "modeLabel": "文生图",
-    "tint": "#0f2a28"
+    "thumb": "/media/showcase/thumbs/s4-mecha.jpg",
+    "image": "/media/showcase/s4-mecha.jpg"
   },
   {
     "id": "s5",
-    "prompt": "水彩质感插画，少女与纸鹤",
+    "prompt": "流线型未来建筑，玻璃曲面，草坪与天光",
     "modeLabel": "文生图",
-    "tint": "#2d2418"
+    "thumb": "/media/showcase/thumbs/s5-architecture.jpg",
+    "image": "/media/showcase/s5-architecture.jpg"
   },
   {
     "id": "s6",
-    "prompt": "产品静物：陶瓷杯与窗光",
+    "prompt": "国潮插画，汉服女子，金红配色，仙鹤与祥云",
     "modeLabel": "文生图",
-    "tint": "#1c2830"
+    "thumb": "/media/showcase/thumbs/s6-guochao.jpg",
+    "image": "/media/showcase/s6-guochao.jpg"
   },
   {
     "id": "s7",
-    "prompt": "参考图风格迁移，保持构图",
-    "modeLabel": "图编辑",
-    "tint": "#24301f"
+    "prompt": "动漫风人像，金饰与深蓝西装，柔焦背景",
+    "modeLabel": "文生图",
+    "thumb": "/media/showcase/thumbs/s7-anime.jpg",
+    "image": "/media/showcase/s7-anime.jpg"
   },
   {
     "id": "s8",
-    "prompt": "云层穿越，航拍跟拍镜头",
-    "modeLabel": "图生视频",
-    "tint": "#1a2230"
+    "prompt": "汉服人像，米白薄纱刺绣，柔和室内光",
+    "modeLabel": "文生图",
+    "thumb": "/media/showcase/thumbs/s8-hanfu.jpg",
+    "image": "/media/showcase/s8-hanfu.jpg"
   }
 ]

@@ -14,12 +14,15 @@ export function ServicesPage() {
     <div className="mx-auto flex max-w-4xl flex-col gap-5">
       <div>
         <h1 className="page-title">服务管理</h1>
-        <p className="page-desc">配置路径并分别启停 FastAPI / FRP（仅管理本应用启动的进程）</p>
+        <p className="page-desc">配置路径并分别启停 ComfyUI / FastAPI / FRP（仅管理本应用启动的进程）</p>
       </div>
 
       <div className="rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-muted">
         <p className="font-medium text-accent">路径要选到哪一级？</p>
         <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>
+            <b>ComfyUI 目录</b>：选到含 <code className="text-text">main.py</code> 的根目录
+          </li>
           <li>
             <b>API 项目目录</b>：选到含 <code className="text-text">app</code> 文件夹的那一层，例如{' '}
             <code className="text-text">D:\projects\comfyUI-api</code>（里面应有 app、.env、workflow_api.json）
@@ -39,6 +42,83 @@ export function ServicesPage() {
         </ul>
         <p className="mt-2 text-xs">用「浏览」选择后会自动保存；手动改文字后请点「保存配置」。</p>
       </div>
+
+      <section className="card space-y-4 p-5">
+        <h2 className="font-medium text-text">ComfyUI</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field
+            label="ComfyUI 目录"
+            hint="选文件夹：含 main.py"
+            value={draft.comfyUiDir}
+            onChange={(v) => set('comfyUiDir', v)}
+            onBrowse={() => void browseDir('comfyUiDir')}
+          />
+          <div className="md:col-span-2">
+            <label className="label">启动命令</label>
+            <p className="mb-1 text-xs text-muted">
+              在上述目录执行；用 .venv\Scripts\python.exe，勿用系统 python
+            </p>
+            <input
+              className="input font-mono text-sm"
+              value={draft.comfyUiLaunch}
+              onChange={(e) => set('comfyUiLaunch', e.target.value)}
+              placeholder=".venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188"
+            />
+          </div>
+          <div>
+            <label className="label">探测 URL</label>
+            <input
+              className="input"
+              value={draft.comfyUrl}
+              onChange={(e) => set('comfyUrl', e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => void save()}>
+            保存配置
+          </button>
+          <button
+            className="btn-primary"
+            disabled={busy}
+            onClick={() => void runAction(() => window.gateway.startComfy())}
+          >
+            启动 ComfyUI
+          </button>
+          <button
+            className="btn-secondary"
+            disabled={busy}
+            onClick={() => void runAction(() => window.gateway.stopComfy())}
+          >
+            停止
+          </button>
+          <button
+            className="btn-danger"
+            disabled={busy}
+            onClick={() => void runAction(() => window.gateway.forceStopComfy())}
+          >
+            强制停止
+          </button>
+          <button
+            className="btn-accent"
+            onClick={() =>
+              void runAction(() =>
+                window.gateway.testComfy().then((r) => ({ ok: r.ok, message: r.message }))
+              )
+            }
+          >
+            健康检查
+          </button>
+        </div>
+        <StatusLine
+          label="状态"
+          value={`${status?.comfyRuntime?.state ?? 'unknown'} · PID ${
+            status?.comfyRuntime?.pid ?? '-'
+          } · ${status?.comfyRuntime?.startedByApp ? '本应用启动' : '外部/未知'} · 探测 ${
+            status?.comfy?.ok ? '在线' : '不可达'
+          }`}
+        />
+      </section>
 
       <section className="card space-y-4 p-5">
         <h2 className="font-medium text-text">FastAPI</h2>

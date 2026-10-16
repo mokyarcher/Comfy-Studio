@@ -79,17 +79,17 @@ export function DemoPanel({ manifest }: Props) {
                   setActiveId(step.id)
                   setMode('image')
                 }}
-                className={`flex w-full gap-4 rounded-xl border p-4 text-left transition ${
+                className={`glass-panel flex w-full gap-4 rounded-xl p-4 text-left transition ${
                   on
-                    ? 'border-accent/45 bg-accent/10'
-                    : 'border-border bg-panel/60 hover:border-accent/30'
+                    ? 'shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_40%,transparent),0_12px_28px_rgba(0,0,0,0.28)]'
+                    : 'hover:bg-white/[0.04]'
                 }`}
               >
                 <span
-                  className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm ${
+                  className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm ${
                     on
-                      ? 'border-accent/40 bg-accent/15 text-accent'
-                      : 'border-accent/30 bg-accent/10 text-accent'
+                      ? 'bg-accent/20 text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_40%,transparent)]'
+                      : 'bg-accent/10 text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)]'
                   }`}
                 >
                   {String(i + 1).padStart(2, '0')}
@@ -104,10 +104,10 @@ export function DemoPanel({ manifest }: Props) {
         })}
       </ol>
 
-      <div className="flex min-h-[32rem] flex-col overflow-hidden rounded-xl border border-border bg-panel lg:h-full lg:min-h-0">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <div className="glass-panel flex min-h-[32rem] flex-col overflow-hidden rounded-xl lg:h-full lg:min-h-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <p className="text-sm font-medium text-text">产品演示</p>
-          <div className="flex rounded-md border border-border bg-bg-elevated p-0.5">
+          <div className="flex rounded-md bg-white/[0.06] p-0.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]">
             <ModeButton active={mode === 'image'} onClick={() => setMode('image')}>
               图片演示
             </ModeButton>
@@ -123,7 +123,7 @@ export function DemoPanel({ manifest }: Props) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 bg-bg-elevated">
+        <div className="min-h-0 flex-1 bg-black/25">
           {mode === 'image' && active ? (
             <ImageCarousel
               feature={active}
@@ -145,7 +145,7 @@ export function DemoPanel({ manifest }: Props) {
           )}
         </div>
 
-        <div className="shrink-0 border-t border-border bg-panel px-5 py-4">
+        <div className="shrink-0 border-t border-white/10 bg-white/[0.03] px-5 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
             <div className="min-w-0 shrink-0">
               <p className="text-[11px] text-muted">当前功能</p>
@@ -181,7 +181,7 @@ export function DemoPanel({ manifest }: Props) {
                 <button
                   type="button"
                   aria-label="上一张"
-                  className="flex h-20 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border/80 bg-bg/85 text-3xl leading-none text-text backdrop-blur hover:bg-panel sm:h-24 sm:w-14"
+                  className="flex h-20 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-bg/70 text-3xl leading-none text-text shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur hover:bg-white/10 sm:h-24 sm:w-14"
                   onClick={(e) => {
                     e.stopPropagation()
                     setImageIndex((i) => (i - 1 + images.length) % images.length)
@@ -194,7 +194,7 @@ export function DemoPanel({ manifest }: Props) {
                 key={currentImage.src}
                 src={mediaUrl(currentImage.src)}
                 alt={currentImage.caption || active?.title || '演示'}
-                className="max-h-[85vh] max-w-[min(85vw,calc(100vw-8rem))] cursor-zoom-out rounded-lg border border-border object-contain shadow-2xl"
+                className="max-h-[85vh] max-w-[min(85vw,calc(100vw-8rem))] cursor-zoom-out rounded-lg object-contain shadow-[0_25px_50px_-12px_rgba(0,0,0,0.55),inset_0_0_0_1px_rgba(255,255,255,0.2)]"
                 initial={{ scale: 0.92, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.96, opacity: 0 }}
@@ -208,7 +208,7 @@ export function DemoPanel({ manifest }: Props) {
                 <button
                   type="button"
                   aria-label="下一张"
-                  className="flex h-20 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border/80 bg-bg/85 text-3xl leading-none text-text backdrop-blur hover:bg-panel sm:h-24 sm:w-14"
+                  className="flex h-20 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-bg/70 text-3xl leading-none text-text shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur hover:bg-white/10 sm:h-24 sm:w-14"
                   onClick={(e) => {
                     e.stopPropagation()
                     setImageIndex((i) => (i + 1) % images.length)
@@ -343,7 +343,7 @@ function ImageCarousel({
           <button
             type="button"
             aria-label="上一张"
-            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-md border border-border/80 bg-bg/70 px-2 py-1.5 text-sm text-text backdrop-blur hover:bg-panel"
+            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-md bg-bg/70 px-2 py-1.5 text-sm text-text shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation()
               go(-1)
@@ -354,7 +354,7 @@ function ImageCarousel({
           <button
             type="button"
             aria-label="下一张"
-            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-md border border-border/80 bg-bg/70 px-2 py-1.5 text-sm text-text backdrop-blur hover:bg-panel"
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-md bg-bg/70 px-2 py-1.5 text-sm text-text shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation()
               go(1)

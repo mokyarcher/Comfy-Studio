@@ -166,3 +166,39 @@ export function resetPassword(userId: string) {
     { method: 'POST', body: JSON.stringify({}) }
   )
 }
+
+export type HostServiceItem = {
+  id: string
+  label: string
+  ok: boolean
+  state: string
+  message: string
+  pid?: number | null
+  configured: boolean
+  detail: string
+}
+
+export type HostServicesResponse = {
+  enabled: boolean
+  services: HostServiceItem[]
+}
+
+export type HostServiceAction = 'start' | 'stop' | 'force_stop' | 'restart'
+
+export function fetchHostServices() {
+  return api<HostServicesResponse>('/v1/admin/host-services')
+}
+
+export function hostServiceAction(
+  service: 'comfy' | 'api' | 'frp',
+  action: HostServiceAction,
+  totpCode: string
+) {
+  return api<{ ok: boolean; message: string; services: HostServiceItem[] }>(
+    '/v1/admin/host-services/action',
+    {
+      method: 'POST',
+      body: JSON.stringify({ service, action, totp_code: totpCode.trim() })
+    }
+  )
+}

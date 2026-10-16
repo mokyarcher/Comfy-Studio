@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { GlassCard } from '@/components/GlassCard'
@@ -7,6 +7,7 @@ import { SlidingSeg } from '@/components/SlidingSeg'
 import { ToastHost } from '@/components/ToastHost'
 import { WorkspaceBackground } from '@/components/WorkspaceBackground'
 import { authLogin, authRegister, testConnection } from '@/lib/api'
+import { preloadBackground } from '@/lib/backgrounds'
 import { useSession } from '@/store/session'
 import { useSettings } from '@/store/settings'
 import { useToast } from '@/store/toast'
@@ -26,6 +27,11 @@ export function AuthPage() {
   const [displayName, setDisplayName] = useState('')
   const [busy, setBusy] = useState(false)
   const [healthMsg, setHealthMsg] = useState('')
+
+  // Login screen: only warm the currently selected full-res background.
+  useEffect(() => {
+    void preloadBackground(backgroundId)
+  }, [backgroundId])
 
   if (hydrated && user) {
     return <Navigate to="/home" replace />
@@ -61,6 +67,7 @@ export function AuthPage() {
         },
         remember
       )
+      void preloadBackground(backgroundId)
       push('登录成功', 'success')
       navigate('/home', { replace: true })
     } finally {

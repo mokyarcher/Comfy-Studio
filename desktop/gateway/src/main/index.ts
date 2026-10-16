@@ -124,8 +124,10 @@ async function handleCloseRequest(): Promise<void> {
   const appOwns =
     status.api.startedByApp ||
     status.frp.startedByApp ||
+    status.comfyRuntime.startedByApp ||
     Boolean(status.api.pid) ||
-    Boolean(status.frp.pid)
+    Boolean(status.frp.pid) ||
+    Boolean(status.comfyRuntime.pid)
 
   const buttons = appOwns
     ? ['最小化到托盘', '保持服务并退出', '退出并停止服务', '取消']
@@ -138,7 +140,7 @@ async function handleCloseRequest(): Promise<void> {
       ? '检测到本应用启动的服务仍在运行，请选择关闭方式：'
       : '要如何关闭窗口？',
     detail: appOwns
-      ? '「保持服务并退出」不会结束 API/FRP 子进程；「退出并停止服务」仅停止由本应用启动的进程。'
+      ? '「保持服务并退出」不会结束 ComfyUI/API/FRP 子进程；「退出并停止服务」仅停止由本应用启动的进程。'
       : undefined,
     buttons,
     defaultId: 0,
@@ -177,7 +179,8 @@ async function handleCloseRequest(): Promise<void> {
 
 async function quitFromTray(): Promise<void> {
   const status = services.getStatus()
-  const appOwns = status.api.startedByApp || status.frp.startedByApp
+  const appOwns =
+    status.api.startedByApp || status.frp.startedByApp || status.comfyRuntime.startedByApp
   if (appOwns) {
     const { response } = await dialog.showMessageBox({
       type: 'question',
@@ -206,6 +209,9 @@ app.whenReady().then(() => {
       void quitFromTray()
     }
   )
+
+  // Auto-start checked services after UI is up (does not block window show).
+  void services.startOnLaunch()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

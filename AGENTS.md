@@ -6,11 +6,14 @@
 
 ```text
 Studio（远程客户端）
-  → HTTPS/公网 Nginx → FRP → 本机 FastAPI（app/）
-  → ComfyUI → 本地 GPU
+ → HTTPS/公网 Nginx → FRP → 本机 FastAPI（app/）
+ → ComfyUI → 本地 GPU
 
-Gateway（本机控制台）
-  → 启停 FastAPI / frpc、用户与监控、提示词库管理、工作流相关运维
+Gateway（本机 Electron）
+ → 启停 ComfyUI / FastAPI / frpc、开机自启勾选、用户与监控、提示词库、工作流运维
+
+Gateway Admin Web（外网）
+ → 审用户 / hold / 注销；总览可远程启停本机 ComfyUI·FRP·重启 API（需 HOST_* + 每次 TOTP）
 ```
 
 推理永远在本机 GPU；云端只做入口与转发。**不要**把 ComfyUI `8188` 暴露到公网。
@@ -19,14 +22,14 @@ Gateway（本机控制台）
 
 | 路径 | 职责 |
 |------|------|
-| `app/` | FastAPI：任务队列、鉴权、工作流注入、润色代理、展馆、提示词库 |
+| `app/` | FastAPI：任务队列、鉴权、工作流注入、润色代理、展馆、提示词库、本机服务启停（`host_services`） |
 | `llm_workflow/` | ComfyUI API/UI 工作流与 `*_mapping.json`（**运行时路径默认在这里**） |
-| `desktop/gateway` | Electron 服务端控制台 |
-| `desktop/gateway-web` | 浏览器端 Gateway 管理台（密码+TOTP，审用户 / hold / 注销） |
+| `desktop/gateway` | Electron 服务端控制台（含 ComfyUI 启停与开机自启） |
+| `desktop/gateway-web` | 浏览器端 Gateway 管理台（TOTP；审用户 / 在线态 / hold / 注销 / 远程启停） |
 | `desktop/studio` | Electron 远程创作客户端 |
-| `desktop/studio-web` | 浏览器端 Studio 工作空间（Vite + React） |
+| `desktop/studio-web` | 浏览器端 Studio 工作空间（Vite + React；云端画廊、最近预览清除） |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
-| `web/` | 官方网站（Astro）：介绍 / 演示 / 部署 / 下载 |
+| `web/` | 官方网站（Astro）：毛玻璃气质 + ICP 页脚；介绍 / 演示 / 部署 / 下载 |
 | `scripts/` | 启动、巡检、UI→API 工作流转换；`start_stack.ps1` 一键 ComfyUI+API+frpc+Studio（路径见 `stack.local.json`） |
 | `tests/` | pytest |
 | `docs/` | 实施/部署/排障长文 |
@@ -59,6 +62,7 @@ Gateway（本机控制台）
 - AI 润色：`/v1/prompt/polish*` —— **上游 Key 只留服务端**（`POLISH_*`）；Studio 默认走网关代理
 - 隐私：成功下载后可清理任务与 Comfy 输入输出；不要在日志打印完整 Key
 - 本地占用：`local_hold` —— Gateway 可「本地占用 GPU」，避免与远程任务抢卡
+- 本机服务启停：`app/host_services.py` + `GET|POST /v1/admin/host-services*`；`.env` 配 `HOST_COMFY_DIR` / `HOST_COMFY_LAUNCH`（须用 ComfyUI 自己的 `.venv`，勿用系统 Python）/ `HOST_FRPC_*`；可用 `HOST_SERVICES_ENABLED=false` 关掉远程启停。每次 action 须再填 Authenticator 动态码
 
 测试：
 
@@ -72,14 +76,17 @@ Gateway（本机控制台）
 
 ### 分工
 
-- **Gateway**：管本机服务、用户审核、官方提示词库维护、玩家共享库审核删除、hold 开关等
+- **Gateway（Electron）**：本机 ComfyUI / FastAPI / frpc 启停与开机自启、用户审核、官方提示词库、玩家共享库审核删除、hold 开关等
+- **Gateway Admin Web**：外网审用户（含 `last_seen_at` 在线/离线）、hold、注销；总览远程启停（依赖台式机 FastAPI 已在跑 + `HOST_*`）
 - **Studio**：登录会话、创作（文生图/图编/图生视频）、队列、画廊、展馆、本地/官方/共享提示词库；Web Studio 另可「保存至云端」（私有 cloud gallery）
+- **Studio Web「最近作品 · 清除」**：仅从创作页预览隐藏（localStorage），**不删** IndexedDB / 云端画廊
 
 ### UI / 文案
 
 - 大道至简：少 `page-desc`、少问号长 tip、空状态短句即可
 - 账号体系用语用「账号」而不是「配置/多 Profile 下拉」
 - 占位提示跟界面语言一致（中文 UI 不要塞英文 placeholder，除非协议字面量如 `<image1>`）
+- Studio Web 小操作钮用液态玻璃（`.glass-cta-btn-sm`），与「保存至云端」开关同行同高、同字号
 
 ### 打包（Windows）
 
@@ -106,10 +113,15 @@ npm run dev
 ```
 
 Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。  
-Gateway Admin Web：`desktop/gateway-web`（默认端口 5174）；部署见 `deploy/comfy-gateway-admin.nginx.conf`。本机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（Authenticator）；短信模式可选。  
+Gateway Admin Web：`desktop/gateway-web`（默认端口 5174）；部署见 `deploy/comfy-gateway-admin.nginx.conf`。本机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（Authenticator）；短信模式可选；远程启停另配 `HOST_*`。  
 API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 
 契约补充：`desktop/docs/api-contract.md`。
+
+### Gateway 启停注意
+
+- ComfyUI 启动命令必须指向其目录下的 `.venv\Scripts\python.exe`，系统 Python 常缺 alembic/sqlalchemy 等依赖
+- Electron「启动全部」可按勾选拉起 ComfyUI → API → FRP；Admin Web 侧停 FRP / 重启 API 会短暂断公网隧道
 
 ## 文档放哪
 
@@ -157,6 +169,8 @@ API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 2. **打包 Access denied**：目标 exe 仍在运行。
 3. **节点报错**：先在 ComfyUI UI 用同一工作流出图，再查自定义节点与 mapping。
 4. **502 / 连不上**：先 Gateway 侧 API+FRP，再 Studio「测试连接」；错误文案保持短、带状态码即可。
+5. **ComfyUI 启不来 / 缺包**：多半用了系统 `python`，改回 ComfyUI `.venv` 启动命令。
+6. **Admin Web 远程启停无效**：确认台式机 FastAPI 在跑、`.env` 已配 `HOST_*` 且 `HOST_SERVICES_ENABLED=true`，操作时填对 TOTP。
 
 ## 改动优先级建议
 

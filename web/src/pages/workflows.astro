@@ -13,10 +13,10 @@ const manifest = workflowsJson as WorkflowsManifest
   title="工作流"
   description="按工作流下载所需模型权重。国内镜像：魔搭优先，HF Mirror 备选。"
 >
-  <section class="container-page py-16 sm:py-20">
+  <section class="container-page pb-6 pt-16 sm:pt-20">
     <Reveal client:visible>
       <p class="eyebrow">工作流</p>
-      <h1 class="section-title mt-3">工作流与模型</h1>
+      <h1 class="section-title hero-glass-title mt-3">工作流与模型</h1>
       <p class="section-lead">
         {manifest.intro || '按工作流拿齐权重。国内优先魔搭，HF Mirror 备选。'}
       </p>
@@ -29,7 +29,7 @@ const manifest = workflowsJson as WorkflowsManifest
 
     <div class="mt-14">
       <Reveal client:visible>
-        <h2 class="section-title !text-2xl">本项目工作流</h2>
+        <h2 class="section-title hero-glass-title !text-2xl">本项目工作流</h2>
         <p class="section-lead">每个工作流下列出所需模型与下载入口。</p>
       </Reveal>
       <div class="mt-8">

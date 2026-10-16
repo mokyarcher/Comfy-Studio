@@ -1,5 +1,5 @@
-import { motion } from 'motion/react'
 import type { ReleasesManifest } from '../data/releases'
+import { Reveal } from './Reveal'
 
 const GH = 'https://github.com/mokyarcher/Comfy-Studio/releases'
 
@@ -29,16 +29,11 @@ export function DownloadCards({ releases }: Props) {
         const asset = releases.apps[app.key]
         const hasFile = Boolean(asset?.url)
         return (
-          <motion.article
-            key={app.key}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08, duration: 0.45 }}
-            className="flex flex-col rounded-xl border border-border bg-panel/70 p-5"
-          >
+          <Reveal key={app.key} delay={i * 0.08}>
+          <article className="glass-panel flex flex-col rounded-xl p-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="display text-2xl text-text">{app.name}</h2>
-              <span className="rounded-md border border-border bg-bg-elevated px-2 py-0.5 font-mono text-xs text-accent">
+              <span className="rounded-md bg-white/10 px-2 py-0.5 font-mono text-xs text-accent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]">
                 {asset?.version || releases.tag || 'latest'}
               </span>
             </div>
@@ -49,16 +44,11 @@ export function DownloadCards({ releases }: Props) {
             ) : null}
             <div className="mt-auto flex flex-wrap gap-2 pt-6">
               {hasFile ? (
-                <motion.a
-                  href={asset!.url}
-                  className="btn-primary"
-                  whileTap={{ scale: 0.98 }}
-                  whileHover={{ y: -1 }}
-                >
+                <a href={asset!.url} className="btn-glass-liquid !rounded-xl">
                   下载 Windows 包
-                </motion.a>
+                </a>
               ) : (
-                <a href={GH} className="btn-primary" target="_blank" rel="noopener noreferrer">
+                <a href={GH} className="btn-glass-liquid !rounded-xl" target="_blank" rel="noopener noreferrer">
                   前往 GitHub Releases
                 </a>
               )}
@@ -66,7 +56,8 @@ export function DownloadCards({ releases }: Props) {
                 全部版本
               </a>
             </div>
-          </motion.article>
+          </article>
+          </Reveal>
         )
       })}
     </div>

@@ -57,6 +57,61 @@ export function SettingsPage() {
             void browseFile('workflowPath', [{ name: 'JSON', extensions: ['json'] }])
           }
         />
+        <PathField
+          label="ComfyUI 目录"
+          hint="文件夹：含 main.py 的 ComfyUI 根目录"
+          value={draft.comfyUiDir}
+          onChange={(v) => set('comfyUiDir', v)}
+          onBrowse={() => void browseDir('comfyUiDir')}
+        />
+        <div>
+          <label className="label">ComfyUI 启动命令</label>
+          <p className="mb-1 text-xs text-muted">
+            在上述目录执行。请用 ComfyUI 的 .venv，不要写裸 python（会落到系统 Python 缺依赖）。
+          </p>
+          <input
+            className="input font-mono text-sm"
+            value={draft.comfyUiLaunch}
+            onChange={(e) => set('comfyUiLaunch', e.target.value)}
+            placeholder=".venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188"
+          />
+        </div>
+      </section>
+
+      <section className="card space-y-4 p-5">
+        <h2 className="font-medium">启动后自动拉起</h2>
+        <p className="text-xs text-muted">
+          打开 Gateway 时按勾选项启动（ComfyUI → API → FRP）。与「启动全部」无关，可独立勾选。
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-text">
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--color-primary)]"
+              checked={draft.autoStartComfy}
+              onChange={(e) => set('autoStartComfy', e.target.checked)}
+            />
+            ComfyUI
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--color-primary)]"
+              checked={draft.autoStartApi}
+              onChange={(e) => set('autoStartApi', e.target.checked)}
+            />
+            FastAPI
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--color-primary)]"
+              checked={draft.autoStartFrp}
+              onChange={(e) => set('autoStartFrp', e.target.checked)}
+            />
+            FRP
+          </label>
+        </div>
       </section>
 
       <section className="card space-y-4 p-5">

@@ -542,6 +542,37 @@ class AdminStatsResponse(BaseModel):
     local_hold_expires_at: str | None = None
 
 
+class HostServiceItem(BaseModel):
+    id: str
+    label: str
+    ok: bool
+    state: str
+    message: str
+    pid: int | None = None
+    configured: bool = True
+    detail: str = ""
+
+
+class HostServicesResponse(BaseModel):
+    enabled: bool
+    services: list[HostServiceItem]
+
+
+class HostServiceActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    service: Literal["comfy", "api", "frp"]
+    action: Literal["start", "stop", "force_stop", "restart"]
+    # Re-auth: Authenticator 6-digit code required for every start/stop/restart
+    totp_code: str = Field(..., min_length=6, max_length=8)
+
+
+class HostServiceActionResponse(BaseModel):
+    ok: bool
+    message: str
+    services: list[HostServiceItem] = Field(default_factory=list)
+
+
 class AdminUserResponse(BaseModel):
     id: str
     name: str

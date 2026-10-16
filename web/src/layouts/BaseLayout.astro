@@ -20,6 +20,9 @@ const canonical = Astro.site
   ? new URL(Astro.url.pathname, Astro.site)
   : Astro.url
 const ogAbs = Astro.site ? new URL(Astro.site.pathname.replace(/\/?$/, '/') + ogImage.replace(/^\//, ''), Astro.site.origin).href : ogImage
+const base = import.meta.env.BASE_URL || '/'
+const atmospherePreview = `${base}backgrounds/atmosphere-preview.jpg`
+const atmosphereFull = `${base}backgrounds/atmosphere.jpg`
 ---
 
 <!doctype html>
@@ -27,13 +30,15 @@ const ogAbs = Astro.site ? new URL(Astro.site.pathname.replace(/\/?$/, '/') + og
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL}favicon.svg`} />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- First paint: small preview; full image warms in the background -->
+    <link rel="preload" as="image" href={atmospherePreview} fetchpriority="high" />
     <link rel="canonical" href={canonical} />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
@@ -47,11 +52,38 @@ const ogAbs = Astro.site ? new URL(Astro.site.pathname.replace(/\/?$/, '/') + og
     <meta name="twitter:description" content={description} />
     <title>{fullTitle}</title>
   </head>
-  <body class="site-shell">
-    <Header />
-    <main>
-      <slot />
-    </main>
-    <Footer />
+  <body
+    class="site-shell"
+    style={`--site-atmosphere: url('${atmospherePreview}')`}
+    data-atmosphere-full={atmosphereFull}
+  >
+    <div class="site-bg" aria-hidden="true">
+      <div class="site-bg-photo" id="site-bg-photo" style={`background-image: var(--site-atmosphere)`}
+></div>
+      <div class="site-bg-veil"></div>
+    </div>
+    <div class="site-content">
+      <Header />
+      <main>
+        <slot />
+      </main>
+      <Footer />
+    </div>
+    <script>
+      const full = document.body.dataset.atmosphereFull
+      if (full) {
+        const img = new Image()
+        img.decoding = 'async'
+        img.onload = () => {
+          document.body.style.setProperty('--site-atmosphere', `url('${full}')`)
+          const el = document.getElementById('site-bg-photo')
+          if (el) {
+            el.style.backgroundImage = `url('${full}')`
+            el.dataset.ready = '1'
+          }
+        }
+        img.src = full
+      }
+    </script>
   </body>
 </html>

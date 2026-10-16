@@ -374,6 +374,7 @@ body {
   pointer-events: none;
   transform-origin: center center;
   will-change: transform, width, height, top, left;
+  contain: layout style;
   background: var(--glass-pill-sheen), var(--glass-pill-fill);
   box-shadow: var(--glass-pill-shadow);
 }
@@ -522,6 +523,22 @@ body {
   font-weight: 600;
   letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Compact glass pill — sit beside switches / toolbars */
+.glass-cta-btn-sm {
+  width: auto;
+  min-height: 1.9rem;
+  padding: 0.22rem 0.8rem;
+  border-radius: 0.55rem;
+  box-shadow:
+    var(--glass-pill-shadow),
+    0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.glass-cta-btn-sm .glass-cta-btn-label {
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .glass-select {
@@ -1185,5 +1202,11 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  /* Skip offscreen gallery tiles during route hops (keeps nav pill smooth). */
+  .gallery-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 280px;
   }
 }

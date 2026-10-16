@@ -4,7 +4,8 @@ import { withBase } from '../lib/paths'
 const path = Astro.url.pathname.replace(/\/$/, '') || '/'
 const baseTrim = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
 const links = [
-  { href: `${withBase()}#intro`, label: '介绍', match: '/' },
+  { href: withBase(), label: '欢迎', match: '/' },
+  { href: withBase('intro'), label: '介绍', match: '/intro' },
   { href: withBase('demo'), label: '演示', match: '/demo' },
   { href: withBase('deploy'), label: '部署', match: '/deploy' },
   { href: withBase('download'), label: '下载', match: '/download' },
@@ -18,11 +19,11 @@ function isActive(match: string) {
 }
 ---
 
-<header class="sticky top-0 z-50 border-b border-border/80 bg-bg/80 backdrop-blur-md">
-  <div class="container-page flex h-16 items-center justify-between gap-4">
-    <a href={withBase()} class="group flex items-center gap-2.5">
+<header class="glass-nav">
+  <div class="container-page relative flex h-[4.25rem] items-center">
+    <a href={withBase()} class="group relative z-10 flex items-center gap-2.5">
       <span
-        class="flex h-8 w-8 items-center justify-center rounded-md border border-accent/30 bg-accent/10 text-sm font-semibold text-accent"
+        class="flex h-8 w-8 items-center justify-center rounded-md bg-accent/15 text-sm font-semibold text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_35%,transparent)]"
         aria-hidden="true"
       >
         C
@@ -32,16 +33,19 @@ function isActive(match: string) {
       </span>
     </a>
 
-    <nav class="hidden items-center gap-1 sm:flex" aria-label="主导航">
+    <nav
+      class="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 sm:flex"
+      aria-label="主导航"
+    >
       {
         links.map((link) => (
           <a
             href={link.href}
             class:list={[
-              'rounded-md px-3 py-1.5 text-sm transition-colors',
+              'rounded-md px-3.5 py-2 text-base font-medium transition-colors',
               isActive(link.match)
-                ? 'text-accent'
-                : 'text-muted hover:bg-panel hover:text-text'
+                ? 'bg-white/10 text-accent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]'
+                : 'text-muted hover:bg-white/[0.06] hover:text-text'
             ]}
           >
             {link.label}
@@ -49,24 +53,10 @@ function isActive(match: string) {
         ))
       }
     </nav>
-
-    <div class="flex items-center gap-2">
-      <a
-        href="https://github.com/mokyarcher/Comfy-Studio"
-        class="btn-secondary !px-3 !py-1.5 text-xs"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        GitHub
-      </a>
-      <a href={withBase('download')} class="btn-primary !px-3 !py-1.5 text-xs sm:!px-4 sm:!py-2 sm:text-sm">
-        下载
-      </a>
-    </div>
   </div>
 
   <nav
-    class="flex gap-1 overflow-x-auto border-t border-border/60 px-4 py-2 sm:hidden"
+    class="flex gap-1 overflow-x-auto border-t border-white/10 px-4 py-2.5 sm:hidden"
     aria-label="移动导航"
   >
     {
@@ -74,8 +64,8 @@ function isActive(match: string) {
         <a
           href={link.href}
           class:list={[
-            'shrink-0 rounded-md px-3 py-1 text-sm',
-            isActive(link.match) ? 'bg-accent/15 text-accent' : 'text-muted'
+            'shrink-0 rounded-md px-3.5 py-1.5 text-base font-medium',
+            isActive(link.match) ? 'bg-white/10 text-accent' : 'text-muted'
           ]}
         >
           {link.label}

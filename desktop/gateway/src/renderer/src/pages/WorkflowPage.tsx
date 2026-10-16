@@ -29,18 +29,36 @@ export function WorkflowPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <div>
         <h1 className="page-title">工作流与 ComfyUI</h1>
-        <p className="page-desc">查看当前 API 使用的工作流文件，并探测 ComfyUI 连通性</p>
+        <p className="page-desc">启停 ComfyUI、探测连通性，并查看 API 工作流文件</p>
       </div>
 
       <section className="card space-y-4 p-5">
-        <h2 className="font-medium">ComfyUI 地址</h2>
+        <h2 className="font-medium">ComfyUI</h2>
         <input className="input" value={comfyUrl} onChange={(e) => setComfyUrl(e.target.value)} />
         <div className="flex flex-wrap gap-2">
           <button
             className="btn-secondary"
             onClick={() => void saveConfig({ comfyUrl })}
           >
-            保存
+            保存地址
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => void runAction(() => window.gateway.startComfy())}
+          >
+            启动
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => void runAction(() => window.gateway.stopComfy())}
+          >
+            停止
+          </button>
+          <button
+            className="btn-danger"
+            onClick={() => void runAction(() => window.gateway.forceStopComfy())}
+          >
+            强制停止
           </button>
           <button
             className="btn-accent"
@@ -51,7 +69,7 @@ export function WorkflowPage() {
             }
           >
             <RefreshCw className="h-4 w-4" />
-            测试 ComfyUI
+            检测
           </button>
         </div>
         {status?.comfy && (
@@ -60,6 +78,9 @@ export function WorkflowPage() {
             {status.comfy.latencyMs != null ? ` · ${status.comfy.latencyMs} ms` : ''}
           </p>
         )}
+        <p className="text-xs text-muted">
+          目录与启动命令在「设置」里配置。对接 API 只需 8188 服务起来，不必再开浏览器工作流界面。
+        </p>
       </section>
 
       <section className="card space-y-4 p-5">
@@ -108,7 +129,7 @@ export function WorkflowPage() {
           </button>
         </div>
         <p className="text-xs text-muted">
-          Gateway 不会改写工作流 JSON；仅展示路径与文件状态。ComfyUI 需自行在浏览器中运行。
+          Gateway 不会改写工作流 JSON；仅展示路径与文件状态。
         </p>
       </section>
     </div>

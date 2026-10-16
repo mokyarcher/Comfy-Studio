@@ -4,6 +4,8 @@
 
 创作页可开「保存至云端」：成功出图后上传到 Gateway 本机私有库（`/v1/cloud-gallery`），与本地 IndexedDB 画廊独立；契约见 [`../docs/api-contract.md`](../docs/api-contract.md)。
 
+「最近作品 · 清除」：多选后从创作页预览隐藏（`localStorage` 按用户记隐藏列表），**不删除**画廊 / 云端作品。清除钮为小液态玻璃按钮（`.glass-cta-btn-sm`），与「保存至云端」开关同行对齐。
+
 ## 开发
 
 ```powershell
@@ -14,7 +16,7 @@ npm run dev
 
 浏览器打开终端提示的地址（默认 `http://localhost:5173`）。本机还需先起 FastAPI（`:8000`），Vite 会把 `/v1`、`/health` 代理过去。
 
-背景图已压到约 1920 宽；开发服对 `/backgrounds/*` 开了长缓存，硬刷新仍会重下，普通刷新可复用。
+背景图在 `public/backgrounds/`（含 `preview/` 缩略图）；开发服对 `/backgrounds/*` 开了长缓存，硬刷新仍会重下，普通刷新可复用。
 
 跨域直连时设置：
 
@@ -29,6 +31,7 @@ VITE_API_BASE=https://qwen-image-2-1.sharex.team
 ```powershell
 npm run build
 # 产物 dist/ → 服务器 /var/www/comfy-studio-app
+# 背景图若有增删：同步上传 public/backgrounds/（或确保 build 已打进 dist）
 ```
 
 Nginx 模板：[`deploy/comfy-studio-app.nginx.conf`](../../deploy/comfy-studio-app.nginx.conf)（同源反代 `/v1` + SPA）。

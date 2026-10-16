@@ -4,10 +4,10 @@
 
 | 应用 | 目录 | 用途 |
 |------|------|------|
-| **Comfy Gateway** | `desktop/gateway` | 服务端控制台：启动/停止 API 与 frpc、健康检查、密钥、日志 |
+| **Comfy Gateway** | `desktop/gateway` | 本机控制台：启停 ComfyUI / API / frpc、开机自启、健康检查、日志 |
 | **Comfy Studio** | `desktop/studio` | 远程生图客户端：提示词、出图、任务队列、画廊 |
-| **Comfy Studio Web** | `desktop/studio-web` | 浏览器工作空间（跨系统）；说明见 [`studio-web/README.md`](./studio-web/README.md) |
-| **Comfy Gateway Admin Web** | `desktop/gateway-web` | 外网管理台（密码+TOTP，审用户 / hold / 注销）；见 [`gateway-web/README.md`](./gateway-web/README.md) |
+| **Comfy Studio Web** | `desktop/studio-web` | 浏览器工作空间（跨系统；云端画廊、最近预览清除）；见 [`studio-web/README.md`](./studio-web/README.md) |
+| **Comfy Gateway Admin Web** | `desktop/gateway-web` | 外网管理台（TOTP；审用户 / 在线态 / hold / 远程启停）；见 [`gateway-web/README.md`](./gateway-web/README.md) |
 
 API 契约见 [`docs/api-contract.md`](./docs/api-contract.md)。
 
@@ -53,10 +53,14 @@ Studio 另有：`npm test`
 ### Gateway（台式机）
 
 1. 设置 → API 项目目录指向仓库根（含 `app/main.py`）
-2. Python 可留空（自动用 `.venv\Scripts\python.exe`）
-3. 选择 `frpc.exe` 与含 `qwen-image-api` 的 TOML
-4. 公网 Base URL 示例：`http://111.229.166.216:8080/qwen-image`
-5. 运行总览 →「启动全部」
+2. Python 可留空（自动用 API 项目 `.venv\Scripts\python.exe`）
+3. 填写 ComfyUI 目录 + 启动命令（用 **ComfyUI 自己的** `.venv`，不要用系统 Python）
+4. 选择 `frpc.exe` 与含 `qwen-image-api` 的 TOML
+5. 公网 Base URL 示例：`https://qwen-image-2-1.sharex.team`
+6. 可选勾选开机自启 ComfyUI / API / FRP
+7. 运行总览 →「启动全部」
+
+远程启停（外网 Admin Web）还需本机 `.env` 配置 `HOST_*`，见 [`gateway-web/README.md`](./gateway-web/README.md)。
 
 ### Studio（调用方）
 

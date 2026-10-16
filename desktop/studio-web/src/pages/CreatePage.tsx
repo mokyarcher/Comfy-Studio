@@ -1,5 +1,5 @@
 import { Eraser, ImageIcon, ImagePlus, Sparkles } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GlassButton } from '@/components/GlassButton'
 import { GlassSwitch } from '@/components/GlassSwitch'
 import { SlidingSeg } from '@/components/SlidingSeg'
@@ -26,6 +26,25 @@ import { useSettings } from '@/store/settings'
 import { useToast } from '@/store/toast'
 
 type RecentItem = GalleryRecord & { url: string }
+
+function hiddenRecentKey(userId: string): string {
+  return `comfy-studio-web-recent-hidden:${userId}`
+}
+
+function loadHiddenRecent(userId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(hiddenRecentKey(userId))
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((id): id is string => typeof id === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
+function saveHiddenRecent(userId: string, ids: Set<string>): void {
+  localStorage.setItem(hiddenRecentKey(userId), JSON.stringify([...ids]))
+}
 
 type ApplyDraft = {
   prompt?: string
@@ -80,9 +99,14 @@ export function CreatePage() {
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [previewIsVideo, setPreviewIsVideo] = useState(false)
+  const [historyId, setHistoryId] = useState<string | null>(null)
   const [status, setStatus] = useState('就绪')
   const [progressPercent, setProgressPercent] = useState<number | null>(null)
   const [recent, setRecent] = useState<RecentItem[]>([])
+  const [pickingRecent, setPickingRecent] = useState(false)
+  const [pickedRecent, setPickedRecent] = useState<Set<string>>(() => new Set())
+  const recentOwner = user.userId || user.username
+  const hiddenRecentRef = useRef<Set<string>>(loadHiddenRecent(recentOwner))
 
   useEffect(() => {
     sessionStorage.removeItem('comfy-studio-web-apply-prompt')
@@ -96,15 +120,20 @@ export function CreatePage() {
     setSeed('')
     setPreview(null)
     setPreviewIsVideo(false)
+    setHistoryId(null)
     setStatus('就绪')
     setProgressPercent(null)
   }
 
   async function reloadRecent() {
     const rows = await listGallery()
+    const hidden = hiddenRecentRef.current
     setRecent((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.url))
-      return rows.slice(0, 12).map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }))
+      return rows
+        .filter((r) => !hidden.has(r.id))
+        .slice(0, 12)
+        .map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }))
     })
   }
 
@@ -203,6 +232,7 @@ export function CreatePage() {
     if (!canSubmit) return
     setBusy(true)
     setPreview(null)
+    setHistoryId(null)
     setPreviewIsVideo(mode === 'image_to_video')
     const localId = crypto.randomUUID()
     const sized = isVideo ? clampVideoSize(width, height) : clampImageSize(width, height, imageMaxSide)
@@ -263,6 +293,7 @@ export function CreatePage() {
   function openRecent(item: RecentItem) {
     setPreview(item.url)
     setPreviewIsVideo(item.mimeType.startsWith('video/'))
+    setHistoryId(item.id)
     setStatus('历史预览')
     if (item.prompt) setPrompt(item.prompt)
     if (item.negativePrompt) setNegative(item.negativePrompt)
@@ -272,7 +303,39 @@ export function CreatePage() {
     if (status !== '历史预览') return
     setPreview(null)
     setPreviewIsVideo(false)
+    setHistoryId(null)
     setStatus('就绪')
+  }
+
+  function togglePickedRecent(id: string) {
+    setPickedRecent((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function cancelPickRecent() {
+    setPickingRecent(false)
+    setPickedRecent(new Set())
+  }
+
+  function confirmClearRecent() {
+    if (!pickedRecent.size) return
+    const next = new Set(hiddenRecentRef.current)
+    pickedRecent.forEach((id) => next.add(id))
+    hiddenRecentRef.current = next
+    saveHiddenRecent(recentOwner, next)
+    if (historyId && pickedRecent.has(historyId)) {
+      setPreview(null)
+      setPreviewIsVideo(false)
+      setHistoryId(null)
+      setStatus('就绪')
+    }
+    cancelPickRecent()
+    void reloadRecent().catch(() => undefined)
+    push('已从预览中清除，画廊作品仍保留', 'success')
   }
 
   return (
@@ -514,74 +577,114 @@ export function CreatePage() {
                 )}
               </div>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col gap-4">
-                <div className="empty-state min-h-[10rem] shrink-0 py-8">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
-                    {busy ? (
-                      <Sparkles className="h-5 w-5 animate-pulse text-white/85" />
-                    ) : (
-                      <ImageIcon className="h-5 w-5 text-white/75" />
-                    )}
-                  </div>
+              <div className="empty-state min-h-[8rem] shrink-0 py-6">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
                   {busy ? (
-                    <div className="w-full max-w-xs space-y-3 px-2">
-                      <p className="text-sm text-text">
-                        {status}
-                        {progressPercent != null ? ` · ${progressPercent}%` : ''}
-                      </p>
-                      <div className="preview-progress">
-                        <div
-                          className="preview-progress-bar"
-                          style={{
-                            width:
-                              progressPercent != null
-                                ? `${Math.min(100, Math.max(4, progressPercent))}%`
-                                : '28%'
-                          }}
-                          data-indeterminate={progressPercent == null ? '1' : undefined}
-                        />
-                      </div>
-                    </div>
+                    <Sparkles className="h-5 w-5 animate-pulse text-white/85" />
                   ) : (
-                    <p className="text-sm text-muted">在左侧输入提示词，开始创作</p>
+                    <ImageIcon className="h-5 w-5 text-white/75" />
                   )}
                 </div>
-
-                {!busy && recent.length ? (
-                  <div className="min-h-0 flex-1 overflow-auto">
-                    <p className="mb-2 text-xs font-medium text-muted">最近作品</p>
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-                      {recent.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="group overflow-hidden rounded-lg border border-border bg-bg text-left transition hover:border-white/35"
-                          onClick={() => openRecent(item)}
-                        >
-                          {item.mimeType.startsWith('video/') ? (
-                            <video src={item.url} className="aspect-square w-full object-cover" muted />
-                          ) : (
-                            <img
-                              src={item.url}
-                              alt=""
-                              className="aspect-square w-full object-cover transition group-hover:scale-[1.03]"
-                            />
-                          )}
-                        </button>
-                      ))}
+                {busy ? (
+                  <div className="w-full max-w-xs space-y-3 px-2">
+                    <p className="text-sm text-text">
+                      {status}
+                      {progressPercent != null ? ` · ${progressPercent}%` : ''}
+                    </p>
+                    <div className="preview-progress">
+                      <div
+                        className="preview-progress-bar"
+                        style={{
+                          width:
+                            progressPercent != null
+                              ? `${Math.min(100, Math.max(4, progressPercent))}%`
+                              : '28%'
+                        }}
+                        data-indeterminate={progressPercent == null ? '1' : undefined}
+                      />
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-sm text-muted">在左侧输入提示词，开始创作</p>
+                )}
               </div>
             )}
 
-            <GlassSwitch
-              className="mt-3"
-              label="保存至云端"
-              checked={settings.saveToCloud}
-              disabled={busy}
-              onChange={(v) => patchSettings({ saveToCloud: v })}
-            />
+            {!busy && recent.length ? (
+              <div className="mt-3 min-h-0 max-h-[42%] overflow-auto">
+                <p className="mb-2 text-xs font-medium text-muted">
+                  {pickingRecent ? `选择要清除的预览 · 已选 ${pickedRecent.size}` : '最近作品'}
+                </p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                  {recent.map((item) => {
+                    const picked = pickedRecent.has(item.id)
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`group relative overflow-hidden rounded-lg border bg-bg text-left transition ${
+                          picked
+                            ? 'border-white/80 ring-2 ring-white/50'
+                            : 'border-border hover:border-white/35'
+                        }`}
+                        onClick={() =>
+                          pickingRecent ? togglePickedRecent(item.id) : openRecent(item)
+                        }
+                      >
+                        {item.mimeType.startsWith('video/') ? (
+                          <video src={item.url} className="aspect-square w-full object-cover" muted />
+                        ) : (
+                          <img
+                            src={item.url}
+                            alt=""
+                            className="aspect-square w-full object-cover transition group-hover:scale-[1.03]"
+                          />
+                        )}
+                        {pickingRecent ? (
+                          <span
+                            className={`absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
+                              picked ? 'bg-white text-black' : 'bg-black/50 text-white ring-1 ring-white/40'
+                            }`}
+                          >
+                            {picked ? '✓' : ''}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-3 flex shrink-0 items-center justify-between gap-3">
+              <GlassSwitch
+                className="min-w-0"
+                label="保存至云端"
+                checked={settings.saveToCloud}
+                disabled={busy}
+                onChange={(v) => patchSettings({ saveToCloud: v })}
+              />
+              {!busy && recent.length ? (
+                pickingRecent ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <GlassButton className="glass-cta-btn-sm" onClick={cancelPickRecent}>
+                      取消
+                    </GlassButton>
+                    <GlassButton
+                      className="glass-cta-btn-sm"
+                      disabled={!pickedRecent.size}
+                      onClick={confirmClearRecent}
+                    >
+                      确认清除{pickedRecent.size ? ` ${pickedRecent.size}` : ''}
+                    </GlassButton>
+                  </div>
+                ) : (
+                  <GlassButton className="glass-cta-btn-sm" onClick={() => setPickingRecent(true)}>
+                    清除
+                  </GlassButton>
+                )
+              ) : null}
+            </div>
           </div>
         </section>
       </div>

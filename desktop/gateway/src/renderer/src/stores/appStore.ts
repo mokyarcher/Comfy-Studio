@@ -4,6 +4,7 @@ import type {
   GatewayConfig,
   GatewayStatus,
   LogLine,
+  LogSource,
   ProbeResult
 } from '../../../shared/types'
 
@@ -33,7 +34,7 @@ interface AppState {
   toast: ToastState | null
   setPage: (page: NavPage) => void
   refreshStatus: () => Promise<void>
-  refreshLogs: (source?: 'api' | 'frp' | 'system') => Promise<void>
+  refreshLogs: (source?: LogSource) => Promise<void>
   runAction: (fn: () => Promise<ActionResult>, okMsg?: string) => Promise<ActionResult>
   showToast: (type: ToastState['type'], message: string) => void
   clearToast: () => void

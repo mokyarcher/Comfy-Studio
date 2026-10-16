@@ -113,6 +113,15 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174"
     )
 
+    # --- Host service control (Gateway Web admin: start/stop ComfyUI / FRP) ---
+    host_services_enabled: bool = True
+    host_comfy_dir: Path | None = None
+    host_comfy_launch: str = (
+        ".venv\\Scripts\\python.exe main.py --listen 127.0.0.1 --port 8188"
+    )
+    host_frpc_path: Path | None = None
+    host_frpc_config_path: Path | None = None
+
     # --- Gateway admin login (remote console) ---
     # totp = password + Authenticator (recommended; no SMS vendor)
     # sms = phone OTP via tencent/aliyun
@@ -178,7 +187,14 @@ class Settings(BaseSettings):
             path = PROJECT_ROOT / path
         return path.resolve()
 
-    @field_validator("comfy_input_dir", "comfy_output_dir", mode="before")
+    @field_validator(
+        "comfy_input_dir",
+        "comfy_output_dir",
+        "host_comfy_dir",
+        "host_frpc_path",
+        "host_frpc_config_path",
+        mode="before",
+    )
     @classmethod
     def _optional_comfy_dir(cls, value: str | Path | None) -> Path | None:
         if value is None:

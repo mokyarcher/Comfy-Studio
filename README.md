@@ -129,10 +129,11 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/v1/tasks/$taskId/images/0" -Header
 
 ## 桌面端与 Web 客户端
 
-- **Comfy Gateway**（Electron）：台式机启动 API + frpc、审用户、hold  
+- **Comfy Gateway**（Electron）：台式机启停 ComfyUI / API / frpc、开机自启、审用户、hold  
 - **Comfy Studio**（Electron）：远程出图、队列、本地画廊  
-- **Studio Web**：`desktop/studio-web` → https://app.comfy-studio.sharex.team（可「保存至云端」）  
-- **Gateway Admin Web**：`desktop/gateway-web` → https://comfy-gateway.sharex.team（密码 + Authenticator）  
+- **Studio Web**：`desktop/studio-web` → https://app.comfy-studio.sharex.team（「保存至云端」；最近预览可清除隐藏）  
+- **Gateway Admin Web**：`desktop/gateway-web` → https://comfy-gateway.sharex.team（密码 + Authenticator；用户在线态；远程启停需本机 `HOST_*`）  
+- **官网**：`web/` → https://comfy-studio.sharex.team（毛玻璃气质 + ICP 页脚）  
 
 详见 [`desktop/README.md`](./desktop/README.md)；契约 [`desktop/docs/api-contract.md`](./desktop/docs/api-contract.md)。
 

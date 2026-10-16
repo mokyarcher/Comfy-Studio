@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fetchGpuStatus, testConnection } from '@/lib/api'
+import { preloadBackground } from '@/lib/backgrounds'
 import { useServerLimits } from '@/store/serverLimits'
 import { useSession } from '@/store/session'
 import { useSettings } from '@/store/settings'
@@ -77,6 +78,11 @@ export function Layout() {
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 })
   }, [location.pathname])
+
+  // Remembered sessions skip /login — warm only the active full-res background.
+  useEffect(() => {
+    void preloadBackground(backgroundId)
+  }, [backgroundId])
 
   const syncNavPill = (animate: boolean) => {
     const navEl = navRef.current
@@ -263,7 +269,11 @@ export function Layout() {
   }, [])
 
   return (
-    <div className="workspace-shell flex h-full min-h-0">
+    <div
+      className="workspace-shell flex h-full min-h-0"
+      data-sidebar-collapsed={collapsed ? '1' : '0'}
+      style={{ ['--sidebar-w' as string]: collapsed ? '3.5rem' : '13rem' }}
+    >
       <WorkspaceBackground backgroundId={backgroundId} />
       <aside
         ref={asideRef}

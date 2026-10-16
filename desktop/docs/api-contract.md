@@ -215,13 +215,14 @@ Header：`X-API-Key`、`Content-Type: application/json`
   - `POST /v1/auth/change-password`（需用户自己的 `X-API-Key`）`{old_password, new_password}`
 - 管理员（Header `X-API-Key` = 管理员 Key，**或** Gateway Admin Web 的 `admin_session` Cookie）：
   - `GET /v1/admin/stats`（含 `pending_users`、`pool_remaining`、`max_approved_users`）
-  - `GET /v1/admin/users`
+  - `GET /v1/admin/users` → 含 `last_seen_at`（业务请求会刷新；Admin Web 用 `ACTIVE_USER_WINDOW_MINUTES` 默认 15 分钟内视为在线）
   - `POST /v1/admin/users/{id}/approve` → 自动生成 Key（受 `MAX_APPROVED_USERS` 限制）
   - `POST /v1/admin/users/{id}/reject`
   - `DELETE /v1/admin/users/{id}` → 注销用户：删除账号及云端画廊 / 展馆投稿 / 共享提示词 / 用量记录（不可删管理员）；响应含 `cloud_gallery_deleted` / `showcase_deleted` / `shared_prompts_deleted`
   - `POST /v1/admin/users/{id}/reset-password` → 返回临时密码（忘密时由管理员重置）
   - `PATCH /v1/admin/users/{id}`、`POST .../rotate-key`
   - `GET|POST /v1/admin/local-hold`
+  - `GET|POST /v1/admin/host-services*` → 见下文「本机服务启停」
 - 业务接口仍用 `X-API-Key`；按用户计日限额。全局队列受 `MAX_QUEUE_SIZE` 限制。
 
 ### 管理员登录（Gateway Admin Web）
@@ -262,6 +263,37 @@ Header：`X-API-Key`、`Content-Type: application/json`
 ```text
 GET {COMFYUI_URL}/system_stats  → 200 视为可达
 ```
+
+## Admin：本机服务启停（Gateway Web）
+
+需管理员会话（cookie）或管理员 API Key。跑在 **GPU 本机** 的 FastAPI 内执行；Admin Web 只发指令。
+
+本机 `.env`：
+
+- `HOST_SERVICES_ENABLED`（默认 true；false 时接口仍可读状态，但 action 拒绝）
+- `HOST_COMFY_DIR` / `HOST_COMFY_LAUNCH`（在目录下执行；**须用 ComfyUI 自带 `.venv`**）
+- `HOST_FRPC_PATH` / `HOST_FRPC_CONFIG_PATH`
+
+```text
+GET  /v1/admin/host-services
+  → { enabled, services: [{ id, label, ok, state, message, pid?, configured, detail }] }
+
+POST /v1/admin/host-services/action
+  body: {
+    "service": "comfy"|"api"|"frp",
+    "action": "start"|"stop"|"force_stop"|"restart",
+    "totp_code": "123456"   // Authenticator 六位动态码（每次启停必填）
+  }
+  → { ok, message, services }
+```
+
+- `comfy`：start / stop / force_stop  
+- `frp`：start / stop（停止会断开公网隧道）  
+- `api`：仅 restart（远程无法在 API 已离线时再拉起）  
+- 动态码错误 → `401`；未配置 `ADMIN_TOTP_SECRET` → `503`；未启用 / 未配置路径 → `400` 类业务错误  
+
+Electron Gateway 仍可本机直接启停 ComfyUI / API / FRP（不经此接口），设置里可勾选开机自启三项。
+
 
 ## 未支持（客户端勿发送）
 

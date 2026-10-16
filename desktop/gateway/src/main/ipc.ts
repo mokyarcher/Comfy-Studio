@@ -37,16 +37,22 @@ export function registerIpc(services: ServiceManager, getWindow: () => BrowserWi
   ipcMain.handle('gateway:startApi', () => services.startApi())
   ipcMain.handle('gateway:stopApi', () => services.stopApi())
   ipcMain.handle('gateway:forceStopApi', () => services.forceStopApi())
+  ipcMain.handle('gateway:startComfy', () => services.startComfy())
+  ipcMain.handle('gateway:stopComfy', () => services.stopComfy())
+  ipcMain.handle('gateway:forceStopComfy', () => services.forceStopComfy())
   ipcMain.handle('gateway:startFrp', () => services.startFrp())
   ipcMain.handle('gateway:stopFrp', () => services.stopFrp())
   ipcMain.handle('gateway:startAll', () => services.startAll())
   ipcMain.handle('gateway:stopAll', () => services.stopAll())
 
-  ipcMain.handle('gateway:getLogs', (_e, source?: 'api' | 'frp' | 'system', limit?: number) => {
-    return services.logs.get(source, limit ?? 500)
-  })
+  ipcMain.handle(
+    'gateway:getLogs',
+    (_e, source?: 'api' | 'frp' | 'comfy' | 'system', limit?: number) => {
+      return services.logs.get(source, limit ?? 500)
+    }
+  )
 
-  ipcMain.handle('gateway:clearLogs', (_e, source?: 'api' | 'frp' | 'system') => {
+  ipcMain.handle('gateway:clearLogs', (_e, source?: 'api' | 'frp' | 'comfy' | 'system') => {
     services.logs.clear(source)
     return { ok: true }
   })

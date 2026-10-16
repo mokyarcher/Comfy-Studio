@@ -115,7 +115,23 @@ export async function setGalleryCloudId(id: string, cloudId: string): Promise<vo
   await putGallery(item)
 }
 
+export async function setGalleryShowcaseId(
+  id: string,
+  showcaseId: string | null
+): Promise<GalleryRecord | null> {
+  const item = await getGallery(id)
+  if (!item) return null
+  item.showcaseId = showcaseId
+  await putGallery(item)
+  return item
+}
+
 export async function findByCloudId(cloudId: string): Promise<GalleryRecord | null> {
   const rows = await listGallery()
   return rows.find((r) => r.cloudId === cloudId) || null
+}
+
+export async function findByShowcaseId(showcaseId: string): Promise<GalleryRecord | null> {
+  const rows = await listGallery()
+  return rows.find((r) => r.showcaseId === showcaseId) || null
 }

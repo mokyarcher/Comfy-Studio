@@ -6,13 +6,25 @@ export const GatewayConfigSchema = z.object({
   apiHost: z.string().default('127.0.0.1'),
   apiPort: z.number().int().min(1).max(65535).default(8000),
   comfyUrl: z.string().default('http://127.0.0.1:8188'),
+  /** ComfyUI 安装目录（含 main.py） */
+  comfyUiDir: z.string().default(''),
+  /** 在该目录下执行的启动命令；务必用 ComfyUI 自己的 .venv，不要用系统 python */
+  comfyUiLaunch: z
+    .string()
+    .default('.venv\\Scripts\\python.exe main.py --listen 127.0.0.1 --port 8188'),
   publicBaseUrl: z.string().default('http://111.229.166.216:8080/qwen-image'),
   frpcPath: z.string().default(''),
   frpcConfigPath: z.string().default(''),
   workflowPath: z.string().default(''),
   healthIntervalMs: z.number().int().min(1000).max(60000).default(3000),
   requestTimeoutMs: z.number().int().min(1000).max(120000).default(8000),
-  minimizeToTrayOnClose: z.boolean().default(false)
+  minimizeToTrayOnClose: z.boolean().default(false),
+  /** Gateway 启动后自动拉起 ComfyUI（可独立勾选） */
+  autoStartComfy: z.boolean().default(false),
+  /** Gateway 启动后自动拉起 FastAPI */
+  autoStartApi: z.boolean().default(false),
+  /** Gateway 启动后自动拉起 FRP */
+  autoStartFrp: z.boolean().default(false)
 })
 
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema>
@@ -48,6 +60,9 @@ export interface ServiceRuntime {
 export interface GatewayStatus {
   api: ServiceRuntime
   frp: ServiceRuntime
+  /** ComfyUI 进程运行时（本应用启停） */
+  comfyRuntime: ServiceRuntime
+  /** ComfyUI HTTP 探测 */
   comfy: ProbeResult
   localApi: ProbeResult
   publicApi: ProbeResult
@@ -56,7 +71,7 @@ export interface GatewayStatus {
   resolvedWorkflowPath?: string
 }
 
-export type LogSource = 'api' | 'frp' | 'system'
+export type LogSource = 'api' | 'frp' | 'comfy' | 'system'
 
 export interface LogLine {
   id: number

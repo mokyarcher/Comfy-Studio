@@ -1,6 +1,6 @@
 # 计划：官网液态玻璃风格（仅方案，未实施）
 
-> 状态：**计划中 / 先别做**  
+> 状态：**已实施（B 档：对齐 Studio 气质 + 氛围图）**  
 > 范围：`web/`（Astro 官网 https://comfy-studio.sharex.team）  
 > 参考实现：`desktop/studio-web` 的 glass CSS（`--glass-*`、`.glass-rim`、毛玻璃面板），**不是**照搬应用壳与设置项。
 
@@ -174,4 +174,4 @@ React 岛 className 替换
 
 ## 9. 下一步
 
-本文档批准且档位（A/B）与背景策略选定后，再开实现 PR；**当前仓库不改 `web/` 业务代码。**
+档位 B + 氛围图已批准并开工：改动集中在 `web/src/styles/global.css`、布局/组件 class，以及 `public/backgrounds/atmosphere.jpg`。

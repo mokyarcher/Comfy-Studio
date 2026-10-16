@@ -28,9 +28,21 @@ export function OverviewPage() {
   const logs = useAppStore((s) => s.logs)
   const busy = useAppStore((s) => s.busy)
   const runAction = useAppStore((s) => s.runAction)
+  const saveConfig = useAppStore((s) => s.saveConfig)
   const setPage = useAppStore((s) => s.setPage)
   const showToast = useAppStore((s) => s.showToast)
   const cfg = status?.config
+
+  const toggleAutoStart = async (
+    key: 'autoStartComfy' | 'autoStartApi' | 'autoStartFrp',
+    value: boolean
+  ) => {
+    try {
+      await saveConfig({ [key]: value })
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : String(err))
+    }
+  }
 
   const [hold, setHold] = useState<HoldState | null>(null)
   const [holdError, setHoldError] = useState('')
@@ -107,6 +119,44 @@ export function OverviewPage() {
         </div>
       </div>
 
+      <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <h2 className="font-medium text-text">启动后自动拉起</h2>
+          <p className="mt-1 text-xs text-muted">
+            勾选后，打开 Gateway 时按 ComfyUI → API → FRP 顺序启动；可单独勾选。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-text">
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={Boolean(cfg?.autoStartComfy)}
+              onChange={(e) => void toggleAutoStart('autoStartComfy', e.target.checked)}
+            />
+            ComfyUI
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={Boolean(cfg?.autoStartApi)}
+              onChange={(e) => void toggleAutoStart('autoStartApi', e.target.checked)}
+            />
+            FastAPI
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={Boolean(cfg?.autoStartFrp)}
+              onChange={(e) => void toggleAutoStart('autoStartFrp', e.target.checked)}
+            />
+            FRP
+          </label>
+        </div>
+      </div>
+
       <div
         className={`card flex flex-wrap items-center justify-between gap-4 p-4 ${
           held ? 'border-warning/40 bg-warning/5' : ''
@@ -172,12 +222,40 @@ export function OverviewPage() {
         <StatusCard
           title="ComfyUI"
           icon={Cpu}
+          runtime={status?.comfyRuntime}
           probe={status?.comfy}
-          detail={cfg?.comfyUrl || '未配置'}
+          detail={
+            cfg?.comfyUiDir
+              ? `${cfg.comfyUrl || '未配置 URL'} · ${cfg.comfyUiDir}`
+              : `未配置 ComfyUI 目录（设置里填写） · ${cfg?.comfyUrl || ''}`
+          }
           actions={
             <>
               <button
+                className="btn-primary"
+                disabled={busy || !cfg?.comfyUiDir}
+                title={!cfg?.comfyUiDir ? '请先在设置中填写 ComfyUI 目录' : undefined}
+                onClick={() => void runAction(() => window.gateway.startComfy())}
+              >
+                启动
+              </button>
+              <button
                 className="btn-secondary"
+                disabled={busy}
+                onClick={() => void runAction(() => window.gateway.stopComfy())}
+              >
+                停止
+              </button>
+              <button
+                className="btn-danger"
+                disabled={busy}
+                title="结束占用 ComfyUI 端口的进程"
+                onClick={() => void runAction(() => window.gateway.forceStopComfy())}
+              >
+                强制停止
+              </button>
+              <button
+                className="btn-ghost"
                 onClick={() =>
                   void runAction(() =>
                     window.gateway.testComfy().then((r) => ({ ok: r.ok, message: r.message }))
@@ -185,9 +263,6 @@ export function OverviewPage() {
                 }
               >
                 检测
-              </button>
-              <button className="btn-ghost" onClick={() => setPage('workflow')}>
-                工作流
               </button>
             </>
           }

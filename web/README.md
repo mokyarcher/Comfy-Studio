@@ -1,6 +1,8 @@
 # Comfy Studio 官网
 
-Astro + React 岛屿 + Tailwind。介绍 / 演示 / 部署 / 下载 / 工作流。
+Astro + React 岛屿 + Tailwind。介绍 / 演示 / 部署 / 下载 / 工作流；页脚含 ICP 备案链接。
+
+视觉：毛玻璃 token（`--glass-*` / `.glass-panel`）与 Web Studio 同一家族，**保留绿色 accent**；氛围与展馆素材见 `public/backgrounds/`、`public/media/showcase/`。不引入 `liquid-glass-react`。方案见 `docs/PLAN_web_liquid_glass.md`（已实施 B 档）。
 
 ## 开发
 
@@ -51,7 +53,7 @@ npm run preview
 ```
 
 同一 `features[]` 下往 `images` 追加即可。左侧点功能块会切换右侧预览，底部标题跟随变动；功能内左右滑动多图。
-- 样例墙：`src/data/showcase.json`
+- 样例墙：`src/data/showcase.json`（`image` 指向 `public/media/showcase/*.jpg`；源图可放仓库根 `官网展示用/`，压缩拷贝进 public 后再改 json）
 - **工作流 / 模型清单**：`src/data/workflows.json`（维护用，勿把维护说明写进 `intro`）
 
 ### 工作流清单格式（`workflows.json`）— 仅开发维护

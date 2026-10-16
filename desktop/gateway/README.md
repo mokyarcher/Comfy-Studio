@@ -1,6 +1,8 @@
 # Comfy Gateway
 
-Windows 桌面控制台：管理本机 FastAPI ComfyUI API 与 FRP 客户端（Electron + React + TypeScript + Vite + Tailwind）。
+Windows 桌面控制台：管理本机 **ComfyUI**、FastAPI 与 FRP 客户端（Electron + React + TypeScript + Vite + Tailwind）。可勾选开机自启三项服务。
+
+外网管理（审用户 / 远程启停）见 [`../gateway-web/README.md`](../gateway-web/README.md)。
 
 ## 开发启动
 
@@ -17,16 +19,19 @@ npm run dev
 | `npm run dev` | 开发模式 |
 | `npm run typecheck` | TypeScript 检查 |
 | `npm run build` | 生产构建（含 typecheck） |
-| `npm run dist` | 打包 NSIS 安装包 → `release/Comfy-Gateway-Setup-*.exe` |
+| `npm run dist:dir` | 解压即用 → `release/win-unpacked/Comfy Gateway.exe` |
+| `npm run dist` | 打包 NSIS（需在线工具） |
 | `npm run preview` | 预览构建产物 |
 
 ## 首次配置
 
 1. **服务管理 / 设置**：选择 API 项目目录（仓库根，含 `app/main.py`）
 2. Python 留空时会自动尝试 `{apiProjectDir}\.venv\Scripts\python.exe`
-3. 选择 `frpc.exe` 与 `config.toml`
-4. 确认 ComfyUI 地址（默认 `http://127.0.0.1:8188`）与公网 Base URL
-5. **运行总览** →「启动全部」
+3. **ComfyUI 目录**（含 `main.py`）+ 启动命令：默认 `.venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188`（**务必用 ComfyUI 自己的 venv**，勿用系统 Python）
+4. 选择 `frpc.exe` 与 `config.toml`
+5. 确认 ComfyUI URL（默认 `http://127.0.0.1:8188`）与公网 Base URL
+6. 可选：勾选「启动时自动拉起」ComfyUI / API / FRP
+7. **运行总览** →「启动全部」（按勾选顺序拉起）
 
 ## 安全说明
 

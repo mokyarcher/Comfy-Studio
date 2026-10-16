@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -16,6 +17,8 @@ from app.auth import AuthContext, normalize_admin_phone, require_admin_access, r
 from app.comfy_client import ComfyClient, ComfyClientError
 from app.config import Settings, get_settings
 from app.database import Database
+from app.host_services import run_action as host_service_run_action
+from app.host_services import status_all as host_services_status
 from app.local_hold import local_hold
 from app.logging_config import setup_logging
 from app.polish_quota import PolishQuotaStore
@@ -48,6 +51,10 @@ from app.schemas import (
     GpuStatusResponse,
     HealthLiveResponse,
     HealthReadyResponse,
+    HostServiceActionRequest,
+    HostServiceActionResponse,
+    HostServiceItem,
+    HostServicesResponse,
     LocalHoldResponse,
     LocalHoldSetRequest,
     PromptLibraryPhrase,
@@ -1247,6 +1254,70 @@ def create_app() -> FastAPI:
             snap.expires_at.isoformat() if snap.expires_at else None,
         )
         return LocalHoldResponse(**snap.to_public_dict())
+
+    def _host_services_response() -> HostServicesResponse:
+        settings = get_settings()
+        items = [
+            HostServiceItem(
+                id=s.id,
+                label=s.label,
+                ok=s.ok,
+                state=s.state,
+                message=s.message,
+                pid=s.pid,
+                configured=s.configured,
+                detail=s.detail,
+            )
+            for s in host_services_status(settings)
+        ]
+        return HostServicesResponse(enabled=settings.host_services_enabled, services=items)
+
+    @app.get("/v1/admin/host-services", response_model=HostServicesResponse, tags=["admin"])
+    async def admin_host_services(auth: AuthContext = Depends(admin_auth)) -> HostServicesResponse:
+        _ = auth
+        return await asyncio.to_thread(_host_services_response)
+
+    @app.post(
+        "/v1/admin/host-services/action",
+        response_model=HostServiceActionResponse,
+        tags=["admin"],
+    )
+    async def admin_host_service_action(
+        body: HostServiceActionRequest,
+        auth: AuthContext = Depends(admin_auth),
+    ) -> HostServiceActionResponse:
+        settings = get_settings()
+        secret = (settings.admin_totp_secret or "").strip()
+        if not secret:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="未配置 ADMIN_TOTP_SECRET，无法二次校验启停操作",
+            )
+        if not verify_totp(secret, body.totp_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="动态码错误或已过期",
+            )
+        ok, message = await asyncio.to_thread(
+            host_service_run_action, settings, body.service, body.action
+        )
+        logger.info(
+            "host_service action service=%s action=%s ok=%s by=%s msg=%s",
+            body.service,
+            body.action,
+            ok,
+            auth.user.id,
+            message,
+        )
+        if body.service == "api" and body.action == "restart" and ok:
+            # Return response first; exit shortly so the restart helper can bind the port.
+            async def _exit_soon() -> None:
+                await asyncio.sleep(0.8)
+                os._exit(0)
+
+            asyncio.create_task(_exit_soon())
+        snap = await asyncio.to_thread(_host_services_response)
+        return HostServiceActionResponse(ok=ok, message=message, services=snap.services)
 
     def _prompt_library_response() -> PromptLibraryResponse:
         doc = state.prompt_library.get()

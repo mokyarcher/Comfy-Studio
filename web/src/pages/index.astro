@@ -1,82 +1,15 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import { Hero } from '../components/Hero'
-import { Reveal } from '../components/Reveal'
-import { ArchDiagram } from '../components/ArchDiagram'
-import { withBase } from '../lib/paths'
+import showcase from '../data/showcase.json'
+import type { ShowcaseItem } from '../data/showcase'
 
-const modes = [
-  {
-    title: '文生图',
-    body: 'Qwen 工作流，异步任务队列，结果落本地画廊。'
-  },
-  {
-    title: '图编辑',
-    body: '底图 / 参考图注入；提示词支持 <image1> / <image2>。'
-  },
-  {
-    title: '图生视频',
-    body: 'Wan TI2V：起始图 + 镜头提示，超时更长、进度可跟。'
-  }
-]
-
-const trusts = [
-  { title: '本地 GPU', body: '推理永不离开你的显卡' },
-  { title: 'API Key', body: '鉴权与配额在服务端' },
-  { title: '展馆', body: '分享作品，复用参数' }
-]
+const items = showcase as ShowcaseItem[]
 ---
 
-<BaseLayout>
-  <Hero client:load />
-
-  <section id="intro" class="container-page scroll-mt-24 py-20">
-    <Reveal client:visible>
-      <p class="eyebrow">能力</p>
-      <h2 class="section-title mt-3">三种生成模式，一套客户端</h2>
-      <p class="section-lead">Studio 覆盖创作全流程；Gateway 守住本机服务与账号体系。</p>
-    </Reveal>
-    <div class="mt-10 grid gap-4 md:grid-cols-3">
-      {
-        modes.map((mode, i) => (
-          <Reveal client:visible delay={i * 0.06}>
-            <article class="h-full rounded-xl border border-border bg-panel/50 p-5 transition hover:border-accent/35">
-              <h3 class="display text-xl text-text">{mode.title}</h3>
-              <p class="mt-2 text-sm text-muted">{mode.body}</p>
-            </article>
-          </Reveal>
-        ))
-      }
-    </div>
-  </section>
-
-  <section class="container-page py-16">
-    <div class="grid gap-4 sm:grid-cols-3">
-      {
-        trusts.map((t, i) => (
-          <Reveal client:visible delay={i * 0.05}>
-            <div class="rounded-xl border border-border/80 px-5 py-4">
-              <p class="text-sm font-medium text-accent">{t.title}</p>
-              <p class="mt-1 text-sm text-muted">{t.body}</p>
-            </div>
-          </Reveal>
-        ))
-      }
-    </div>
-  </section>
-
-  <section class="container-page py-20">
-    <Reveal client:visible>
-      <p class="eyebrow">架构</p>
-      <h2 class="section-title mt-3">云端入口，本地算力</h2>
-      <p class="section-lead">Studio → HTTPS / Nginx → FRP → 本机 FastAPI → ComfyUI → GPU。</p>
-    </Reveal>
-    <div class="mt-10">
-      <ArchDiagram client:visible />
-    </div>
-    <div class="mt-8 flex flex-wrap gap-3">
-      <a href={withBase('deploy')} class="btn-secondary">部署方案</a>
-      <a href={withBase('demo')} class="btn-secondary">产品演示</a>
-    </div>
-  </section>
+<BaseLayout
+  title="Comfy Studio"
+  description="本地 GPU 推理，远程创作。了解产品、演示、部署与客户端下载。"
+>
+  <Hero client:load items={items} />
 </BaseLayout>
