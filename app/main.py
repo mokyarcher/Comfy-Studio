@@ -33,11 +33,18 @@ from app.schemas import (
     AdminDeleteUserResponse,
     AdminResetPasswordRequest,
     AdminResetPasswordResponse,
+    AuthBindEmailRequest,
+    AuthBindEmailResponse,
     AuthChangePasswordRequest,
     AuthChangePasswordResponse,
     AuthLoginRequest,
     AuthLoginResponse,
     AuthMeResponse,
+    AuthPasswordResetRequest,
+    AuthPasswordResetResponse,
+    AuthPasswordResetSendRequest,
+    AuthPasswordResetSendResponse,
+    AuthProfileResponse,
     AuthRegisterRequest,
     AuthRegisterResponse,
     AdminTotpLoginRequest,
@@ -96,6 +103,8 @@ from app.sms_auth import (
     send_tencent_sms,
 )
 from app.totp import verify_totp
+from app.email_auth import EmailResetStore, generate_otp_code, send_reset_email
+from app.user_store import normalize_email
 import secrets as _secrets
 from app.workflow import WorkflowError, WorkflowRegistry, load_workflow_registry
 from app.worker import TaskWorker
@@ -119,6 +128,7 @@ class AppState:
     showcase: ShowcaseStore
     cloud_gallery: CloudGalleryStore
     sms_auth: SmsAuthStore
+    email_reset: EmailResetStore
     prompt_library: PromptLibraryStore
     shared_prompts: SharedPromptStore
     translate_cache: TranslateCacheStore
@@ -173,6 +183,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.cloud_gallery_db_path, settings.cloud_gallery_files_dir
     )
     state.sms_auth = SmsAuthStore(settings.admin_sms_db_path)
+    state.email_reset = EmailResetStore(settings.email_reset_db_path)
     state.prompt_library = PromptLibraryStore(settings.prompt_library_path)
     state.shared_prompts = SharedPromptStore(settings.shared_prompts_db_path)
     state.translate_cache = TranslateCacheStore(settings.translate_cache_db_path)
@@ -1130,6 +1141,7 @@ def create_app() -> FastAPI:
                 body.username,
                 body.password,
                 display_name=body.display_name or body.username,
+                email=body.email,
             )
             state.user_store.set_default_limits(
                 user.id,
@@ -1139,12 +1151,17 @@ def create_app() -> FastAPI:
             user = state.user_store.get_user(user.id) or user
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        logger.info("user registered id=%s username=%s pending", user.id, user.username)
+        logger.info(
+            "user registered id=%s username=%s email=%s pending",
+            user.id,
+            user.username,
+            user.email,
+        )
         return AuthRegisterResponse(
             user_id=user.id,
             username=user.username,
             status=user.status,
-            message="注册成功，请等待管理员审核通过后再登录",
+            message="注册成功，等待审核",
         )
 
     @app.post("/v1/auth/login", response_model=AuthLoginResponse, tags=["auth"])
@@ -1182,7 +1199,113 @@ def create_app() -> FastAPI:
             daily_generate_limit=user.daily_generate_limit,
             daily_polish_limit=user.daily_polish_limit,
             status=user.status,
+            email=user.email or "",
         )
+
+    @app.get("/v1/auth/profile", response_model=AuthProfileResponse, tags=["auth"])
+    async def auth_profile(auth: AuthContext = Depends(require_auth)) -> AuthProfileResponse:
+        user = state.user_store.get_user(auth.user.id) or auth.user
+        return AuthProfileResponse(
+            user_id=user.id,
+            username=user.username,
+            name=user.name,
+            email=user.email or "",
+        )
+
+    @app.post("/v1/auth/email", response_model=AuthBindEmailResponse, tags=["auth"])
+    async def auth_bind_email(
+        body: AuthBindEmailRequest,
+        auth: AuthContext = Depends(require_auth),
+    ) -> AuthBindEmailResponse:
+        try:
+            user = state.user_store.bind_email(auth.user.id, body.password, body.email)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="User not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.info("user bound email id=%s email=%s", user.id, user.email)
+        return AuthBindEmailResponse(email=user.email)
+
+    @app.post(
+        "/v1/auth/password-reset/send",
+        response_model=AuthPasswordResetSendResponse,
+        tags=["auth"],
+    )
+    async def auth_password_reset_send(
+        body: AuthPasswordResetSendRequest,
+    ) -> AuthPasswordResetSendResponse:
+        email = normalize_email(body.email)
+        if not email:
+            raise HTTPException(status_code=400, detail="请填写有效邮箱")
+        user = state.user_store.find_by_email(email)
+        if user is None or not user.email:
+            raise HTTPException(status_code=404, detail="该邮箱未绑定任何账号")
+        if user.status != STATUS_ACTIVE or not user.enabled:
+            raise HTTPException(status_code=403, detail="账号不可用，无法重置密码")
+
+        s = state.settings
+        ok, msg = state.email_reset.can_send(
+            email,
+            cooldown_seconds=s.mail_cooldown_seconds,
+            daily_limit=s.mail_daily_limit,
+        )
+        if not ok:
+            raise HTTPException(status_code=429, detail=msg)
+
+        code = generate_otp_code()
+        secret = (s.admin_session_secret or s.api_key).strip()
+        dry = s.mail_dry_run or not s.mail_smtp_host
+        try:
+            send_reset_email(
+                to_email=email,
+                code=code,
+                smtp_host=s.mail_smtp_host,
+                smtp_port=s.mail_smtp_port,
+                smtp_user=s.mail_smtp_user,
+                smtp_password=s.mail_smtp_password,
+                mail_from=s.mail_from or s.mail_smtp_user,
+                use_tls=s.mail_use_tls,
+                dry_run=dry,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("send reset email failed")
+            raise HTTPException(status_code=502, detail=f"邮件发送失败：{exc}") from exc
+
+        state.email_reset.save_otp(
+            email, code, ttl_seconds=s.mail_otp_ttl_seconds, secret=secret
+        )
+        return AuthPasswordResetSendResponse(
+            message="验证码已发送" if not dry else "验证码已发送（调试模式见服务端日志）",
+            cooldown_seconds=s.mail_cooldown_seconds,
+        )
+
+    @app.post(
+        "/v1/auth/password-reset",
+        response_model=AuthPasswordResetResponse,
+        tags=["auth"],
+    )
+    async def auth_password_reset(
+        body: AuthPasswordResetRequest,
+    ) -> AuthPasswordResetResponse:
+        if body.new_password != body.confirm_password:
+            raise HTTPException(status_code=400, detail="两次输入的密码不一致")
+        email = normalize_email(body.email)
+        if not email:
+            raise HTTPException(status_code=400, detail="请填写有效邮箱")
+        user = state.user_store.find_by_email(email)
+        if user is None:
+            raise HTTPException(status_code=404, detail="该邮箱未绑定任何账号")
+
+        secret = (state.settings.admin_session_secret or state.settings.api_key).strip()
+        ok, msg = state.email_reset.verify_otp(email, body.code, secret=secret)
+        if not ok:
+            raise HTTPException(status_code=400, detail=msg)
+        try:
+            state.user_store.set_password(user.id, body.new_password)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.info("password reset via email user_id=%s", user.id)
+        return AuthPasswordResetResponse()
 
     @app.post(
         "/v1/auth/change-password",

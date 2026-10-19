@@ -68,7 +68,12 @@ def test_admin_replace_prompt_library(client: TestClient):
 def test_non_admin_cannot_replace(client: TestClient):
     created = client.post(
         "/v1/auth/register",
-        json={"username": "libuser", "password": "secret12", "display_name": "库用户"},
+        json={
+            "username": "libuser",
+            "password": "secret12",
+            "display_name": "库用户",
+            "email": "libuser@example.com",
+        },
     )
     assert created.status_code == 200
     user_id = created.json()["user_id"]

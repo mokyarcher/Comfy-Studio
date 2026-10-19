@@ -122,6 +122,19 @@ class Settings(BaseSettings):
     host_frpc_path: Path | None = None
     host_frpc_config_path: Path | None = None
 
+    # --- User email (register / bind / password reset) ---
+    email_reset_db_path: Path = PROJECT_ROOT / "data" / "email_reset.db"
+    mail_dry_run: bool = True
+    mail_smtp_host: str = ""
+    mail_smtp_port: int = 587
+    mail_smtp_user: str = ""
+    mail_smtp_password: str = ""
+    mail_from: str = ""
+    mail_use_tls: bool = True
+    mail_cooldown_seconds: int = 60
+    mail_daily_limit: int = 10
+    mail_otp_ttl_seconds: int = 300
+
     # --- Gateway admin login (remote console) ---
     # totp = password + Authenticator (recommended; no SMS vendor)
     # sms = phone OTP via tencent/aliyun
@@ -178,6 +191,7 @@ class Settings(BaseSettings):
         "cloud_gallery_db_path",
         "cloud_gallery_files_dir",
         "admin_sms_db_path",
+        "email_reset_db_path",
         mode="before",
     )
     @classmethod

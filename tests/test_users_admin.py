@@ -37,6 +37,7 @@ def test_approve_user_and_disable(client: TestClient):
             "username": "limituser",
             "password": "secret12",
             "display_name": "限额用户",
+            "email": "limituser@example.com",
         },
     )
     assert created.status_code == 200
@@ -72,7 +73,12 @@ def test_approve_user_and_disable(client: TestClient):
 def test_admin_delete_user(client: TestClient):
     created = client.post(
         "/v1/auth/register",
-        json={"username": "todelete", "password": "secret12", "display_name": "待删"},
+        json={
+            "username": "todelete",
+            "password": "secret12",
+            "display_name": "待删",
+            "email": "todelete@example.com",
+        },
     )
     assert created.status_code == 200
     user_id = created.json()["user_id"]

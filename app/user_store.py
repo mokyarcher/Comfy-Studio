@@ -52,6 +52,18 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+def normalize_email(raw: str) -> str | None:
+    s = (raw or "").strip().lower()
+    if not s or len(s) > 254 or " " in s or s.count("@") != 1:
+        return None
+    local, _, domain = s.partition("@")
+    if not local or not domain or "." not in domain:
+        return None
+    if domain.startswith(".") or domain.endswith("."):
+        return None
+    return s
+
+
 @dataclass
 class ApiUser:
     id: str
@@ -69,6 +81,7 @@ class ApiUser:
     note: str
     created_at: str
     last_seen_at: str | None
+    email: str = ""
 
 
 @dataclass
@@ -138,12 +151,19 @@ class UserStore:
                 ("password_hash", "TEXT NOT NULL DEFAULT ''"),
                 ("status", "TEXT NOT NULL DEFAULT 'active'"),
                 ("api_key_secret", "TEXT NOT NULL DEFAULT ''"),
+                ("email", "TEXT NOT NULL DEFAULT ''"),
             ]
             for name, decl in migrations:
                 if name not in cols:
                     conn.execute(f"ALTER TABLE api_users ADD COLUMN {name} {decl}")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_users_username ON api_users(username)"
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+                ON api_users(lower(email)) WHERE email != ''
+                """
             )
 
     def ensure_bootstrap_admin(self, legacy_api_key: str) -> ApiUser | None:
@@ -186,8 +206,8 @@ class UserStore:
                     id, name, username, password_hash, status,
                     api_key_hash, api_key_prefix, api_key_secret,
                     enabled, is_admin, daily_generate_limit, daily_polish_limit,
-                    note, created_at, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, NULL)
+                    note, created_at, last_seen_at, email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, NULL, '')
                 """,
                 (
                     user_id,
@@ -208,7 +228,14 @@ class UserStore:
         assert user is not None
         return user, plain
 
-    def register_user(self, username: str, password: str, *, display_name: str = "") -> ApiUser:
+    def register_user(
+        self,
+        username: str,
+        password: str,
+        *,
+        display_name: str = "",
+        email: str = "",
+    ) -> ApiUser:
         uname = username.strip().lower()
         if not uname or len(uname) < 3:
             raise ValueError("用户名至少 3 个字符")
@@ -216,6 +243,11 @@ class UserStore:
             raise ValueError("密码至少 6 个字符")
         if self.find_by_username(uname) is not None:
             raise ValueError("用户名已存在")
+        email_norm = normalize_email(email)
+        if not email_norm:
+            raise ValueError("请填写有效邮箱")
+        if self.find_by_email(email_norm) is not None:
+            raise ValueError("该邮箱已被注册")
 
         user_id = uuid.uuid4().hex[:12]
         now = utcnow()
@@ -227,8 +259,8 @@ class UserStore:
                     id, name, username, password_hash, status,
                     api_key_hash, api_key_prefix, api_key_secret,
                     enabled, is_admin, daily_generate_limit, daily_polish_limit,
-                    note, created_at, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, '', '', 1, 0, ?, ?, '', ?, NULL)
+                    note, created_at, last_seen_at, email
+                ) VALUES (?, ?, ?, ?, ?, ?, '', '', 1, 0, ?, ?, '', ?, NULL, ?)
                 """,
                 (
                     user_id,
@@ -240,12 +272,44 @@ class UserStore:
                     50,  # overwritten by settings at route layer if needed
                     200,
                     now,
+                    email_norm,
                 ),
             )
-        # Apply default limits from caller via update if needed — set properly in register route
         user = self.get_user(user_id)
         assert user is not None
         return user
+
+    def find_by_email(self, email: str) -> ApiUser | None:
+        email_norm = normalize_email(email)
+        if not email_norm:
+            return None
+        with self._lock, self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM api_users WHERE lower(email) = ?", (email_norm,)
+            ).fetchone()
+        return self._row_to_user(row) if row else None
+
+    def bind_email(self, user_id: str, password: str, email: str) -> ApiUser:
+        """Bind/replace recovery email after verifying current password. No mail send."""
+        user = self.get_user(user_id)
+        if user is None:
+            raise LookupError("User not found")
+        if not user.password_hash or not verify_password(password, user.password_hash):
+            raise ValueError("当前密码不正确")
+        email_norm = normalize_email(email)
+        if not email_norm:
+            raise ValueError("请填写有效邮箱")
+        other = self.find_by_email(email_norm)
+        if other is not None and other.id != user_id:
+            raise ValueError("该邮箱已被其他账号占用")
+        with self._lock, self.connect() as conn:
+            conn.execute(
+                "UPDATE api_users SET email = ? WHERE id = ?",
+                (email_norm, user_id),
+            )
+        updated = self.get_user(user_id)
+        assert updated is not None
+        return updated
 
     def set_default_limits(self, user_id: str, gen: int, polish: int) -> ApiUser | None:
         return self.update_user(
@@ -570,6 +634,7 @@ class UserStore:
             "id": user.id,
             "name": user.name,
             "username": user.username,
+            "email": user.email or "",
             "status": user.status,
             "api_key_prefix": user.api_key_prefix,
             "enabled": user.enabled,
@@ -602,4 +667,5 @@ class UserStore:
             note=row["note"] or "",
             created_at=row["created_at"],
             last_seen_at=row["last_seen_at"],
+            email=(row["email"] if "email" in keys else "") or "",
         )

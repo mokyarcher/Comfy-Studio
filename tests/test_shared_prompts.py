@@ -25,7 +25,12 @@ def _admin():
 def _approve_user(client: TestClient, username: str, password: str = "secret12") -> str:
     created = client.post(
         "/v1/auth/register",
-        json={"username": username, "password": password, "display_name": username},
+        json={
+            "username": username,
+            "password": password,
+            "display_name": username,
+            "email": f"{username}@example.com",
+        },
     )
     assert created.status_code == 200
     user_id = created.json()["user_id"]

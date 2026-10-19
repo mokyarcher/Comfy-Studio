@@ -24,7 +24,12 @@ def _admin():
 def test_register_pending_login_then_approve(client: TestClient):
     reg = client.post(
         "/v1/auth/register",
-        json={"username": "alice", "password": "secret12", "display_name": "爱丽丝"},
+        json={
+            "username": "alice",
+            "password": "secret12",
+            "display_name": "爱丽丝",
+            "email": "alice@example.com",
+        },
     )
     assert reg.status_code == 200
     body = reg.json()
@@ -50,6 +55,7 @@ def test_register_pending_login_then_approve(client: TestClient):
     assert login.status_code == 200
     key = login.json()["api_key"]
     assert key
+    assert login.json().get("email") == "alice@example.com"
 
     # Key works for authenticated routes
     task = client.get("/v1/tasks/does-not-exist", headers={"X-API-Key": key})
@@ -59,15 +65,15 @@ def test_register_pending_login_then_approve(client: TestClient):
 def test_reject_and_pool_limit(client: TestClient):
     a = client.post(
         "/v1/auth/register",
-        json={"username": "bob", "password": "secret12"},
+        json={"username": "bob", "password": "secret12", "email": "bob@example.com"},
     ).json()
     b = client.post(
         "/v1/auth/register",
-        json={"username": "carol", "password": "secret12"},
+        json={"username": "carol", "password": "secret12", "email": "carol@example.com"},
     ).json()
     c = client.post(
         "/v1/auth/register",
-        json={"username": "dave", "password": "secret12"},
+        json={"username": "dave", "password": "secret12", "email": "dave@example.com"},
     ).json()
 
     assert client.post(f"/v1/admin/users/{a['user_id']}/approve", headers=_admin()).status_code == 200
@@ -92,12 +98,20 @@ def test_duplicate_username(client: TestClient):
     assert (
         client.post(
             "/v1/auth/register",
-            json={"username": "dupuser", "password": "secret12"},
+            json={
+                "username": "dupuser",
+                "password": "secret12",
+                "email": "dupuser@example.com",
+            },
         ).status_code
         == 200
     )
     again = client.post(
         "/v1/auth/register",
-        json={"username": "dupuser", "password": "secret99"},
+        json={
+            "username": "dupuser",
+            "password": "secret99",
+            "email": "dupuser2@example.com",
+        },
     )
     assert again.status_code == 400

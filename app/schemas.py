@@ -381,6 +381,7 @@ class AuthRegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=32)
     password: str = Field(..., min_length=6, max_length=128)
     display_name: str = Field(default="", max_length=64)
+    email: str = Field(..., min_length=3, max_length=254)
 
 
 class AuthLoginRequest(BaseModel):
@@ -405,6 +406,53 @@ class AuthLoginResponse(BaseModel):
     daily_generate_limit: int
     daily_polish_limit: int
     status: str
+    email: str = ""
+
+
+class AuthProfileResponse(BaseModel):
+    user_id: str
+    username: str
+    name: str
+    email: str = ""
+
+
+class AuthBindEmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(..., min_length=1, max_length=128)
+    email: str = Field(..., min_length=3, max_length=254)
+
+
+class AuthBindEmailResponse(BaseModel):
+    ok: bool = True
+    message: str = "邮箱已绑定"
+    email: str = ""
+
+
+class AuthPasswordResetSendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(..., min_length=3, max_length=254)
+
+
+class AuthPasswordResetSendResponse(BaseModel):
+    ok: bool = True
+    message: str = "验证码已发送"
+    cooldown_seconds: int = 60
+
+
+class AuthPasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(..., min_length=3, max_length=254)
+    code: str = Field(..., min_length=4, max_length=8)
+    new_password: str = Field(..., min_length=6, max_length=128)
+    confirm_password: str = Field(..., min_length=6, max_length=128)
+
+
+class AuthPasswordResetResponse(BaseModel):
+    ok: bool = True
+    message: str = "密码已重置"
 
 
 class AuthChangePasswordRequest(BaseModel):
@@ -577,6 +625,7 @@ class AdminUserResponse(BaseModel):
     id: str
     name: str
     username: str = ""
+    email: str = ""
     status: str = "active"
     api_key_prefix: str
     enabled: bool

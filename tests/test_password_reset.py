@@ -23,7 +23,11 @@ def _admin():
 def test_admin_reset_and_user_change_password(client: TestClient):
     reg = client.post(
         "/v1/auth/register",
-        json={"username": "pwduser", "password": "oldpass1"},
+        json={
+            "username": "pwduser",
+            "password": "oldpass1",
+            "email": "pwduser@example.com",
+        },
     )
     assert reg.status_code == 200
     uid = reg.json()["user_id"]

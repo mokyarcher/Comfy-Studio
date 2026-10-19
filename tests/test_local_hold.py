@@ -71,7 +71,12 @@ def test_generate_rejected_while_held(client: TestClient, monkeypatch: pytest.Mo
 def test_non_admin_cannot_set_hold(client: TestClient):
     created = client.post(
         "/v1/auth/register",
-        json={"username": "holduser", "password": "secret12", "display_name": "占用测试"},
+        json={
+            "username": "holduser",
+            "password": "secret12",
+            "display_name": "占用测试",
+            "email": "holduser@example.com",
+        },
     )
     assert created.status_code == 200
     user_id = created.json()["user_id"]
