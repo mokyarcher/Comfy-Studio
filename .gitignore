@@ -20,6 +20,7 @@ desktop/**/dist/
 .DS_Store
 
 # Local / tooling leftovers
+recover/
 desktop/**/release-*/
 desktop/**/win-unpacked-old-*/
 other/_t.png
