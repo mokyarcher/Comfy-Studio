@@ -1,9 +1,9 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { GlassSelect } from '@/components/GlassSelect'
 import { GlassSwitch } from '@/components/GlassSwitch'
 import { BACKGROUNDS, BACKGROUND_PAGE_SIZE, preloadBackground } from '@/lib/backgrounds'
-import { authChangePassword, testConnection } from '@/lib/api'
+import { authBindEmail, authChangePassword, authProfile, testConnection } from '@/lib/api'
 import {
   IMAGE_MAX_SIDE,
   SIZE_MULTIPLE,
@@ -26,6 +26,7 @@ import { useToast } from '@/store/toast'
 export function SettingsPage() {
   const user = useSession((s) => s.user)!
   const logout = useSession((s) => s.logout)
+  const patchUser = useSession((s) => s.patchUser)
   const settings = useSettings()
   const patch = useSettings((s) => s.patch)
   const maxSteps = useServerLimits((s) => s.maxSteps)
@@ -35,6 +36,8 @@ export function SettingsPage() {
   const push = useToast((s) => s.push)
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
+  const [bindEmail, setBindEmail] = useState('')
+  const [bindPassword, setBindPassword] = useState('')
   const bgPageCount = Math.max(1, Math.ceil(BACKGROUNDS.length / BACKGROUND_PAGE_SIZE))
   const [bgPage, setBgPage] = useState(() => {
     const idx = BACKGROUNDS.findIndex((b) => b.id === settings.backgroundId)
@@ -44,6 +47,18 @@ export function SettingsPage() {
     const start = bgPage * BACKGROUND_PAGE_SIZE
     return BACKGROUNDS.slice(start, start + BACKGROUND_PAGE_SIZE)
   }, [bgPage])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const r = await authProfile(user.apiKey)
+      if (cancelled || !r.ok || r.email == null) return
+      patchUser({ email: r.email })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user.apiKey, patchUser])
 
   async function onChangePassword(e: FormEvent) {
     e.preventDefault()
@@ -56,6 +71,21 @@ export function SettingsPage() {
     if (r.ok) {
       setOldPw('')
       setNewPw('')
+    }
+  }
+
+  async function onBindEmail(e: FormEvent) {
+    e.preventDefault()
+    const r = await authBindEmail({
+      apiKey: user.apiKey,
+      password: bindPassword,
+      email: bindEmail.trim()
+    })
+    push(r.message, r.ok ? 'success' : 'error')
+    if (r.ok) {
+      patchUser({ email: r.email || bindEmail.trim() })
+      setBindEmail('')
+      setBindPassword('')
     }
   }
 
@@ -206,6 +236,10 @@ export function SettingsPage() {
           <p className="text-xs text-muted">
             {user.username} · Key {maskedKey(user)}
           </p>
+          <p className="text-xs text-muted">
+            找回邮箱：
+            {user.email ? <span className="text-text">{user.email}</span> : '未绑定'}
+          </p>
           <button
             type="button"
             className="btn-secondary text-xs"
@@ -235,6 +269,32 @@ export function SettingsPage() {
             />
             <button type="submit" className="btn-secondary">
               修改密码
+            </button>
+          </form>
+          <form className="space-y-2.5" onSubmit={onBindEmail}>
+            <p className="text-[11px] text-muted">
+              {user.email
+                ? '更换找回邮箱（需验证当前密码，不会发邮件）'
+                : '绑定找回邮箱（需验证当前密码，不会发邮件）'}
+            </p>
+            <input
+              className="input"
+              type="email"
+              placeholder={user.email ? '新邮箱' : '邮箱'}
+              value={bindEmail}
+              onChange={(e) => setBindEmail(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="当前密码"
+              value={bindPassword}
+              onChange={(e) => setBindPassword(e.target.value)}
+              required
+            />
+            <button type="submit" className="btn-secondary">
+              {user.email ? '更新邮箱' : '绑定邮箱'}
             </button>
           </form>
           <div className="border-t border-border pt-3">

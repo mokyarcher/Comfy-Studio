@@ -131,3 +131,22 @@ def test_password_reset_unknown_email(client: TestClient):
         json={"email": "nobody@example.com"},
     )
     assert res.status_code == 404
+
+
+def test_login_with_email(client: TestClient):
+    key = _register_and_approve(client, "emaillogin", "emaillogin@example.com")
+    _ = key
+    by_email = client.post(
+        "/v1/auth/login",
+        json={"username": "emaillogin@example.com", "password": "secret12"},
+    )
+    assert by_email.status_code == 200
+    assert by_email.json()["username"] == "emaillogin"
+    assert by_email.json()["email"] == "emaillogin@example.com"
+
+    by_user = client.post(
+        "/v1/auth/login",
+        json={"username": "emaillogin", "password": "secret12"},
+    )
+    assert by_user.status_code == 200
+    assert by_user.json()["api_key"]

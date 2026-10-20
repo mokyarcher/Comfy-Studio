@@ -610,7 +610,7 @@ export function CreatePage() {
               </div>
             )}
 
-            {!busy && recent.length ? (
+            {!busy && recent.length && settings.showRecentWorks ? (
               <div className="mt-3 min-h-0 max-h-[42%] overflow-auto">
                 <p className="mb-2 text-xs font-medium text-muted">
                   {pickingRecent ? `选择要清除的预览 · 已选 ${pickedRecent.size}` : '最近作品'}
@@ -656,15 +656,29 @@ export function CreatePage() {
               </div>
             ) : null}
 
-            <div className="mt-3 flex shrink-0 items-center justify-between gap-3">
-              <GlassSwitch
-                className="min-w-0"
-                label="保存至云端"
-                checked={settings.saveToCloud}
-                disabled={busy}
-                onChange={(v) => patchSettings({ saveToCloud: v })}
-              />
-              {!busy && recent.length ? (
+            <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                <GlassSwitch
+                  className="min-w-0"
+                  label="保存至云端"
+                  checked={settings.saveToCloud}
+                  disabled={busy}
+                  onChange={(v) => patchSettings({ saveToCloud: v })}
+                />
+                {recent.length ? (
+                  <GlassSwitch
+                    className="min-w-0"
+                    label="最近作品"
+                    checked={settings.showRecentWorks}
+                    disabled={busy}
+                    onChange={(v) => {
+                      if (!v) cancelPickRecent()
+                      patchSettings({ showRecentWorks: v })
+                    }}
+                  />
+                ) : null}
+              </div>
+              {!busy && recent.length && settings.showRecentWorks ? (
                 pickingRecent ? (
                   <div className="flex shrink-0 items-center gap-2">
                     <GlassButton className="glass-cta-btn-sm" onClick={cancelPickRecent}>

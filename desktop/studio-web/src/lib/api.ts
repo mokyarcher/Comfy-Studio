@@ -106,6 +106,7 @@ export async function authRegister(opts: {
   username: string
   password: string
   displayName?: string
+  email: string
 }): Promise<{ ok: boolean; message: string }> {
   const url = joinUrl(opts.baseUrl ?? apiBase(), '/v1/auth/register')
   try {
@@ -116,7 +117,8 @@ export async function authRegister(opts: {
       body: JSON.stringify({
         username: opts.username,
         password: opts.password,
-        display_name: opts.displayName || opts.username
+        display_name: opts.displayName || opts.username,
+        email: opts.email
       })
     })
     const body = await parseJsonSafe(res)
@@ -139,6 +141,7 @@ export async function authLogin(opts: {
   userId?: string
   username?: string
   name?: string
+  email?: string
 }> {
   const url = joinUrl(opts.baseUrl ?? apiBase(), '/v1/auth/login')
   try {
@@ -155,6 +158,7 @@ export async function authLogin(opts: {
       user_id?: string
       username?: string
       name?: string
+      email?: string
     }
     if (!b.api_key) return { ok: false, message: '登录响应缺少 API Key' }
     return {
@@ -163,7 +167,44 @@ export async function authLogin(opts: {
       apiKey: b.api_key,
       userId: b.user_id,
       username: b.username,
-      name: b.name
+      name: b.name,
+      email: b.email || ''
+    }
+  } catch (err) {
+    return { ok: false, message: mapNetworkError(err) }
+  }
+}
+
+export async function authProfile(apiKey: string): Promise<{
+  ok: boolean
+  message: string
+  email?: string
+  username?: string
+  name?: string
+  userId?: string
+}> {
+  const url = joinUrl(apiBase(), '/v1/auth/profile')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      timeoutMs: 15_000,
+      headers: authHeaders(apiKey)
+    })
+    const body = await parseJsonSafe(res)
+    if (!res.ok) return { ok: false, message: detailMessage(body, mapHttpError(res.status, body)) }
+    const b = (body ?? {}) as {
+      email?: string
+      username?: string
+      name?: string
+      user_id?: string
+    }
+    return {
+      ok: true,
+      message: 'ok',
+      email: b.email || '',
+      username: b.username,
+      name: b.name,
+      userId: b.user_id
     }
   } catch (err) {
     return { ok: false, message: mapNetworkError(err) }
@@ -190,6 +231,88 @@ export async function authChangePassword(opts: {
     if (!res.ok) return { ok: false, message: detailMessage(body, mapHttpError(res.status, body)) }
     const b = (body ?? {}) as { message?: string }
     return { ok: true, message: b.message || '密码已修改' }
+  } catch (err) {
+    return { ok: false, message: mapNetworkError(err) }
+  }
+}
+
+export async function authBindEmail(opts: {
+  apiKey: string
+  password: string
+  email: string
+}): Promise<{ ok: boolean; message: string; email?: string }> {
+  const url = joinUrl(apiBase(), '/v1/auth/email')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      timeoutMs: 15_000,
+      headers: authHeaders(opts.apiKey, true),
+      body: JSON.stringify({ password: opts.password, email: opts.email })
+    })
+    const body = await parseJsonSafe(res)
+    if (!res.ok) return { ok: false, message: detailMessage(body, mapHttpError(res.status, body)) }
+    const b = (body ?? {}) as { message?: string; email?: string }
+    return { ok: true, message: b.message || '邮箱已绑定', email: b.email || opts.email }
+  } catch (err) {
+    return { ok: false, message: mapNetworkError(err) }
+  }
+}
+
+export async function authPasswordResetSend(email: string): Promise<{
+  ok: boolean
+  message: string
+  cooldownSeconds: number
+}> {
+  const url = joinUrl(apiBase(), '/v1/auth/password-reset/send')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      timeoutMs: 20_000,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    const body = await parseJsonSafe(res)
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: detailMessage(body, mapHttpError(res.status, body)),
+        cooldownSeconds: 0
+      }
+    }
+    const b = (body ?? {}) as { message?: string; cooldown_seconds?: number }
+    return {
+      ok: true,
+      message: b.message || '验证码已发送',
+      cooldownSeconds: b.cooldown_seconds ?? 60
+    }
+  } catch (err) {
+    return { ok: false, message: mapNetworkError(err), cooldownSeconds: 0 }
+  }
+}
+
+export async function authPasswordReset(opts: {
+  email: string
+  code: string
+  newPassword: string
+  confirmPassword: string
+}): Promise<{ ok: boolean; message: string }> {
+  const url = joinUrl(apiBase(), '/v1/auth/password-reset')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      timeoutMs: 15_000,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        email: opts.email,
+        code: opts.code,
+        new_password: opts.newPassword,
+        confirm_password: opts.confirmPassword
+      })
+    })
+    const body = await parseJsonSafe(res)
+    if (!res.ok) return { ok: false, message: detailMessage(body, mapHttpError(res.status, body)) }
+    const b = (body ?? {}) as { message?: string }
+    return { ok: true, message: b.message || '密码已重置' }
   } catch (err) {
     return { ok: false, message: mapNetworkError(err) }
   }

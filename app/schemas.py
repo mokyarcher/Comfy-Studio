@@ -387,7 +387,8 @@ class AuthRegisterRequest(BaseModel):
 class AuthLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    username: str = Field(..., min_length=1, max_length=32)
+    # Username or bound email (same JSON field for Studio Web compatibility)
+    username: str = Field(..., min_length=1, max_length=254)
     password: str = Field(..., min_length=1, max_length=128)
 
 

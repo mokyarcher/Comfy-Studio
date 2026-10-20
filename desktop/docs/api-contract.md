@@ -211,7 +211,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
 - 首次启动：若 `users.db` 为空，将 `.env` 的 `API_KEY` 导入为**管理员**（Gateway 管理用，不占名额）。
 - 用户自助：
   - `POST /v1/auth/register` `{username, password, display_name?, email}` → `pending`（尚无 Key；邮箱唯一）
-  - `POST /v1/auth/login` → 仅 `active` 返回 `api_key` + `email`；pending/rejected/disabled 返回 403
+  - `POST /v1/auth/login` `{ username, password }` → `username` 可为**用户名或已绑定邮箱**；仅 `active` 返回 `api_key` + `email`；pending/rejected/disabled 返回 403
   - `GET /v1/auth/profile`（`X-API-Key`）→ `{ user_id, username, name, email }`
   - `POST /v1/auth/email`（`X-API-Key`）`{ password, email }` → 校验当前密码后绑定/更换找回邮箱（**不发邮件**）
   - `POST /v1/auth/password-reset/send` `{ email }` → 向已绑定邮箱发验证码（`cooldown_seconds`）；未绑定 404

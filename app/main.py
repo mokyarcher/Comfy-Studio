@@ -1170,7 +1170,12 @@ def create_app() -> FastAPI:
         if user is None:
             # Bootstrap admin may have no password — allow login with username=admin
             # and password equal to API_KEY only if admin has empty password_hash
-            admin = state.user_store.find_by_username(body.username)
+            lookup = body.username.strip()
+            admin = (
+                None
+                if "@" in lookup
+                else state.user_store.find_by_username(lookup)
+            )
             if (
                 admin
                 and admin.is_admin
@@ -1179,7 +1184,7 @@ def create_app() -> FastAPI:
             ):
                 user = admin
             else:
-                raise HTTPException(status_code=401, detail="用户名或密码错误")
+                raise HTTPException(status_code=401, detail="用户名/邮箱或密码错误")
 
         if user.status == STATUS_PENDING:
             raise HTTPException(status_code=403, detail="账号待管理员审核，请稍后再试")

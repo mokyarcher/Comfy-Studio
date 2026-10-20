@@ -324,8 +324,16 @@ class UserStore:
             ).fetchone()
         return self._row_to_user(row) if row else None
 
-    def authenticate(self, username: str, password: str) -> ApiUser | None:
-        user = self.find_by_username(username)
+    def authenticate(self, username_or_email: str, password: str) -> ApiUser | None:
+        """Login with username or bound email (field name stays ``username`` for clients)."""
+        raw = (username_or_email or "").strip()
+        if not raw:
+            return None
+        user: ApiUser | None = None
+        if "@" in raw:
+            user = self.find_by_email(raw)
+        if user is None:
+            user = self.find_by_username(raw)
         if user is None or not user.password_hash:
             return None
         if not verify_password(password, user.password_hash):

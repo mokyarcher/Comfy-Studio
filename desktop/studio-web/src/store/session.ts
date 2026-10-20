@@ -10,6 +10,7 @@ export type SessionUser = {
   username: string
   name?: string
   userId?: string
+  email?: string
 }
 
 type SessionState = {
@@ -18,6 +19,7 @@ type SessionState = {
   hydrated: boolean
   hydrate: () => void
   login: (user: SessionUser, remember: boolean) => void
+  patchUser: (p: Partial<SessionUser>) => void
   logout: () => void
   setRemember: (v: boolean) => void
 }
@@ -34,7 +36,14 @@ function readStored(): SessionUser | null {
   }
 }
 
-export const useSession = create<SessionState>((set) => ({
+function persistUser(user: SessionUser, remember: boolean) {
+  const payload = JSON.stringify(user)
+  sessionStorage.setItem(SESSION_KEY, payload)
+  if (remember) localStorage.setItem(REMEMBER_KEY, payload)
+  else localStorage.removeItem(REMEMBER_KEY)
+}
+
+export const useSession = create<SessionState>((set, get) => ({
   user: null,
   remember: Boolean(localStorage.getItem(REMEMBER_KEY)),
   hydrated: false,
@@ -42,11 +51,15 @@ export const useSession = create<SessionState>((set) => ({
     set({ user: readStored(), remember: Boolean(localStorage.getItem(REMEMBER_KEY)), hydrated: true })
   },
   login: (user, remember) => {
-    const payload = JSON.stringify(user)
-    sessionStorage.setItem(SESSION_KEY, payload)
-    if (remember) localStorage.setItem(REMEMBER_KEY, payload)
-    else localStorage.removeItem(REMEMBER_KEY)
+    persistUser(user, remember)
     set({ user, remember })
+  },
+  patchUser: (p) => {
+    const cur = get().user
+    if (!cur) return
+    const next = { ...cur, ...p }
+    persistUser(next, get().remember)
+    set({ user: next })
   },
   logout: () => {
     sessionStorage.removeItem(SESSION_KEY)

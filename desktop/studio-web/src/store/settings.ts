@@ -12,6 +12,8 @@ export type AppSettings = {
   autoPurge: boolean
   /** Upload result to Gateway private cloud gallery after success. */
   saveToCloud: boolean
+  /** Show recent works strip under the create preview. */
+  showRecentWorks: boolean
   polishLanguage: 'match_input' | 'zh' | 'en'
   polishDetail: 'concise' | 'standard' | 'detailed'
   polishProfile: 'sdxl' | 'flux' | 'unknown' | 'wan'
@@ -52,6 +54,7 @@ const defaults: AppSettings = {
   jobTimeoutMs: 900_000,
   autoPurge: true,
   saveToCloud: true,
+  showRecentWorks: true,
   polishLanguage: 'match_input',
   polishDetail: 'standard',
   polishProfile: 'unknown',

@@ -6,11 +6,19 @@ import { GlassSwitch } from '@/components/GlassSwitch'
 import { SlidingSeg } from '@/components/SlidingSeg'
 import { ToastHost } from '@/components/ToastHost'
 import { WorkspaceBackground } from '@/components/WorkspaceBackground'
-import { authLogin, authRegister, testConnection } from '@/lib/api'
+import {
+  authLogin,
+  authPasswordReset,
+  authPasswordResetSend,
+  authRegister,
+  testConnection
+} from '@/lib/api'
 import { preloadBackground } from '@/lib/backgrounds'
 import { useSession } from '@/store/session'
 import { useSettings } from '@/store/settings'
 import { useToast } from '@/store/toast'
+
+type AuthMode = 'login' | 'register' | 'reset'
 
 export function AuthPage() {
   const navigate = useNavigate()
@@ -21,10 +29,15 @@ export function AuthPage() {
   const setRemember = useSession((s) => s.setRemember)
   const backgroundId = useSettings((s) => s.backgroundId)
   const push = useToast((s) => s.push)
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<AuthMode>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [cooldown, setCooldown] = useState(0)
   const [busy, setBusy] = useState(false)
   const [healthMsg, setHealthMsg] = useState('')
 
@@ -32,6 +45,14 @@ export function AuthPage() {
   useEffect(() => {
     void preloadBackground(backgroundId)
   }, [backgroundId])
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = window.setInterval(() => {
+      setCooldown((c) => (c <= 1 ? 0 : c - 1))
+    }, 1000)
+    return () => window.clearInterval(t)
+  }, [cooldown])
 
   if (hydrated && user) {
     return <Navigate to="/home" replace />
@@ -43,12 +64,49 @@ export function AuthPage() {
     push(r.ok ? `连接正常 · ${r.latencyMs} ms` : r.message, r.ok ? 'success' : 'error')
   }
 
+  async function onSendCode() {
+    if (!email.trim()) {
+      push('请填写邮箱', 'error')
+      return
+    }
+    setBusy(true)
+    try {
+      const r = await authPasswordResetSend(email.trim())
+      push(r.message, r.ok ? 'success' : 'error')
+      if (r.ok && r.cooldownSeconds > 0) setCooldown(r.cooldownSeconds)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setBusy(true)
     try {
+      if (mode === 'reset') {
+        const r = await authPasswordReset({
+          email: email.trim(),
+          code: code.trim(),
+          newPassword,
+          confirmPassword
+        })
+        push(r.message, r.ok ? 'success' : 'error')
+        if (r.ok) {
+          setMode('login')
+          setCode('')
+          setNewPassword('')
+          setConfirmPassword('')
+          setPassword('')
+        }
+        return
+      }
       if (mode === 'register') {
-        const r = await authRegister({ username, password, displayName })
+        const r = await authRegister({
+          username,
+          password,
+          displayName,
+          email: email.trim()
+        })
         push(r.message, r.ok ? 'success' : 'error')
         if (r.ok) setMode('login')
         return
@@ -63,7 +121,8 @@ export function AuthPage() {
           apiKey: r.apiKey,
           username: r.username || username,
           name: r.name,
-          userId: r.userId
+          userId: r.userId,
+          email: r.email || ''
         },
         remember
       )
@@ -106,50 +165,163 @@ export function AuthPage() {
           </div>
         </div>
 
-        <SlidingSeg
-          className="mb-4 w-full"
-          aria-label="登录或注册"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'login', label: '登录' },
-            { value: 'register', label: '注册' }
-          ]}
-        />
+        {mode === 'reset' ? (
+          <h2 className="mb-4 text-sm font-medium text-text">重置密码</h2>
+        ) : (
+          <SlidingSeg
+            className="mb-4 w-full"
+            aria-label="登录或注册"
+            value={mode === 'register' ? 'register' : 'login'}
+            onChange={(v) => setMode(v)}
+            options={[
+              { value: 'login', label: '登录' },
+              { value: 'register', label: '注册' }
+            ]}
+          />
+        )}
 
         <form className="space-y-3" onSubmit={onSubmit}>
-          <div>
-            <label className="label">账号</label>
-            <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" />
-          </div>
-          {mode === 'register' ? (
-            <div>
-              <label className="label">显示名</label>
-              <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="可选" />
-            </div>
-          ) : null}
-          <div>
-            <label className="label">密码</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            />
-          </div>
-          {mode === 'login' ? (
-            <GlassSwitch
-              label="记住账号"
-              description="公用电脑请勿开启；凭证会写到本机长期保存。"
-              checked={remember}
-              onChange={setRemember}
-            />
-          ) : null}
+          {mode === 'reset' ? (
+            <>
+              <div>
+                <label className="label">邮箱</label>
+                <div className="flex gap-2">
+                  <input
+                    className="input min-w-0 flex-1"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0 px-3 text-xs"
+                    disabled={busy || cooldown > 0}
+                    onClick={() => void onSendCode()}
+                  >
+                    {cooldown > 0 ? `${cooldown}s` : '发送验证码'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="label">验证码</label>
+                <input
+                  className="input"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <div>
+                <label className="label">新密码</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <label className="label">确认新密码</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="label">{mode === 'login' ? '账号 / 邮箱' : '账号'}</label>
+                <input
+                  className="input"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  autoComplete="username"
+                  placeholder={mode === 'login' ? '用户名或邮箱' : undefined}
+                />
+              </div>
+              {mode === 'register' ? (
+                <>
+                  <div>
+                    <label className="label">邮箱</label>
+                    <input
+                      className="input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">显示名</label>
+                    <input
+                      className="input"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="可选"
+                    />
+                  </div>
+                </>
+              ) : null}
+              <div>
+                <label className="label">密码</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                />
+              </div>
+              {mode === 'login' ? (
+                <GlassSwitch
+                  label="记住账号"
+                  description="公用电脑请勿开启；凭证会写到本机长期保存。"
+                  checked={remember}
+                  onChange={setRemember}
+                />
+              ) : null}
+            </>
+          )}
           <button type="submit" className="btn-primary w-full" disabled={busy}>
-            {busy ? '处理中…' : mode === 'login' ? '登录' : '提交注册'}
+            {busy
+              ? '处理中…'
+              : mode === 'login'
+                ? '登录'
+                : mode === 'register'
+                  ? '提交注册'
+                  : '重置密码'}
           </button>
+          {mode === 'login' ? (
+            <button
+              type="button"
+              className="w-full text-center text-xs text-muted hover:text-text"
+              onClick={() => setMode('reset')}
+            >
+              忘记密码
+            </button>
+          ) : null}
+          {mode === 'reset' ? (
+            <button
+              type="button"
+              className="w-full text-center text-xs text-muted hover:text-text"
+              onClick={() => setMode('login')}
+            >
+              返回登录
+            </button>
+          ) : null}
         </form>
 
         <div className="mt-4 flex items-center justify-between gap-2">
