@@ -1,16 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Copy, Download, Expand, Loader2, Trash2, X } from 'lucide-react'
+import {
+  Bookmark,
+  Copy,
+  Download,
+  Expand,
+  Heart,
+  Loader2,
+  MessageCircle,
+  Trash2,
+  X
+} from 'lucide-react'
 import { WorkDetailMeta } from '@/components/WorkDetailMeta'
 import { findByShowcaseId } from '@/lib/gallery-db'
-import { fetchAuthedBlob, listShowcase, unlistShowcase } from '@/lib/api'
+import {
+  addShowcaseComment,
+  deleteShowcaseComment,
+  fetchAuthedBlob,
+  listShowcase,
+  listShowcaseComments,
+  toggleShowcaseFavorite,
+  toggleShowcaseLike,
+  unlistShowcase
+} from '@/lib/api'
 import { formatDateTime, modeLabel } from '@/lib/format'
-import type { GenerateMode, ShowcaseItem } from '@/lib/types'
+import type { GenerateMode, ShowcaseComment, ShowcaseEngagement, ShowcaseItem } from '@/lib/types'
 import { useSession } from '@/store/session'
 import { useToast } from '@/store/toast'
 
 type Row = ShowcaseItem & { thumb?: string }
-type BusyAction = 'download' | 'unlist' | null
+type BusyAction = 'download' | 'unlist' | 'like' | 'favorite' | 'comment' | null
+
+function applyEngagement(row: Row, eng: ShowcaseEngagement): Row {
+  return { ...row, ...eng }
+}
 
 export function ShowcasePage() {
   const apiKey = useSession((s) => s.user!.apiKey)
@@ -23,6 +46,9 @@ export function ShowcasePage() {
   const [loadingFull, setLoadingFull] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [busy, setBusy] = useState<BusyAction>(null)
+  const [comments, setComments] = useState<ShowcaseComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentDraft, setCommentDraft] = useState('')
   /** Keep full-res object URLs across open/close — avoid re-download every click. */
   const fullCacheRef = useRef(new Map<string, string>())
   const inflightRef = useRef(new Map<string, Promise<string>>())
@@ -32,6 +58,11 @@ export function ShowcasePage() {
     for (const url of fullCacheRef.current.values()) URL.revokeObjectURL(url)
     fullCacheRef.current.clear()
     inflightRef.current.clear()
+  }
+
+  function patchItem(id: string, patch: Partial<Row>) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+    setActive((cur) => (cur && cur.id === id ? { ...cur, ...patch } : cur))
   }
 
   async function ensureFullUrl(item: Row): Promise<string> {
@@ -93,10 +124,29 @@ export function ShowcasePage() {
           fullCacheRef.current.delete(id)
         }
       }
+      if (activeIdRef.current) {
+        const fresh = withThumbs.find((i) => i.id === activeIdRef.current)
+        if (fresh) setActive((cur) => (cur ? { ...fresh, thumb: cur.thumb } : fresh))
+      }
     } catch (err) {
       push(err instanceof Error ? err.message : '加载失败', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadComments(itemId: string) {
+    setCommentsLoading(true)
+    try {
+      const { items: rows } = await listShowcaseComments({ apiKey, itemId, limit: 100 })
+      if (activeIdRef.current === itemId) setComments(rows)
+    } catch (err) {
+      if (activeIdRef.current === itemId) {
+        push(err instanceof Error ? err.message : '评论加载失败', 'error')
+        setComments([])
+      }
+    } finally {
+      if (activeIdRef.current === itemId) setCommentsLoading(false)
     }
   }
 
@@ -125,6 +175,9 @@ export function ShowcasePage() {
     setFullscreen(false)
     activeIdRef.current = item.id
     setActive(item)
+    setCommentDraft('')
+    setComments([])
+    void loadComments(item.id)
 
     const cached = fullCacheRef.current.get(item.id)
     if (cached) {
@@ -155,6 +208,8 @@ export function ShowcasePage() {
     setActive(null)
     setActiveUrl(null)
     setLoadingFull(false)
+    setComments([])
+    setCommentDraft('')
   }
 
   async function onCopy(item: Row) {
@@ -222,6 +277,68 @@ export function ShowcasePage() {
     }
   }
 
+  async function onLike(item: Row) {
+    if (busy) return
+    setBusy('like')
+    try {
+      const eng = await toggleShowcaseLike({ apiKey, itemId: item.id })
+      patchItem(item.id, applyEngagement(item, eng))
+    } catch (err) {
+      push(err instanceof Error ? err.message : '点赞失败', 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function onFavorite(item: Row) {
+    if (busy) return
+    setBusy('favorite')
+    try {
+      const eng = await toggleShowcaseFavorite({ apiKey, itemId: item.id })
+      patchItem(item.id, applyEngagement(item, eng))
+    } catch (err) {
+      push(err instanceof Error ? err.message : '收藏失败', 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function onSubmitComment() {
+    if (!active || busy) return
+    const body = commentDraft.trim()
+    if (!body) {
+      push('请输入评论', 'error')
+      return
+    }
+    setBusy('comment')
+    try {
+      const row = await addShowcaseComment({ apiKey, itemId: active.id, body })
+      setComments((prev) => [...prev, row])
+      setCommentDraft('')
+      patchItem(active.id, { comment_count: (active.comment_count || 0) + 1 })
+    } catch (err) {
+      push(err instanceof Error ? err.message : '评论失败', 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function onDeleteComment(c: ShowcaseComment) {
+    if (!active || busy || !c.mine) return
+    setBusy('comment')
+    try {
+      await deleteShowcaseComment({ apiKey, itemId: active.id, commentId: c.id })
+      setComments((prev) => prev.filter((x) => x.id !== c.id))
+      patchItem(active.id, {
+        comment_count: Math.max(0, (active.comment_count || 1) - 1)
+      })
+    } catch (err) {
+      push(err instanceof Error ? err.message : '删除失败', 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const mediaSrc = activeUrl || active?.thumb || ''
 
   return (
@@ -267,6 +384,24 @@ export function ShowcasePage() {
                   {item.author_name} · {modeLabel(item.mode)}
                 </span>
                 {item.mine ? <span className="shrink-0 text-accent">我的</span> : null}
+              </div>
+              <div className="flex items-center gap-2.5 text-[10px] text-muted">
+                <span className="inline-flex items-center gap-0.5">
+                  <Heart
+                    className={`h-3 w-3 ${item.liked_by_me ? 'fill-primary text-primary' : ''}`}
+                  />
+                  {item.like_count || 0}
+                </span>
+                <span className="inline-flex items-center gap-0.5">
+                  <Bookmark
+                    className={`h-3 w-3 ${item.favorited_by_me ? 'fill-primary text-primary' : ''}`}
+                  />
+                  {item.favorite_count || 0}
+                </span>
+                <span className="inline-flex items-center gap-0.5">
+                  <MessageCircle className="h-3 w-3" />
+                  {item.comment_count || 0}
+                </span>
               </div>
             </div>
           </button>
@@ -355,10 +490,112 @@ export function ShowcasePage() {
                   ) : null
                 }
               />
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  评论 {active.comment_count || 0}
+                </div>
+                {commentsLoading ? (
+                  <p className="text-xs text-muted">加载评论…</p>
+                ) : null}
+                {!commentsLoading && !comments.length ? (
+                  <p className="text-xs text-muted">暂无评论</p>
+                ) : null}
+                <ul className="space-y-2">
+                  {comments.map((c) => (
+                    <li
+                      key={c.id}
+                      className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-muted">
+                        <span className="truncate">
+                          {c.author_name}
+                          {c.mine ? ' · 我' : ''}
+                          {' · '}
+                          {formatDateTime(c.created_at)}
+                        </span>
+                        {c.mine ? (
+                          <button
+                            type="button"
+                            className="shrink-0 text-muted hover:text-danger"
+                            disabled={busy === 'comment'}
+                            onClick={() => void onDeleteComment(c)}
+                          >
+                            删除
+                          </button>
+                        ) : null}
+                      </div>
+                      <p className="whitespace-pre-wrap text-xs leading-relaxed text-text">
+                        {c.body}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input flex-1 text-xs"
+                    maxLength={500}
+                    placeholder="写一句评论"
+                    value={commentDraft}
+                    disabled={busy === 'comment'}
+                    onChange={(e) => setCommentDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void onSubmitComment()
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0 text-xs"
+                    disabled={busy === 'comment' || !commentDraft.trim()}
+                    onClick={() => void onSubmitComment()}
+                  >
+                    {busy === 'comment' ? <Loader2 className="h-4 w-4 animate-spin" /> : '发送'}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2 border-t border-border p-4">
               <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busy === 'like'}
+                  onClick={() => void onLike(active)}
+                >
+                  {busy === 'like' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Heart
+                      className={`h-4 w-4 ${active.liked_by_me ? 'fill-primary text-primary' : ''}`}
+                    />
+                  )}
+                  {active.liked_by_me ? '已赞' : '点赞'}
+                  {(active.like_count || 0) > 0 ? ` ${active.like_count}` : ''}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busy === 'favorite'}
+                  onClick={() => void onFavorite(active)}
+                >
+                  {busy === 'favorite' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Bookmark
+                      className={`h-4 w-4 ${
+                        active.favorited_by_me ? 'fill-primary text-primary' : ''
+                      }`}
+                    />
+                  )}
+                  {active.favorited_by_me ? '已藏' : '收藏'}
+                  {(active.favorite_count || 0) > 0 ? ` ${active.favorite_count}` : ''}
+                </button>
                 <button
                   type="button"
                   className="btn-secondary"

@@ -59,7 +59,7 @@ export function SettingsPage() {
         />
         <PathField
           label="ComfyUI 目录"
-          hint="文件夹：含 main.py 的 ComfyUI 根目录"
+          hint="桌面版：含 main.py；便携版：ComfyUI_windows_portable（或外层安装夹）"
           value={draft.comfyUiDir}
           onChange={(v) => set('comfyUiDir', v)}
           onBrowse={() => void browseDir('comfyUiDir')}
@@ -67,7 +67,7 @@ export function SettingsPage() {
         <div>
           <label className="label">ComfyUI 启动命令</label>
           <p className="mb-1 text-xs text-muted">
-            在上述目录执行。请用 ComfyUI 的 .venv，不要写裸 python（会落到系统 Python 缺依赖）。
+            在解析后的目录执行。桌面版用 .venv；便携版用 python_embeded（可留默认，启动时会按目录类型自动校正）。勿写裸 python。
           </p>
           <input
             className="input font-mono text-sm"

@@ -12,6 +12,7 @@ import type {
   ProbeResult,
   ServiceRuntime
 } from '../shared/types'
+import { resolveComfyInstall, resolveComfyLaunch } from './comfyResolve'
 import { loadConfig, saveConfig, suggestApiProjectDir } from './config'
 import { testComfy, testLocalApi, testPublicApi } from './health'
 import { RingLogBuffer } from './logs'
@@ -248,30 +249,31 @@ export class ServiceManager {
       }
     }
 
-    const dir = this.config.comfyUiDir.trim()
-    let launch = (this.config.comfyUiLaunch || '').trim()
-    if (!dir || !existsSync(dir)) {
+    const rawDir = this.config.comfyUiDir.trim()
+    const install = resolveComfyInstall(rawDir)
+    if (!install) {
       return {
         ok: false,
-        message: '请先在设置中填写 ComfyUI 目录（含 main.py 的文件夹）'
+        message:
+          '请先在设置中填写 ComfyUI 目录：桌面版选含 main.py 的文件夹；便携版可选 ComfyUI_windows_portable（或外层安装夹）'
       }
+    }
+
+    const configuredLaunch = (this.config.comfyUiLaunch || '').trim()
+    const resolved = resolveComfyLaunch(install, configuredLaunch)
+    let launch = resolved.launch
+    if (resolved.rewrittenFrom !== undefined) {
+      this.logs.append(
+        'comfy',
+        'system',
+        `已按${install.kind === 'portable' ? '便携版' : '桌面版'}校正启动命令：${launch}`
+      )
     }
     if (!launch) {
       return { ok: false, message: '请先配置 ComfyUI 启动命令' }
     }
 
-    // Bare `python` hits system Python (often missing alembic/sqlalchemy).
-    // Prefer ComfyUI's own .venv when present.
-    const venvPy = join(dir, '.venv', 'Scripts', 'python.exe')
-    if (existsSync(venvPy) && /^(python|python\.exe|py)(\s|$)/i.test(launch)) {
-      const fixed = launch.replace(/^(python|python\.exe|py)\b/i, `"${venvPy}"`)
-      this.logs.append(
-        'comfy',
-        'system',
-        `启动命令含裸 python，已改用 ComfyUI .venv：${fixed}`
-      )
-      launch = fixed
-    }
+    const dir = install.cwd
 
     const port = comfyListenPort(this.config.comfyUrl)
     const listeners = findListeningPids(port)
@@ -287,7 +289,11 @@ export class ServiceManager {
       startedByApp: true,
       startedAt: new Date().toISOString()
     }
-    this.logs.append('comfy', 'system', `启动 ComfyUI：cwd=${dir} · ${launch}`)
+    this.logs.append(
+      'comfy',
+      'system',
+      `启动 ComfyUI（${install.kind}）：cwd=${dir} · ${launch}`
+    )
 
     try {
       const proc = spawnShellCommand(launch, dir)

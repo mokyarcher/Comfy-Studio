@@ -76,6 +76,13 @@ from app.schemas import (
     PurgeTaskResponse,
     CloudGalleryItemResponse,
     CloudGalleryListResponse,
+    WorkItemResponse,
+    WorkListResponse,
+    WorkCreateRequest,
+    ShowcaseCommentCreateRequest,
+    ShowcaseCommentListResponse,
+    ShowcaseCommentResponse,
+    ShowcaseEngagementResponse,
     ShowcaseItemResponse,
     ShowcaseListResponse,
     PromptPolishQuota,
@@ -94,6 +101,7 @@ from app.task_service import QueueFullError, TaskService, UnsupportedModeError
 from app.user_store import UserStore
 from app.cloud_gallery_store import CloudGalleryStore
 from app.showcase_store import ShowcaseStore
+from app.works_store import WorksStore
 from app.sms_auth import (
     COOKIE_NAME,
     SmsAuthStore,
@@ -118,15 +126,16 @@ logger = logging.getLogger(__name__)
 
 class AppState:
     settings: Settings
-    db: Database
-    comfy: ComfyClient
+    db: Database | None
+    comfy: ComfyClient | None
     registry: WorkflowRegistry
-    task_service: TaskService
-    worker: TaskWorker
+    task_service: TaskService | None
+    worker: TaskWorker | None
     polish_quota: PolishQuotaStore
     user_store: UserStore
     showcase: ShowcaseStore
     cloud_gallery: CloudGalleryStore
+    works: WorksStore
     sms_auth: SmsAuthStore
     email_reset: EmailResetStore
     prompt_library: PromptLibraryStore
@@ -143,11 +152,20 @@ async def _retention_loop() -> None:
     while True:
         try:
             await asyncio.sleep(interval)
-            await state.task_service.purge_stale_tasks()
+            if state.task_service is not None:
+                await state.task_service.purge_stale_tasks()
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
             logger.exception("Retention sweep failed")
+
+
+def _require_generation() -> None:
+    if not state.settings.enable_generation or state.task_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="generation disabled on this instance (meta data plane)",
+        )
 
 
 @asynccontextmanager
@@ -155,33 +173,49 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     setup_logging()
     settings = get_settings()
     state.settings = settings
+    settings.instance_data_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        registry = load_workflow_registry(
-            txt2img_workflow=settings.workflow_path,
-            txt2img_mapping=settings.workflow_mapping_path,
-            image_edit_workflow=settings.image_edit_workflow_path,
-            image_edit_mapping=settings.image_edit_workflow_mapping_path,
-            image_to_video_workflow=settings.image_to_video_workflow_path,
-            image_to_video_mapping=settings.image_to_video_workflow_mapping_path,
+    if settings.enable_generation:
+        try:
+            registry = load_workflow_registry(
+                txt2img_workflow=settings.workflow_path,
+                txt2img_mapping=settings.workflow_mapping_path,
+                image_edit_workflow=settings.image_edit_workflow_path,
+                image_edit_mapping=settings.image_edit_workflow_mapping_path,
+                image_to_video_workflow=settings.image_to_video_workflow_path,
+                image_to_video_mapping=settings.image_to_video_workflow_mapping_path,
+            )
+        except WorkflowError:
+            logger.exception("Failed to load workflow/mapping")
+            raise
+        settings.image_output_dir.mkdir(parents=True, exist_ok=True)
+        state.db = Database(settings.database_path)
+        state.comfy = ComfyClient(settings)
+        state.registry = registry
+        state.task_service = TaskService(settings, state.db, registry, state.comfy)
+        local_hold.clear()
+        state.worker = TaskWorker(
+            state.db, state.task_service, hold_checker=local_hold.is_held
         )
-    except WorkflowError:
-        logger.exception("Failed to load workflow/mapping")
-        raise
+    else:
+        state.db = None
+        state.comfy = None
+        state.registry = WorkflowRegistry(bundles={})
+        state.task_service = None
+        state.worker = None
+        logger.info(
+            "Meta data plane (ENABLE_GENERATION=false) instance_id=%s dir=%s",
+            settings.safe_instance_id,
+            settings.instance_data_dir,
+        )
 
-    settings.image_output_dir.mkdir(parents=True, exist_ok=True)
-    state.db = Database(settings.database_path)
-    state.comfy = ComfyClient(settings)
-    state.registry = registry
-    state.task_service = TaskService(settings, state.db, registry, state.comfy)
-    local_hold.clear()
-    state.worker = TaskWorker(state.db, state.task_service, hold_checker=local_hold.is_held)
     state.polish_quota = PolishQuotaStore(settings.polish_quota_db_path)
     state.user_store = UserStore(settings.users_db_path)
     state.showcase = ShowcaseStore(settings.showcase_db_path, settings.showcase_files_dir)
     state.cloud_gallery = CloudGalleryStore(
         settings.cloud_gallery_db_path, settings.cloud_gallery_files_dir
     )
+    state.works = WorksStore(settings.works_db_path)
     state.sms_auth = SmsAuthStore(settings.admin_sms_db_path)
     state.email_reset = EmailResetStore(settings.email_reset_db_path)
     state.prompt_library = PromptLibraryStore(settings.prompt_library_path)
@@ -193,18 +227,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.user_store = state.user_store
     app.state.settings = settings
     app.state.sms_auth = state.sms_auth
-    await state.worker.start()
+    if state.worker is not None:
+        await state.worker.start()
     state.retention_task = None
-    if settings.image_retention_days > 0:
+    if settings.enable_generation and settings.image_retention_days > 0:
         state.retention_task = asyncio.create_task(_retention_loop())
     logger.info(
-        "API listening on %s:%s (polish_enabled=%s users=%s modes=%s retention_days=%s)",
+        "API listening on %s:%s instance=%s generation=%s polish=%s users=%s modes=%s",
         settings.host,
         settings.port,
+        settings.safe_instance_id,
+        settings.enable_generation,
         settings.polish_enabled,
         len(state.user_store.list_users()),
-        ",".join(registry.modes),
-        settings.image_retention_days,
+        ",".join(state.registry.modes) or "(none)",
     )
     try:
         yield
@@ -216,8 +252,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             except asyncio.CancelledError:
                 pass
             state.retention_task = None
-        await state.worker.stop()
-        await state.comfy.aclose()
+        if state.worker is not None:
+            await state.worker.stop()
+        if state.comfy is not None:
+            await state.comfy.aclose()
 
 
 def create_app() -> FastAPI:
@@ -249,13 +287,21 @@ def create_app() -> FastAPI:
 
     @app.get("/health/ready", response_model=HealthReadyResponse, tags=["health"])
     async def health_ready() -> HealthReadyResponse:
+        s = state.settings
+        if not s.enable_generation or state.comfy is None:
+            return HealthReadyResponse(
+                status="ready",
+                comfyui="meta",
+                max_steps=s.max_steps,
+                max_width=s.max_width,
+                max_height=s.max_height,
+            )
         ok = await state.comfy.ping()
         if not ok:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={"status": "not_ready", "comfyui": "down"},
             )
-        s = state.settings
         return HealthReadyResponse(
             status="ready",
             comfyui="up",
@@ -274,6 +320,7 @@ def create_app() -> FastAPI:
         body: GenerateImageRequest,
         auth: AuthContext = Depends(require_auth),
     ) -> GenerateImageResponse:
+        _require_generation()
         if local_hold.is_held():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -291,6 +338,7 @@ def create_app() -> FastAPI:
                     "daily_generate_limit": limit,
                 },
             )
+        assert state.task_service is not None
         try:
             task = state.task_service.submit(body)
         except UnsupportedModeError as exc:
@@ -344,6 +392,7 @@ def create_app() -> FastAPI:
         file: UploadFile = File(...),
         auth: AuthContext = Depends(require_auth),
     ) -> UploadImageResponse:
+        _require_generation()
         raw_name = file.filename or "upload.png"
         suffix = PurePosixPath(raw_name).suffix.lower()
         if suffix not in _ALLOWED_UPLOAD_SUFFIXES:
@@ -368,6 +417,7 @@ def create_app() -> FastAPI:
                     "message": f"文件超过上限 {state.settings.max_upload_bytes} bytes",
                 },
             )
+        assert state.comfy is not None
         safe_name = f"studio_{auth.user.id[:8]}_{uuid.uuid4().hex[:12]}{suffix}"
         try:
             ref = await state.comfy.upload_image(
@@ -400,6 +450,8 @@ def create_app() -> FastAPI:
         tags=["tasks"],
     )
     async def get_task(task_id: str) -> TaskStatusResponse:
+        _require_generation()
+        assert state.task_service is not None
         result = state.task_service.get_status(task_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -412,6 +464,8 @@ def create_app() -> FastAPI:
         tags=["tasks"],
     )
     async def get_task_result(task_id: str) -> TaskResultResponse:
+        _require_generation()
+        assert state.task_service is not None
         result = state.task_service.get_result(task_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -423,6 +477,8 @@ def create_app() -> FastAPI:
         tags=["tasks"],
     )
     async def get_task_image(task_id: str, image_index: int) -> FileResponse:
+        _require_generation()
+        assert state.task_service is not None
         resolved = state.task_service.resolve_image_path(task_id, image_index)
         if resolved is None:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -443,6 +499,8 @@ def create_app() -> FastAPI:
         auth: AuthContext = Depends(require_auth),
     ) -> PurgeTaskResponse:
         # Auth required so only logged-in clients can purge; task ids are UUIDs.
+        _require_generation()
+        assert state.task_service is not None
         _ = auth
         try:
             result = await state.task_service.purge_task(task_id)
@@ -455,6 +513,34 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Task not found")
         return result
 
+    def _showcase_response(item, *, mine: bool, user_id: str) -> ShowcaseItemResponse:
+        eng = state.showcase.engagement_for(item.id, user_id)
+        return ShowcaseItemResponse(**{**item.to_public_dict(mine=mine), **eng})
+
+    def _showcase_list_response(items, *, user_id: str) -> ShowcaseListResponse:
+        eng_map = state.showcase.engagement_batch([it.id for it in items], user_id)
+        return ShowcaseListResponse(
+            items=[
+                ShowcaseItemResponse(
+                    **{
+                        **it.to_public_dict(mine=it.author_user_id == user_id),
+                        **eng_map.get(it.id, {}),
+                    }
+                )
+                for it in items
+            ],
+            count=len(items),
+        )
+
+    def _require_published_showcase(item_id: str, auth: AuthContext):
+        item = state.showcase.get(item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Showcase item not found")
+        mine = item.author_user_id == auth.user.id
+        if item.status != "published" and not mine:
+            raise HTTPException(status_code=404, detail="Showcase item not found")
+        return item, mine
+
     @app.get(
         "/v1/showcase",
         response_model=ShowcaseListResponse,
@@ -466,15 +552,7 @@ def create_app() -> FastAPI:
         auth: AuthContext = Depends(require_auth),
     ) -> ShowcaseListResponse:
         items = state.showcase.list_published(limit=limit, offset=offset)
-        return ShowcaseListResponse(
-            items=[
-                ShowcaseItemResponse(
-                    **it.to_public_dict(mine=it.author_user_id == auth.user.id)
-                )
-                for it in items
-            ],
-            count=len(items),
-        )
+        return _showcase_list_response(items, user_id=auth.user.id)
 
     @app.get(
         "/v1/showcase/mine",
@@ -485,8 +563,14 @@ def create_app() -> FastAPI:
         auth: AuthContext = Depends(require_auth),
     ) -> ShowcaseListResponse:
         items = state.showcase.list_by_author(auth.user.id)
+        eng_map = state.showcase.engagement_batch([it.id for it in items], auth.user.id)
         return ShowcaseListResponse(
-            items=[ShowcaseItemResponse(**it.to_public_dict(mine=True)) for it in items],
+            items=[
+                ShowcaseItemResponse(
+                    **{**it.to_public_dict(mine=True), **eng_map.get(it.id, {})}
+                )
+                for it in items
+            ],
             count=len(items),
         )
 
@@ -499,13 +583,8 @@ def create_app() -> FastAPI:
         item_id: str,
         auth: AuthContext = Depends(require_auth),
     ) -> ShowcaseItemResponse:
-        item = state.showcase.get(item_id)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Showcase item not found")
-        mine = item.author_user_id == auth.user.id
-        if item.status != "published" and not mine:
-            raise HTTPException(status_code=404, detail="Showcase item not found")
-        return ShowcaseItemResponse(**item.to_public_dict(mine=mine))
+        item, mine = _require_published_showcase(item_id, auth)
+        return _showcase_response(item, mine=mine, user_id=auth.user.id)
 
     @app.post(
         "/v1/showcase",
@@ -579,7 +658,7 @@ def create_app() -> FastAPI:
             mode,
             item.ref_count,
         )
-        return ShowcaseItemResponse(**item.to_public_dict(mine=True))
+        return _showcase_response(item, mine=True, user_id=auth.user.id)
 
     @app.post(
         "/v1/showcase/{item_id}/unlist",
@@ -596,7 +675,102 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         if item is None:
             raise HTTPException(status_code=404, detail="Showcase item not found")
-        return ShowcaseItemResponse(**item.to_public_dict(mine=True))
+        return _showcase_response(item, mine=True, user_id=auth.user.id)
+
+    @app.post(
+        "/v1/showcase/{item_id}/like",
+        response_model=ShowcaseEngagementResponse,
+        tags=["showcase"],
+    )
+    async def toggle_showcase_like(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> ShowcaseEngagementResponse:
+        _require_published_showcase(item_id, auth)
+        eng = state.showcase.toggle_like(item_id, auth.user.id)
+        return ShowcaseEngagementResponse(**eng)
+
+    @app.post(
+        "/v1/showcase/{item_id}/favorite",
+        response_model=ShowcaseEngagementResponse,
+        tags=["showcase"],
+    )
+    async def toggle_showcase_favorite(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> ShowcaseEngagementResponse:
+        _require_published_showcase(item_id, auth)
+        eng = state.showcase.toggle_favorite(item_id, auth.user.id)
+        return ShowcaseEngagementResponse(**eng)
+
+    @app.get(
+        "/v1/showcase/{item_id}/comments",
+        response_model=ShowcaseCommentListResponse,
+        tags=["showcase"],
+    )
+    async def list_showcase_comments(
+        item_id: str,
+        auth: AuthContext = Depends(require_auth),
+        limit: int = 100,
+    ) -> ShowcaseCommentListResponse:
+        _require_published_showcase(item_id, auth)
+        rows = state.showcase.list_comments(item_id, limit=limit)
+        return ShowcaseCommentListResponse(
+            items=[
+                ShowcaseCommentResponse(
+                    **row, mine=row["user_id"] == auth.user.id
+                )
+                for row in rows
+            ],
+            count=len(rows),
+        )
+
+    @app.post(
+        "/v1/showcase/{item_id}/comments",
+        response_model=ShowcaseCommentResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["showcase"],
+    )
+    async def add_showcase_comment(
+        item_id: str,
+        body: ShowcaseCommentCreateRequest,
+        auth: AuthContext = Depends(require_auth),
+    ) -> ShowcaseCommentResponse:
+        _require_published_showcase(item_id, auth)
+        try:
+            row = state.showcase.add_comment(
+                item_id=item_id,
+                user_id=auth.user.id,
+                author_name=auth.user.name or auth.user.username,
+                body=body.body,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return ShowcaseCommentResponse(**row, mine=True)
+
+    @app.delete(
+        "/v1/showcase/{item_id}/comments/{comment_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["showcase"],
+        response_class=Response,
+    )
+    async def delete_showcase_comment(
+        item_id: str,
+        comment_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> Response:
+        _require_published_showcase(item_id, auth)
+        try:
+            ok = state.showcase.delete_comment(
+                comment_id,
+                user_id=auth.user.id,
+                is_admin=bool(auth.user.is_admin),
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if not ok:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get(
         "/v1/showcase/{item_id}/thumb",
@@ -712,6 +886,60 @@ def create_app() -> FastAPI:
         )
         logger.info("cloud gallery save user=%s id=%s mode=%s", auth.user.id, item.id, mode)
         return CloudGalleryItemResponse(**item.to_dict())
+
+    @app.get(
+        "/v1/works",
+        response_model=WorkListResponse,
+        tags=["works"],
+    )
+    async def list_works(
+        auth: AuthContext = Depends(require_auth),
+        limit: int = 100,
+    ) -> WorkListResponse:
+        items = state.works.list_by_owner(auth.user.id, limit=limit)
+        return WorkListResponse(
+            items=[WorkItemResponse(**it.to_dict()) for it in items],
+            count=len(items),
+        )
+
+    @app.post(
+        "/v1/works",
+        response_model=WorkItemResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["works"],
+    )
+    async def create_work(
+        body: WorkCreateRequest,
+        auth: AuthContext = Depends(require_auth),
+    ) -> WorkItemResponse:
+        if body.mode not in ("txt2img", "image_edit", "image_to_video"):
+            raise HTTPException(status_code=400, detail="invalid mode")
+        item = state.works.create(
+            owner_user_id=auth.user.id,
+            prompt=body.prompt.strip(),
+            negative_prompt=(body.negative_prompt or "").strip(),
+            mode=body.mode,
+            width=body.width,
+            height=body.height,
+            steps=body.steps,
+            seed=body.seed,
+            remote_task_id=body.remote_task_id,
+            cloud_gallery_id=body.cloud_gallery_id,
+            mime_type=body.mime_type,
+        )
+        return WorkItemResponse(**item.to_dict())
+
+    @app.delete(
+        "/v1/works/{work_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["works"],
+    )
+    async def delete_work(
+        work_id: str,
+        auth: AuthContext = Depends(require_auth),
+    ) -> None:
+        if not state.works.delete(work_id, auth.user.id):
+            raise HTTPException(status_code=404, detail="Work not found")
 
     @app.delete(
         "/v1/cloud-gallery/{item_id}",
@@ -1707,6 +1935,7 @@ def create_app() -> FastAPI:
             cloud_n = state.cloud_gallery.delete_all_by_owner(user_id)
             showcase_n = state.showcase.delete_all_by_author(user_id)
             shared_n = state.shared_prompts.delete_all_by_author(user_id)
+            works_n = state.works.delete_by_owner(user_id)
             state.polish_quota.delete_key(user_id)
             state.user_store.delete_user(user_id)
         except LookupError as exc:
@@ -1714,12 +1943,13 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         logger.info(
-            "admin deleted user id=%s username=%s cloud=%s showcase=%s shared=%s",
+            "admin deleted user id=%s username=%s cloud=%s showcase=%s shared=%s works=%s",
             user.id,
             user.username,
             cloud_n,
             showcase_n,
             shared_n,
+            works_n,
         )
         return AdminDeleteUserResponse(
             id=user.id,
@@ -1727,6 +1957,7 @@ def create_app() -> FastAPI:
             cloud_gallery_deleted=cloud_n,
             showcase_deleted=showcase_n,
             shared_prompts_deleted=shared_n,
+            works_deleted=works_n,
         )
 
     @app.post(

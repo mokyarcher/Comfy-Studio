@@ -27,7 +27,7 @@ npm run dev
 
 1. **服务管理 / 设置**：选择 API 项目目录（仓库根，含 `app/main.py`）
 2. Python 留空时会自动尝试 `{apiProjectDir}\.venv\Scripts\python.exe`
-3. **ComfyUI 目录**（含 `main.py`）+ 启动命令：默认 `.venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188`（**务必用 ComfyUI 自己的 venv**，勿用系统 Python）
+3. **ComfyUI 目录** + 启动命令：桌面版选含 `main.py` 的目录，默认 `.venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188`；便携版可选 `ComfyUI_windows_portable`（或外层安装夹），会自动改用 `python_embeded`（勿用系统 Python）
 4. 选择 `frpc.exe` 与 `config.toml`
 5. 确认 ComfyUI URL（默认 `http://127.0.0.1:8188`）与公网 Base URL
 6. 可选：勾选「启动时自动拉起」ComfyUI / API / FRP

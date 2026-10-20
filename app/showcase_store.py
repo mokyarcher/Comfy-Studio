@@ -158,6 +158,40 @@ class ShowcaseStore:
                 conn.execute(
                     "ALTER TABLE showcase_items ADD COLUMN elapsed_ms INTEGER"
                 )
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS showcase_likes (
+                    item_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (item_id, user_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_showcase_likes_user
+                    ON showcase_likes(user_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS showcase_favorites (
+                    item_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (item_id, user_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_showcase_favorites_user
+                    ON showcase_favorites(user_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS showcase_comments (
+                    id TEXT PRIMARY KEY,
+                    item_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    author_name TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_showcase_comments_item
+                    ON showcase_comments(item_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_showcase_comments_user
+                    ON showcase_comments(user_id);
+                """
+            )
 
     def item_dir(self, item_id: str) -> Path:
         return self.files_dir / item_id
@@ -296,12 +330,253 @@ class ShowcaseStore:
                 break
             for item in items:
                 with self._lock, self.connect() as conn:
+                    conn.execute("DELETE FROM showcase_likes WHERE item_id = ?", (item.id,))
+                    conn.execute(
+                        "DELETE FROM showcase_favorites WHERE item_id = ?", (item.id,)
+                    )
+                    conn.execute(
+                        "DELETE FROM showcase_comments WHERE item_id = ?", (item.id,)
+                    )
                     conn.execute("DELETE FROM showcase_items WHERE id = ?", (item.id,))
                 directory = self.item_dir(item.id)
                 if directory.exists():
                     shutil.rmtree(directory, ignore_errors=True)
                 deleted += 1
+        # Also drop this user's likes / favorites / comments on others' works.
+        with self._lock, self.connect() as conn:
+            conn.execute("DELETE FROM showcase_likes WHERE user_id = ?", (author_user_id,))
+            conn.execute(
+                "DELETE FROM showcase_favorites WHERE user_id = ?", (author_user_id,)
+            )
+            conn.execute(
+                "DELETE FROM showcase_comments WHERE user_id = ?", (author_user_id,)
+            )
         return deleted
+
+    def engagement_for(self, item_id: str, user_id: str) -> dict[str, Any]:
+        with self._lock, self.connect() as conn:
+            like_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM showcase_likes WHERE item_id = ?",
+                    (item_id,),
+                ).fetchone()["c"]
+            )
+            fav_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM showcase_favorites WHERE item_id = ?",
+                    (item_id,),
+                ).fetchone()["c"]
+            )
+            comment_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM showcase_comments WHERE item_id = ?",
+                    (item_id,),
+                ).fetchone()["c"]
+            )
+            liked = (
+                conn.execute(
+                    "SELECT 1 FROM showcase_likes WHERE item_id = ? AND user_id = ?",
+                    (item_id, user_id),
+                ).fetchone()
+                is not None
+            )
+            favorited = (
+                conn.execute(
+                    "SELECT 1 FROM showcase_favorites WHERE item_id = ? AND user_id = ?",
+                    (item_id, user_id),
+                ).fetchone()
+                is not None
+            )
+        return {
+            "like_count": like_count,
+            "favorite_count": fav_count,
+            "comment_count": comment_count,
+            "liked_by_me": liked,
+            "favorited_by_me": favorited,
+        }
+
+    def engagement_batch(
+        self, item_ids: list[str], user_id: str
+    ) -> dict[str, dict[str, Any]]:
+        if not item_ids:
+            return {}
+        out: dict[str, dict[str, Any]] = {
+            i: {
+                "like_count": 0,
+                "favorite_count": 0,
+                "comment_count": 0,
+                "liked_by_me": False,
+                "favorited_by_me": False,
+            }
+            for i in item_ids
+        }
+        placeholders = ",".join("?" * len(item_ids))
+        with self._lock, self.connect() as conn:
+            for row in conn.execute(
+                f"""
+                SELECT item_id, COUNT(*) AS c FROM showcase_likes
+                WHERE item_id IN ({placeholders}) GROUP BY item_id
+                """,
+                item_ids,
+            ):
+                out[row["item_id"]]["like_count"] = int(row["c"])
+            for row in conn.execute(
+                f"""
+                SELECT item_id, COUNT(*) AS c FROM showcase_favorites
+                WHERE item_id IN ({placeholders}) GROUP BY item_id
+                """,
+                item_ids,
+            ):
+                out[row["item_id"]]["favorite_count"] = int(row["c"])
+            for row in conn.execute(
+                f"""
+                SELECT item_id, COUNT(*) AS c FROM showcase_comments
+                WHERE item_id IN ({placeholders}) GROUP BY item_id
+                """,
+                item_ids,
+            ):
+                out[row["item_id"]]["comment_count"] = int(row["c"])
+            for row in conn.execute(
+                f"""
+                SELECT item_id FROM showcase_likes
+                WHERE user_id = ? AND item_id IN ({placeholders})
+                """,
+                [user_id, *item_ids],
+            ):
+                out[row["item_id"]]["liked_by_me"] = True
+            for row in conn.execute(
+                f"""
+                SELECT item_id FROM showcase_favorites
+                WHERE user_id = ? AND item_id IN ({placeholders})
+                """,
+                [user_id, *item_ids],
+            ):
+                out[row["item_id"]]["favorited_by_me"] = True
+        return out
+
+    def toggle_like(self, item_id: str, user_id: str) -> dict[str, Any]:
+        with self._lock, self.connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM showcase_likes WHERE item_id = ? AND user_id = ?",
+                (item_id, user_id),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    "DELETE FROM showcase_likes WHERE item_id = ? AND user_id = ?",
+                    (item_id, user_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO showcase_likes (item_id, user_id, created_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (item_id, user_id, utcnow()),
+                )
+        return self.engagement_for(item_id, user_id)
+
+    def toggle_favorite(self, item_id: str, user_id: str) -> dict[str, Any]:
+        with self._lock, self.connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM showcase_favorites WHERE item_id = ? AND user_id = ?",
+                (item_id, user_id),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    "DELETE FROM showcase_favorites WHERE item_id = ? AND user_id = ?",
+                    (item_id, user_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO showcase_favorites (item_id, user_id, created_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (item_id, user_id, utcnow()),
+                )
+        return self.engagement_for(item_id, user_id)
+
+    def list_comments(self, item_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 200))
+        with self._lock, self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, item_id, user_id, author_name, body, created_at
+                FROM showcase_comments
+                WHERE item_id = ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (item_id, limit),
+            ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "item_id": r["item_id"],
+                "user_id": r["user_id"],
+                "author_name": r["author_name"],
+                "body": r["body"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+
+    def add_comment(
+        self,
+        *,
+        item_id: str,
+        user_id: str,
+        author_name: str,
+        body: str,
+    ) -> dict[str, Any]:
+        text = (body or "").strip()
+        if not text:
+            raise ValueError("评论不能为空")
+        if len(text) > 500:
+            raise ValueError("评论最多 500 字")
+        comment_id = str(uuid.uuid4())
+        now = utcnow()
+        with self._lock, self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO showcase_comments (
+                    id, item_id, user_id, author_name, body, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    comment_id,
+                    item_id,
+                    user_id,
+                    (author_name or "用户").strip()[:64],
+                    text,
+                    now,
+                ),
+            )
+        return {
+            "id": comment_id,
+            "item_id": item_id,
+            "user_id": user_id,
+            "author_name": (author_name or "用户").strip()[:64],
+            "body": text,
+            "created_at": now,
+        }
+
+    def delete_comment(
+        self, comment_id: str, *, user_id: str, is_admin: bool = False
+    ) -> bool:
+        with self._lock, self.connect() as conn:
+            row = conn.execute(
+                "SELECT user_id FROM showcase_comments WHERE id = ?",
+                (comment_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            if not is_admin and row["user_id"] != user_id:
+                raise PermissionError("只能删除自己的评论")
+            cur = conn.execute(
+                "DELETE FROM showcase_comments WHERE id = ?", (comment_id,)
+            )
+            return cur.rowcount > 0
 
     def _set_unlisted(self, item_id: str) -> ShowcaseItem | None:
         item = self.get(item_id)

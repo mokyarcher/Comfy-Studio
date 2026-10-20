@@ -86,7 +86,25 @@ export interface CloudGalleryItem {
   thumb_url?: string
 }
 
-export interface ShowcaseItem {
+export interface ShowcaseEngagement {
+  like_count: number
+  favorite_count: number
+  comment_count: number
+  liked_by_me: boolean
+  favorited_by_me: boolean
+}
+
+export interface ShowcaseComment {
+  id: string
+  item_id: string
+  user_id: string
+  author_name: string
+  body: string
+  created_at: string
+  mine?: boolean
+}
+
+export interface ShowcaseItem extends ShowcaseEngagement {
   id: string
   author_name: string
   author_username: string

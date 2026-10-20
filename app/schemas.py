@@ -199,11 +199,43 @@ class ShowcaseItemResponse(BaseModel):
     thumb_url: str = ""
     ref_urls: list[str] = Field(default_factory=list)
     mine: bool = False
+    like_count: int = 0
+    favorite_count: int = 0
+    comment_count: int = 0
+    liked_by_me: bool = False
+    favorited_by_me: bool = False
 
 
 class ShowcaseListResponse(BaseModel):
     items: list[ShowcaseItemResponse]
     count: int
+
+
+class ShowcaseEngagementResponse(BaseModel):
+    like_count: int = 0
+    favorite_count: int = 0
+    comment_count: int = 0
+    liked_by_me: bool = False
+    favorited_by_me: bool = False
+
+
+class ShowcaseCommentResponse(BaseModel):
+    id: str
+    item_id: str
+    user_id: str
+    author_name: str
+    body: str
+    created_at: str
+    mine: bool = False
+
+
+class ShowcaseCommentListResponse(BaseModel):
+    items: list[ShowcaseCommentResponse]
+    count: int
+
+
+class ShowcaseCommentCreateRequest(BaseModel):
+    body: str
 
 
 class CloudGalleryItemResponse(BaseModel):
@@ -225,6 +257,43 @@ class CloudGalleryItemResponse(BaseModel):
 class CloudGalleryListResponse(BaseModel):
     items: list[CloudGalleryItemResponse]
     count: int
+
+
+class WorkItemResponse(BaseModel):
+    id: str
+    prompt: str
+    negative_prompt: str | None = None
+    mode: str = "txt2img"
+    width: int = 0
+    height: int = 0
+    steps: int = 0
+    seed: int | None = None
+    remote_task_id: str | None = None
+    cloud_gallery_id: str | None = None
+    mime_type: str | None = None
+    created_at: str
+    image_url: str | None = None
+    thumb_url: str | None = None
+
+
+class WorkListResponse(BaseModel):
+    items: list[WorkItemResponse]
+    count: int
+
+
+class WorkCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prompt: str = Field(..., min_length=1)
+    negative_prompt: str | None = None
+    mode: Literal["txt2img", "image_edit", "image_to_video"] = "txt2img"
+    width: int = 0
+    height: int = 0
+    steps: int = 0
+    seed: int | None = None
+    remote_task_id: str | None = None
+    cloud_gallery_id: str | None = None
+    mime_type: str | None = None
 
 
 class GenerateImageResponse(BaseModel):
@@ -536,6 +605,7 @@ class AdminDeleteUserResponse(BaseModel):
     cloud_gallery_deleted: int = 0
     showcase_deleted: int = 0
     shared_prompts_deleted: int = 0
+    works_deleted: int = 0
 
 
 class AdminPatchUserRequest(BaseModel):

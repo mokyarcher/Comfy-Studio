@@ -1,0 +1,19 @@
+---
+description: Prefer production cloud for QA; avoid dual local/cloud account confusion
+alwaysApply: true
+---
+
+# 测试以云端为准
+
+用户约定：**功能验收、联调、出图验证优先在云端**（`https://app.comfy-studio.sharex.team` / Gateway Admin），不要默认让用户走本机 `localhost:5173/5174` 测账号相关流程。
+
+原因：nginx 分流后 **登录/用户库在云 Meta**，生图在 GPU FRP；本机再起一套 Studio/API 容易造成两套 `users.db`、Key 对不上。
+
+Agent 应：
+
+1. 改 Web Studio / 影响线上行为的前端后，**主动 build + 部署**到 `/var/www/comfy-studio-app`（与 deploy 授权一致），再请用户在云端硬刷新验证
+2. 改 Meta 数据面时同步云机 `/opt/comfy-studio-meta`（含 `.env` 非密钥说明、systemd 重启）
+3. 本机 `npm run dev` 仅作开发热更；涉及登录、Key、画廊、提示词、翻译/润色时，以云端结果为准
+4. 不要引导用户长期用本机 API Key 会话与云端混用；若必须本机调试生成，提醒本机 `users.db` 须与云 Meta 对齐
+
+拉代码仍只跟 GitHub（见 `git-pull-from-github.mdc`）；云机只用于部署与验收，不当代码源。

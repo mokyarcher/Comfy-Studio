@@ -1,12 +1,38 @@
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_LEGACY_DATA_ROOT = (PROJECT_ROOT / "data").resolve()
+
+# Runtime / user content under data/ — namespaced by INSTANCE_ID.
+_INSTANCE_PATH_FIELDS = (
+    "database_path",
+    "image_output_dir",
+    "showcase_db_path",
+    "showcase_files_dir",
+    "cloud_gallery_db_path",
+    "cloud_gallery_files_dir",
+    "prompt_library_path",
+    "shared_prompts_db_path",
+    "translate_cache_db_path",
+    "polish_quota_db_path",
+    "users_db_path",
+    "admin_sms_db_path",
+    "email_reset_db_path",
+    "works_db_path",
+)
+
+
+def sanitize_instance_id(raw: str) -> str:
+    s = re.sub(r"[^a-zA-Z0-9._-]+", "-", (raw or "default").strip())
+    s = s.strip(".-")[:64]
+    return s or "default"
 
 
 class Settings(BaseSettings):
@@ -18,6 +44,14 @@ class Settings(BaseSettings):
 
     host: str = "127.0.0.1"
     port: int = 8000
+
+    # Isolates user content when multiple product chains share one host/tunnel.
+    # Paths under data/ (not already under data/instances/) relocate to
+    # data/instances/{INSTANCE_ID}/…
+    instance_id: str = "default"
+    # False = cloud meta data plane (auth / prompts / gallery / showcase / works).
+    # Generation + ComfyUI stay on the GPU machine (ENABLE_GENERATION=true).
+    enable_generation: bool = True
 
     comfyui_url: str = "http://127.0.0.1:8188"
     comfyui_timeout_seconds: float = 30.0
@@ -37,6 +71,7 @@ class Settings(BaseSettings):
     prompt_library_path: Path = PROJECT_ROOT / "data" / "prompt_library.json"
     shared_prompts_db_path: Path = PROJECT_ROOT / "data" / "shared_prompts.db"
     translate_cache_db_path: Path = PROJECT_ROOT / "data" / "translate_cache.db"
+    works_db_path: Path = PROJECT_ROOT / "data" / "works.db"
     workflow_path: Path = PROJECT_ROOT / "llm_workflow" / "workflow_api.json"
     workflow_mapping_path: Path = PROJECT_ROOT / "llm_workflow" / "workflow_mapping.json"
     # Optional second workflow: Qwen Image Edit (multi-reference image edit)
@@ -167,10 +202,23 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    @property
+    def safe_instance_id(self) -> str:
+        return sanitize_instance_id(self.instance_id)
+
+    @property
+    def instance_data_dir(self) -> Path:
+        return (_LEGACY_DATA_ROOT / "instances" / self.safe_instance_id).resolve()
+
     @field_validator("polish_ai_base_url")
     @classmethod
     def _strip_polish_base(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("instance_id")
+    @classmethod
+    def _normalize_instance_id(cls, value: str) -> str:
+        return sanitize_instance_id(value)
 
     @field_validator(
         "database_path",
@@ -192,6 +240,7 @@ class Settings(BaseSettings):
         "cloud_gallery_files_dir",
         "admin_sms_db_path",
         "email_reset_db_path",
+        "works_db_path",
         mode="before",
     )
     @classmethod
@@ -224,6 +273,26 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @model_validator(mode="after")
+    def _namespace_instance_data_paths(self) -> Settings:
+        """Relocate legacy data/* paths into data/instances/{INSTANCE_ID}/."""
+        root = self.instance_data_dir
+        for name in _INSTANCE_PATH_FIELDS:
+            path: Path = getattr(self, name)
+            try:
+                rel = path.resolve().relative_to(_LEGACY_DATA_ROOT)
+            except ValueError:
+                # Absolute path outside repo data/ (tests, custom mounts) — keep.
+                continue
+            parts = rel.parts
+            if parts and parts[0] == "instances":
+                continue
+            object.__setattr__(self, name, (root / rel).resolve())
+
+        if not self.enable_generation:
+            object.__setattr__(self, "host_services_enabled", False)
+        return self
 
 
 @lru_cache

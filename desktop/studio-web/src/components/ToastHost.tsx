@@ -8,22 +8,24 @@ export function ToastHost() {
   if (!items.length || typeof document === 'undefined') return null
   return createPortal(
     <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
-      {items.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          className={`pointer-events-auto rounded-lg border px-3 py-2 text-left text-sm shadow-lg ${
-            t.tone === 'error'
-              ? 'border-danger/40 bg-panel text-danger'
-              : t.tone === 'success'
-                ? 'border-success/40 bg-panel text-success'
-                : 'border-border bg-panel text-text'
-          }`}
-          onClick={() => dismiss(t.id)}
-        >
-          {t.message}
-        </button>
-      ))}
+      {items.map((t) => {
+        const toneClass =
+          t.tone === 'error'
+            ? 'glass-toast-error'
+            : t.tone === 'success'
+              ? 'glass-toast-success'
+              : 'glass-toast-info'
+        return (
+          <button
+            key={t.id}
+            type="button"
+            className={`pointer-events-auto glass-toast ${toneClass}`}
+            onClick={() => dismiss(t.id)}
+          >
+            <span>{t.message}</span>
+          </button>
+        )
+      })}
     </div>,
     document.body
   )

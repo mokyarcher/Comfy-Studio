@@ -1,4 +1,5 @@
 import {
+  createWorkRecord,
   fetchTaskBlob,
   pollTask,
   purgeTask,
@@ -19,6 +20,10 @@ export type GenerateCallbacks = {
   apiKey: string
   isHidden?: () => boolean
   onBackgroundHint?: () => void
+  /** Fired after background cloud gallery upload succeeds */
+  onCloudSaved?: () => void
+  /** Fired after background cloud gallery upload fails */
+  onCloudFailed?: (message: string) => void
 }
 
 export async function runGenerateJob(opts: {
@@ -143,7 +148,8 @@ export async function runGenerateJob(opts: {
     task = {
       ...task,
       progressMessage: '下载中',
-      progress: { value: 100, max: 100, percent: 100 },
+      // Keep indeterminate-ish until bytes actually arrive — don't fake 100% early.
+      progress: { value: 90, max: 100, percent: 90 },
       updatedAt: now()
     }
     opts.cb.onUpdate(task)
@@ -154,24 +160,79 @@ export async function runGenerateJob(opts: {
       taskId: submitted.taskId
     })
     const previewUrl = URL.createObjectURL(media.blob)
-    const gallery = await saveFromTask({
-      taskId: submitted.taskId,
-      blob: media.blob,
-      mimeType: media.contentType,
-      prompt: opts.prompt,
-      negativePrompt: opts.negativePrompt,
-      width: opts.width,
-      height: opts.height,
-      steps: opts.steps,
-      seed: task.seed,
-      mode: opts.mode
-    })
 
-    if (opts.cb.saveToCloud) {
-      task = { ...task, progressMessage: '同步云端', updatedAt: now() }
-      opts.cb.onUpdate(task)
+    // Paint preview first — IndexedDB / purge / cloud must not gate the UI.
+    task = {
+      ...task,
+      status: 'succeeded',
+      previewUrl,
+      progressMessage: '完成',
+      progress: { value: 100, max: 100, percent: 100 },
+      updatedAt: now()
+    }
+    opts.cb.onUpdate(task)
+
+    const seed = task.seed
+    const blob = media.blob
+    const contentType = media.contentType
+    void (async () => {
+      let galleryId: string | undefined
       try {
-        const cloud = await uploadCloudGallery({
+        const gallery = await saveFromTask({
+          taskId: submitted.taskId,
+          blob,
+          mimeType: contentType,
+          prompt: opts.prompt,
+          negativePrompt: opts.negativePrompt,
+          width: opts.width,
+          height: opts.height,
+          steps: opts.steps,
+          seed,
+          mode: opts.mode
+        })
+        galleryId = gallery.id
+        opts.cb.onUpdate({ ...task, galleryId, updatedAt: now() })
+      } catch (err) {
+        console.warn('[studio-web] local gallery save failed', err)
+      }
+
+      if (opts.cb.autoPurge) {
+        try {
+          await purgeTask({
+            apiKey: opts.cb.apiKey,
+            timeoutMs: opts.cb.timeoutMs,
+            taskId: submitted.taskId
+          })
+        } catch (err) {
+          console.warn('[studio-web] purge failed', err)
+        }
+      }
+
+      let cloudGalleryId: string | undefined
+      if (opts.cb.saveToCloud) {
+        try {
+          const cloud = await uploadCloudGallery({
+            apiKey: opts.cb.apiKey,
+            prompt: opts.prompt,
+            negativePrompt: opts.negativePrompt,
+            mode: opts.mode,
+            width: opts.width,
+            height: opts.height,
+            steps: opts.steps,
+            seed,
+            image: blob,
+            filename: contentType.includes('video') ? 'result.mp4' : 'result.png'
+          })
+          cloudGalleryId = cloud.id
+          if (galleryId) await setGalleryCloudId(galleryId, cloud.id)
+          opts.cb.onCloudSaved?.()
+        } catch (err) {
+          console.warn('[studio-web] cloud gallery upload failed', err)
+          opts.cb.onCloudFailed?.(err instanceof Error ? err.message : String(err))
+        }
+      }
+      try {
+        await createWorkRecord({
           apiKey: opts.cb.apiKey,
           prompt: opts.prompt,
           negativePrompt: opts.negativePrompt,
@@ -179,34 +240,16 @@ export async function runGenerateJob(opts: {
           width: opts.width,
           height: opts.height,
           steps: opts.steps,
-          seed: task.seed,
-          image: media.blob,
-          filename: media.contentType.includes('video') ? 'result.mp4' : 'result.png'
+          seed,
+          remoteTaskId: submitted.taskId,
+          cloudGalleryId,
+          mimeType: contentType
         })
-        await setGalleryCloudId(gallery.id, cloud.id)
       } catch (err) {
-        console.warn('[studio-web] cloud gallery upload failed', err)
+        console.warn('[studio-web] works record failed', err)
       }
-    }
+    })()
 
-    if (opts.cb.autoPurge) {
-      await purgeTask({
-        apiKey: opts.cb.apiKey,
-        timeoutMs: opts.cb.timeoutMs,
-        taskId: submitted.taskId
-      })
-    }
-
-    task = {
-      ...task,
-      status: 'succeeded',
-      previewUrl,
-      galleryId: gallery.id,
-      progressMessage: '完成',
-      progress: { value: 100, max: 100, percent: 100 },
-      updatedAt: now()
-    }
-    opts.cb.onUpdate(task)
     return task
   } catch (err) {
     task = {

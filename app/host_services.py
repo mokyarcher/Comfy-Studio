@@ -298,21 +298,100 @@ def run_action(settings: Settings, service: ServiceId, action: ActionId) -> tupl
     return False, "未知服务"
 
 
+def _is_portable_root(directory: Path) -> bool:
+    if not (directory / "ComfyUI" / "main.py").is_file():
+        return False
+    return (directory / "python_embeded" / "python.exe").is_file() or (
+        directory / "python_embedded" / "python.exe"
+    ).is_file()
+
+
+def _portable_python_rel(directory: Path) -> str:
+    if (directory / "python_embeded" / "python.exe").is_file():
+        return r"python_embeded\python.exe"
+    return r"python_embedded\python.exe"
+
+
+def _resolve_comfy_install(raw: Path | None) -> tuple[Path, str, str] | None:
+    """Return (cwd, kind, default_launch) for source or Windows portable layouts."""
+    if raw is None or not raw.is_dir():
+        return None
+    nested = raw / "ComfyUI_windows_portable"
+    candidates = [nested, raw]
+    for directory in candidates:
+        if _is_portable_root(directory):
+            py = _portable_python_rel(directory)
+            launch = (
+                f"{py} -s ComfyUI\\main.py --windows-standalone-build "
+                "--enable-manager --listen 127.0.0.1 --port 8188"
+            )
+            return directory, "portable", launch
+    if (raw / "main.py").is_file():
+        return (
+            raw,
+            "source",
+            r".venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188",
+        )
+    nested_src = raw / "ComfyUI"
+    if (nested_src / "main.py").is_file():
+        return (
+            nested_src,
+            "source",
+            r".venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188",
+        )
+    return None
+
+
+def _resolve_comfy_launch(cwd: Path, kind: str, default_launch: str, configured: str) -> str:
+    launch = (configured or "").strip()
+    if not launch:
+        return default_launch
+    source_like = bool(re.search(r"(?:^|[\\/])\.venv[\\/]Scripts[\\/]python(?:\.exe)?\b", launch, re.I)) or (
+        re.search(r"\bmain\.py\b", launch, re.I)
+        and not re.search(r"[\\/]ComfyUI[\\/]main\.py\b", launch, re.I)
+    )
+    portable_like = bool(
+        re.search(r"python_embede?d[\\/]python(?:\.exe)?", launch, re.I)
+        or re.search(r"run_nvidia_gpu(?:_fast[^\\/]*)?\.bat\b", launch, re.I)
+        or re.search(r"[\\/]ComfyUI[\\/]main\.py\b", launch, re.I)
+    )
+    if kind == "portable" and source_like and not portable_like:
+        return default_launch
+    # Official portable bats end with `pause`; prefer embeded python for clean process exit.
+    if kind == "portable" and re.search(r"run_nvidia_gpu(?:_fast[^\\/]*)?\.bat\b", launch, re.I):
+        return default_launch
+    if kind == "source" and (
+        re.search(r"python_embede?d", launch, re.I) or re.search(r"run_nvidia_gpu", launch, re.I)
+    ):
+        return default_launch
+    if kind == "portable" and re.match(r"^(python|python\.exe|py)(\s|$)", launch, re.I):
+        abs_py = cwd / _portable_python_rel(cwd).replace("\\", os.sep)
+        return re.sub(r"^(python|python\.exe|py)\b", f'"{abs_py}"', launch, count=1, flags=re.I)
+    if kind == "source" and re.match(r"^(python|python\.exe|py)(\s|$)", launch, re.I):
+        venv_py = cwd / ".venv" / "Scripts" / "python.exe"
+        if venv_py.is_file():
+            return re.sub(r"^(python|python\.exe|py)\b", f'"{venv_py}"', launch, count=1, flags=re.I)
+    return launch
+
+
 def _start_comfy(settings: Settings) -> tuple[bool, str]:
     ok, msg = _probe_http(f"{settings.comfyui_url.rstrip('/')}/system_stats")
     if ok:
         return True, f"ComfyUI 已在线（{msg}）"
-    directory = settings.host_comfy_dir
-    launch = (settings.host_comfy_launch or "").strip()
-    if not directory or not directory.is_dir():
-        return False, "请在 .env 配置 HOST_COMFY_DIR（含 main.py 的目录）"
+    resolved = _resolve_comfy_install(settings.host_comfy_dir)
+    if not resolved:
+        return False, (
+            "请在 .env 配置 HOST_COMFY_DIR：桌面版选含 main.py 的目录；"
+            "便携版可选 ComfyUI_windows_portable（或外层安装夹）"
+        )
+    directory, kind, default_launch = resolved
+    launch = _resolve_comfy_launch(
+        directory, kind, default_launch, settings.host_comfy_launch or ""
+    )
     if not launch:
         return False, "请配置 HOST_COMFY_LAUNCH"
-    # Bare `python` → system interpreter without Comfy deps; prefer local .venv.
-    venv_py = directory / ".venv" / "Scripts" / "python.exe"
-    if venv_py.is_file() and re.match(r"^(python|python\.exe|py)(\s|$)", launch, re.I):
-        launch = re.sub(r"^(python|python\.exe|py)\b", f'"{venv_py}"', launch, count=1, flags=re.I)
-        logger.info("host_services rewritten bare python → %s", launch)
+    if launch != (settings.host_comfy_launch or "").strip():
+        logger.info("host_services comfy launch rewritten (%s) → %s", kind, launch)
     port = _comfy_port(settings.comfyui_url)
     listeners = _find_listening_pids(port)
     if listeners:
@@ -321,7 +400,7 @@ def _start_comfy(settings: Settings) -> tuple[bool, str]:
     pid = _spawn_shell(launch, directory)
     if pid:
         _tracked["comfy"] = pid
-    logger.info("host_services start comfy pid=%s cwd=%s", pid, directory)
+    logger.info("host_services start comfy pid=%s kind=%s cwd=%s", pid, kind, directory)
 
     # Short wait so the HTTP request does not hang behind reverse proxies.
     for _ in range(6):

@@ -21,7 +21,10 @@ export function ServicesPage() {
         <p className="font-medium text-accent">路径要选到哪一级？</p>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li>
-            <b>ComfyUI 目录</b>：选到含 <code className="text-text">main.py</code> 的根目录
+            <b>ComfyUI 目录</b>：桌面版选含 <code className="text-text">main.py</code>；便携版选{' '}
+            <code className="text-text">ComfyUI_windows_portable</code>（内有{' '}
+            <code className="text-text">python_embeded</code> /{' '}
+            <code className="text-text">run_nvidia_gpu.bat</code>），也可选外层安装夹
           </li>
           <li>
             <b>API 项目目录</b>：选到含 <code className="text-text">app</code> 文件夹的那一层，例如{' '}
@@ -48,7 +51,7 @@ export function ServicesPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <Field
             label="ComfyUI 目录"
-            hint="选文件夹：含 main.py"
+            hint="桌面版含 main.py；便携版选 portable 根目录"
             value={draft.comfyUiDir}
             onChange={(v) => set('comfyUiDir', v)}
             onBrowse={() => void browseDir('comfyUiDir')}
@@ -56,7 +59,7 @@ export function ServicesPage() {
           <div className="md:col-span-2">
             <label className="label">启动命令</label>
             <p className="mb-1 text-xs text-muted">
-              在上述目录执行；用 .venv\Scripts\python.exe，勿用系统 python
+              桌面版用 .venv；便携版用 python_embeded（可留默认，启动时自动校正），勿用系统 python
             </p>
             <input
               className="input font-mono text-sm"

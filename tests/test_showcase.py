@@ -108,6 +108,79 @@ def test_showcase_requires_auth(client: TestClient):
     assert r.status_code == 401
 
 
+def test_showcase_like_favorite_comment(client: TestClient):
+    png = _png_bytes()
+    r = client.post(
+        "/v1/showcase",
+        data={
+            "prompt": "social target",
+            "mode": "txt2img",
+            "width": "512",
+            "height": "512",
+            "steps": "20",
+        },
+        files=[("image", ("result.png", png, "image/png"))],
+        headers=_admin(),
+    )
+    assert r.status_code == 201, r.text
+    item_id = r.json()["id"]
+    assert r.json()["like_count"] == 0
+    assert r.json()["liked_by_me"] is False
+
+    liked = client.post(f"/v1/showcase/{item_id}/like", headers=_admin())
+    assert liked.status_code == 200, liked.text
+    body = liked.json()
+    assert body["like_count"] == 1
+    assert body["liked_by_me"] is True
+
+    liked2 = client.post(f"/v1/showcase/{item_id}/like", headers=_admin())
+    assert liked2.status_code == 200
+    assert liked2.json()["like_count"] == 0
+    assert liked2.json()["liked_by_me"] is False
+
+    fav = client.post(f"/v1/showcase/{item_id}/favorite", headers=_admin())
+    assert fav.status_code == 200, fav.text
+    assert fav.json()["favorite_count"] == 1
+    assert fav.json()["favorited_by_me"] is True
+
+    c = client.post(
+        f"/v1/showcase/{item_id}/comments",
+        json={"body": "好看"},
+        headers=_admin(),
+    )
+    assert c.status_code == 201, c.text
+    comment = c.json()
+    assert comment["body"] == "好看"
+    assert comment["mine"] is True
+    comment_id = comment["id"]
+
+    listed = client.get(f"/v1/showcase/{item_id}/comments", headers=_admin())
+    assert listed.status_code == 200
+    assert listed.json()["count"] == 1
+
+    detail = client.get(f"/v1/showcase/{item_id}", headers=_admin())
+    assert detail.status_code == 200
+    assert detail.json()["comment_count"] == 1
+    assert detail.json()["favorite_count"] == 1
+
+    empty = client.post(
+        f"/v1/showcase/{item_id}/comments",
+        json={"body": "   "},
+        headers=_admin(),
+    )
+    assert empty.status_code == 400
+
+    deleted = client.delete(
+        f"/v1/showcase/{item_id}/comments/{comment_id}",
+        headers=_admin(),
+    )
+    assert deleted.status_code == 204
+
+    listed2 = client.get(f"/v1/showcase/{item_id}/comments", headers=_admin())
+    assert listed2.status_code == 200
+    assert listed2.json()["count"] == 0
+
+
 def test_admin_force_unlist(client: TestClient):
     png = _png_bytes()
     r = client.post(

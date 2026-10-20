@@ -263,19 +263,25 @@ export function CreatePage() {
           saveToCloud: settings.saveToCloud,
           isHidden: () => document.visibilityState === 'hidden',
           onBackgroundHint: () => push('标签页在后台，轮询可能被浏览器降速', 'info'),
+          onCloudSaved: () => push('已保存至云端', 'success'),
+          onCloudFailed: (msg) => push(msg || '云端同步失败', 'error'),
           onUpdate: (t) => {
             upsert(t)
             setStatus(t.progressMessage || t.status)
-            if (t.status === 'running' && t.progress) {
-              setProgressPercent(Math.round(t.progress.percent))
-            } else if (t.progressMessage === '下载中' || t.progressMessage === '同步云端') {
-              setProgressPercent(100)
-            } else if (t.status === 'queued' || t.status === 'submitting') {
-              setProgressPercent(null)
-            }
             if (t.previewUrl) {
               setPreview(t.previewUrl)
               setPreviewIsVideo(t.mode === 'image_to_video' || Boolean(t.previewUrl.includes('video')))
+              // Drop the loading shell as soon as bytes are ready.
+              setBusy(false)
+              setProgressPercent(null)
+              return
+            }
+            if (t.status === 'running' && t.progress) {
+              setProgressPercent(Math.round(t.progress.percent))
+            } else if (t.progressMessage === '下载中' && t.progress) {
+              setProgressPercent(Math.round(t.progress.percent))
+            } else if (t.status === 'queued' || t.status === 'submitting') {
+              setProgressPercent(null)
             }
           }
         }
@@ -355,15 +361,6 @@ export function CreatePage() {
                 ]}
               />
             </div>
-            <button
-              type="button"
-              className="btn-secondary shrink-0 !px-2.5 text-xs"
-              disabled={busy}
-              onClick={onClear}
-            >
-              <Eraser className="h-3.5 w-3.5" />
-              清屏
-            </button>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-3.5 py-3.5 sm:px-4">
@@ -678,26 +675,34 @@ export function CreatePage() {
                   />
                 ) : null}
               </div>
-              {!busy && recent.length && settings.showRecentWorks ? (
-                pickingRecent ? (
-                  <div className="flex shrink-0 items-center gap-2">
-                    <GlassButton className="glass-cta-btn-sm" onClick={cancelPickRecent}>
-                      取消
+              <div className="flex shrink-0 items-center gap-2">
+                {!busy && recent.length && settings.showRecentWorks ? (
+                  pickingRecent ? (
+                    <>
+                      <GlassButton className="glass-cta-btn-sm" onClick={cancelPickRecent}>
+                        取消
+                      </GlassButton>
+                      <GlassButton
+                        className="glass-cta-btn-sm"
+                        disabled={!pickedRecent.size}
+                        onClick={confirmClearRecent}
+                      >
+                        确认清除{pickedRecent.size ? ` ${pickedRecent.size}` : ''}
+                      </GlassButton>
+                    </>
+                  ) : (
+                    <GlassButton className="glass-cta-btn-sm" onClick={() => setPickingRecent(true)}>
+                      清除
                     </GlassButton>
-                    <GlassButton
-                      className="glass-cta-btn-sm"
-                      disabled={!pickedRecent.size}
-                      onClick={confirmClearRecent}
-                    >
-                      确认清除{pickedRecent.size ? ` ${pickedRecent.size}` : ''}
-                    </GlassButton>
-                  </div>
-                ) : (
-                  <GlassButton className="glass-cta-btn-sm" onClick={() => setPickingRecent(true)}>
-                    清除
-                  </GlassButton>
-                )
-              ) : null}
+                  )
+                ) : null}
+                <GlassButton className="glass-cta-btn-sm" disabled={busy} onClick={onClear}>
+                  <span className="inline-flex items-center gap-1">
+                    <Eraser className="h-3.5 w-3.5" />
+                    清屏
+                  </span>
+                </GlassButton>
+              </div>
             </div>
           </div>
         </section>

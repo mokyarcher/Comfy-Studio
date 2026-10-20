@@ -6,9 +6,9 @@ export const GatewayConfigSchema = z.object({
   apiHost: z.string().default('127.0.0.1'),
   apiPort: z.number().int().min(1).max(65535).default(8000),
   comfyUrl: z.string().default('http://127.0.0.1:8188'),
-  /** ComfyUI 安装目录（含 main.py） */
+  /** ComfyUI 目录：桌面版含 main.py；便携版为 portable 根目录或外层安装夹 */
   comfyUiDir: z.string().default(''),
-  /** 在该目录下执行的启动命令；务必用 ComfyUI 自己的 .venv，不要用系统 python */
+  /** 启动命令；桌面版用 .venv，便携版用 python_embeded（可留默认，启动时按目录类型校正） */
   comfyUiLaunch: z
     .string()
     .default('.venv\\Scripts\\python.exe main.py --listen 127.0.0.1 --port 8188'),

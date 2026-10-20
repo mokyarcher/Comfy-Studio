@@ -746,6 +746,84 @@ export async function unlistShowcase(opts: { apiKey: string; itemId: string }) {
   }
 }
 
+export async function toggleShowcaseLike(opts: { apiKey: string; itemId: string }) {
+  const url = joinUrl(apiBase(), `/v1/showcase/${opts.itemId}/like`)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey)
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as import('./types').ShowcaseEngagement
+}
+
+export async function toggleShowcaseFavorite(opts: { apiKey: string; itemId: string }) {
+  const url = joinUrl(apiBase(), `/v1/showcase/${opts.itemId}/favorite`)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey)
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as import('./types').ShowcaseEngagement
+}
+
+export async function listShowcaseComments(opts: {
+  apiKey: string
+  itemId: string
+  limit?: number
+}) {
+  const q = opts.limit != null ? `?limit=${opts.limit}` : ''
+  const url = joinUrl(apiBase(), `/v1/showcase/${opts.itemId}/comments${q}`)
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey)
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as { items: import('./types').ShowcaseComment[]; count: number }
+}
+
+export async function addShowcaseComment(opts: {
+  apiKey: string
+  itemId: string
+  body: string
+}) {
+  const url = joinUrl(apiBase(), `/v1/showcase/${opts.itemId}/comments`)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey, true),
+    body: JSON.stringify({ body: opts.body })
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as import('./types').ShowcaseComment
+}
+
+export async function deleteShowcaseComment(opts: {
+  apiKey: string
+  itemId: string
+  commentId: string
+}) {
+  const url = joinUrl(
+    apiBase(),
+    `/v1/showcase/${opts.itemId}/comments/${opts.commentId}`
+  )
+  const res = await fetchWithTimeout(url, {
+    method: 'DELETE',
+    timeoutMs: 60_000,
+    headers: authHeaders(opts.apiKey)
+  })
+  if (!res.ok) {
+    const data = await parseJsonSafe(res)
+    throw new Error(mapHttpError(res.status, data))
+  }
+}
+
 export async function listCloudGallery(opts: {
   apiKey: string
   limit?: number
@@ -760,6 +838,46 @@ export async function listCloudGallery(opts: {
   const data = await parseJsonSafe(res)
   if (!res.ok) throw new Error(mapHttpError(res.status, data))
   return data as { items: import('./types').CloudGalleryItem[]; count: number }
+}
+
+export async function createWorkRecord(opts: {
+  apiKey: string
+  prompt: string
+  negativePrompt?: string
+  mode: string
+  width: number
+  height: number
+  steps: number
+  seed?: number | null
+  remoteTaskId?: string
+  cloudGalleryId?: string
+  mimeType?: string
+}): Promise<{ id: string }> {
+  const url = joinUrl(apiBase(), '/v1/works')
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: 60_000,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-API-Key': opts.apiKey
+    },
+    body: JSON.stringify({
+      prompt: opts.prompt,
+      negative_prompt: opts.negativePrompt || null,
+      mode: opts.mode || 'txt2img',
+      width: opts.width,
+      height: opts.height,
+      steps: opts.steps,
+      seed: opts.seed ?? null,
+      remote_task_id: opts.remoteTaskId || null,
+      cloud_gallery_id: opts.cloudGalleryId || null,
+      mime_type: opts.mimeType || null
+    })
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as { id: string }
 }
 
 export async function uploadCloudGallery(opts: {

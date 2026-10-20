@@ -6,8 +6,9 @@
 
 ```text
 Studio（远程客户端）
- → HTTPS/公网 Nginx → FRP → 本机 FastAPI（app/）
- → ComfyUI → 本地 GPU
+ → HTTPS/公网 Nginx
+    ├─ 数据面（云机 Meta：INSTANCE_ID 隔离）提示词 / 用户 / works / 画廊 / 展馆
+    └─ 生成面（FRP → 本机 FastAPI）/v1/images /v1/tasks → ComfyUI → 本地 GPU
 
 Gateway（本机 Electron）
  → 启停 ComfyUI / FastAPI / frpc、开机自启勾选、用户与监控、提示词库、工作流运维
@@ -16,7 +17,7 @@ Gateway Admin Web（外网）
  → 审用户 / hold / 注销；总览可远程启停本机 ComfyUI·FRP·重启 API（需 HOST_* + 每次 TOTP）
 ```
 
-推理永远在本机 GPU；云端只做入口与转发。**不要**把 ComfyUI `8188` 暴露到公网。
+推理永远在本机 GPU；**权威用户内容按 `INSTANCE_ID` 落在云机**（见 `docs/ARCHITECTURE_CLOUD_DATA.md`）。**不要**把 ComfyUI `8188` 暴露到公网。共用隧道时不同产品链必须不同 `INSTANCE_ID` / Meta 进程，禁止串库。
 
 ## 仓库地图
 
@@ -120,7 +121,7 @@ API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 
 ### Gateway 启停注意
 
-- ComfyUI 启动命令必须指向其目录下的 `.venv\Scripts\python.exe`，系统 Python 常缺 alembic/sqlalchemy 等依赖
+- ComfyUI 启动：桌面版用其目录下 `.venv\Scripts\python.exe`；Windows 便携版选 `ComfyUI_windows_portable`（或外层安装夹），Gateway / `HOST_COMFY_*` 会改用 `python_embeded`。勿用系统 Python（常缺 alembic/sqlalchemy）
 - Electron「启动全部」可按勾选拉起 ComfyUI → API → FRP；Admin Web 侧停 FRP / 重启 API 会短暂断公网隧道
 
 ## 文档放哪
@@ -130,6 +131,7 @@ API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 | 用户/运维快速上手 | `README.md` |
 | Agent / 开发约束（本文） | `AGENTS.md` |
 | 长篇设计、部署、排障 | `docs/` |
+| 产品/工程待办 | `docs/TODO.md` |
 | 桌面端说明 | `desktop/README.md` |
 | Web Studio | `desktop/studio-web/README.md` |
 | Gateway Admin Web | `desktop/gateway-web/README.md` |

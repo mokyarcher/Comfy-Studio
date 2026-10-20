@@ -129,9 +129,11 @@ Header：`X-API-Key`、`Content-Type: application/json`
 
 ### 展馆（Showcase）
 
-- `GET /v1/showcase` → `{ items[], count }`（含 `image_url` / `thumb_url` / `ref_urls`，拉媒体仍需 Key）
+- `GET /v1/showcase` → `{ items[], count }`（含 `image_url` / `thumb_url` / `ref_urls`，拉媒体仍需 Key；含互动字段 `like_count` / `favorite_count` / `comment_count` / `liked_by_me` / `favorited_by_me`）
 - `POST /v1/showcase`：`multipart` 主图 `image` + 元数据字段；可选 `refs`
 - `POST /v1/showcase/{id}/unlist`：作者下架
+- `POST /v1/showcase/{id}/like` · `/favorite` → 切换点赞/收藏，返回互动计数
+- `GET|POST /v1/showcase/{id}/comments` · `DELETE .../comments/{comment_id}`：评论列表 / 发表（body≤500）/ 作者或管理员删除
 
 ### 私有云端画廊（Gateway 本机）
 
@@ -141,6 +143,14 @@ Header：`X-API-Key`、`Content-Type: application/json`
 - `POST /v1/cloud-gallery`：`multipart` 字段同展馆（`image` + prompt/mode/尺寸等），支持图/视频
 - `GET /v1/cloud-gallery/{id}/image` · `/thumb`（需 Key，且仅 owner）
 - `DELETE /v1/cloud-gallery/{id}`
+
+### 统一作品记录（`INSTANCE_ID` 隔离目录下的 `works.db`）
+
+- `GET /v1/works` → `{ items[], count }`（含可选 `cloud_gallery_id` / `image_url`）
+- `POST /v1/works` `{ prompt, mode, width, height, steps, seed?, remote_task_id?, cloud_gallery_id?, … }`
+- `DELETE /v1/works/{id}`
+
+部署：云 Meta 设 `ENABLE_GENERATION=false` + `INSTANCE_ID=…`；nginx 分流见 `deploy/comfy-studio-app.split.nginx.conf` 与 `docs/ARCHITECTURE_CLOUD_DATA.md`。
 
 ### `GET /v1/prompt/polish/status`
 
@@ -223,7 +233,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
   - `GET /v1/admin/users` → 含 `last_seen_at`（业务请求会刷新；Admin Web 用 `ACTIVE_USER_WINDOW_MINUTES` 默认 15 分钟内视为在线）
   - `POST /v1/admin/users/{id}/approve` → 自动生成 Key（受 `MAX_APPROVED_USERS` 限制）
   - `POST /v1/admin/users/{id}/reject`
-  - `DELETE /v1/admin/users/{id}` → 注销用户：删除账号及云端画廊 / 展馆投稿 / 共享提示词 / 用量记录（不可删管理员）；响应含 `cloud_gallery_deleted` / `showcase_deleted` / `shared_prompts_deleted`
+  - `DELETE /v1/admin/users/{id}` → 注销用户：删除账号及云端画廊 / 展馆投稿 / 共享提示词 / 作品记录 / 用量记录（不可删管理员）；响应含 `cloud_gallery_deleted` / `showcase_deleted` / `shared_prompts_deleted` / `works_deleted`
   - `POST /v1/admin/users/{id}/reset-password` → 返回临时密码（忘密时由管理员重置）
   - `PATCH /v1/admin/users/{id}`、`POST .../rotate-key`
   - `GET|POST /v1/admin/local-hold`

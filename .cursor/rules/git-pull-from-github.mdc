@@ -1,0 +1,15 @@
+---
+description: Pull/sync code only from GitHub origin, never the cloud VPS
+alwaysApply: true
+---
+
+# 拉取代码 = 只跟 GitHub
+
+用户说「拉取 / 拉代码 / 同步最新代码」时：
+
+1. **唯一来源**：`origin` → `https://github.com/mokyarcher/Comfy-Studio.git`（GitHub）
+2. **不要** SSH/拉取 `root@111.229.166.216` 或其它云机上的仓库来当代码源
+3. 云机只用于 **部署静态站 / nginx**（Web Studio、Gateway Admin），与「拉代码」无关
+4. 以 GitHub `main`（或用户指定的分支）为准；本地落后时用 `git fetch` + `git pull --ff-only`（有本地冲突再 stash/说明，不要擅自 force）
+
+部署到云机仍可按 `deploy-authorization.mdc` 执行；那是上传构建产物，不是从云机 git pull。

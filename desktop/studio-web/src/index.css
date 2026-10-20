@@ -301,6 +301,92 @@ body {
   z-index: 4;
 }
 
+/* Bottom-right toasts — same liquid glass family as panels / CTA */
+.glass-toast {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  border: none;
+  border-radius: var(--glass-radius);
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.36),
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 1px 2px rgba(255, 255, 255, 0.1) inset;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.glass-toast::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.58) 0%,
+    rgba(255, 255, 255, 0.12) 30%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.2) 74%,
+    rgba(255, 255, 255, 0.48) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.glass-toast::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 42%);
+  opacity: 0.75;
+}
+
+.glass-toast > * {
+  position: relative;
+  z-index: 1;
+}
+
+.glass-toast:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 1px 2px rgba(255, 255, 255, 0.12) inset;
+}
+
+.glass-toast-success {
+  background: color-mix(in srgb, var(--success) 16%, var(--glass-bg-strong));
+  color: color-mix(in srgb, var(--success) 72%, #f3fff8);
+}
+
+.glass-toast-error {
+  background: color-mix(in srgb, var(--danger) 16%, var(--glass-bg-strong));
+  color: color-mix(in srgb, var(--danger) 78%, #fff5f5);
+}
+
+.glass-toast-info {
+  color: var(--text);
+}
+
 .glass-cta {
   display: block;
   width: 100%;
