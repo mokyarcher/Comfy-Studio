@@ -173,6 +173,39 @@ def _gpu_mem_used_priority(sensor: str) -> int:
     return 0
 
 
+def _cpu_temp_priority(sensor: str) -> int:
+    """Rank CPU temp sensors. Never use Distance-to-TjMax (idle headroom ≈ 70°C)."""
+    s = sensor.lower().strip()
+    if any(
+        k in s
+        for k in (
+            "distance",
+            "tjmax",
+            "t.j.max",
+            "t j max",
+            "limit",
+            "crit",
+            "alarm",
+            "throttle",
+            "delta",
+        )
+    ):
+        return -1
+    if "average" in s:
+        return 5
+    if any(k in s for k in ("package", "tctl", "tdie")):
+        return 4
+    if "core max" in s:
+        return 3
+    # "CPU Core #1" / "Core #1" — real die temps when Average/Package missing
+    if "core #" in s or re.search(r"\bcore\s+\d+", s):
+        return 2
+    # Generic "CPU" (often SuperIO) — last resort only
+    if s in ("cpu", "cpu temperature"):
+        return 1
+    return 0
+
+
 def _ingest_sensor(
     store: dict[str, float],
     hw: str,
@@ -192,10 +225,21 @@ def _ingest_sensor(
             else:
                 _pick_better(store, "gpu_temp", value, prefer_max=True)
         elif hw == "cpu":
-            if any(k in s for k in ("package", "tctl", "tdie", "average", "core max", "cpu")):
+            prio = _cpu_temp_priority(s)
+            if prio < 0:
+                return
+            if prio == 0 and "cpu_temp" in store:
+                return
+            prev = int(store.get("_cpu_temp_prio", -1))
+            if prio > prev:
+                store["cpu_temp"] = value
+                store["_cpu_temp_prio"] = float(prio)
+            elif prio == prev and prio >= 2:
+                # Same-class cores: keep the hotter reading (≈ Core Max).
                 _pick_better(store, "cpu_temp", value, prefer_max=True)
             elif "cpu_temp" not in store:
                 store["cpu_temp"] = value
+                store["_cpu_temp_prio"] = float(prio)
         return
 
     if "load" in g or "负载" in g or "utilization" in g:
@@ -368,39 +412,68 @@ def summarize_lhm_tree(root: Any) -> dict[str, Any]:
     }
 
 
+def _lhm_fetch_bases(settings: Settings) -> list[str]:
+    """Bases to try: configured URL, then common local binds."""
+    bases: list[str] = []
+    configured = (settings.lhm_url or "http://127.0.0.1:8085").rstrip("/")
+    bases.append(configured)
+    # LHM often binds a LAN NIC IP (127.0.0.1 is rewritten to '+' internally).
+    try:
+        import socket
+
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127."):
+                bases.append(f"http://{ip}:8085")
+    except OSError:
+        pass
+    if "127.0.0.1" not in configured:
+        bases.append("http://127.0.0.1:8085")
+    seen: set[str] = set()
+    out: list[str] = []
+    for b in bases:
+        if b not in seen:
+            seen.add(b)
+            out.append(b)
+    return out
+
+
 async def fetch_host_metrics(settings: Settings) -> dict[str, Any]:
     """Return API-shaped metrics dict including ok / message / source."""
-    base = (settings.lhm_url or "http://127.0.0.1:8085").rstrip("/")
-    paths = ["/Data.json", "/data.json"]
+    bases = _lhm_fetch_bases(settings)
+    paths = ["/data.json", "/Data.json"]
     last_err = "unreachable"
     timeout = max(1.0, float(settings.lhm_timeout_seconds))
+    primary = bases[0]
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        for path in paths:
-            url = f"{base}{path}"
-            try:
-                res = await client.get(url)
-            except httpx.HTTPError as exc:
-                last_err = str(exc)[:160]
-                continue
-            if res.status_code != 200:
-                last_err = f"HTTP {res.status_code}"
-                continue
-            try:
-                data = res.json()
-            except ValueError:
-                last_err = "invalid JSON"
-                continue
-            summary = summarize_lhm_tree(data)
-            if summary.get("ram_used_mb") is None or summary.get("ram_total_mb") is None:
-                summary = {**summary, **{k: v for k, v in _ram_from_os().items() if v is not None}}
-            return {
-                "ok": True,
-                "message": "ok",
-                "source": "libre_hardware_monitor",
-                "url": url,
-                **summary,
-            }
+        for base in bases:
+            for path in paths:
+                url = f"{base}{path}"
+                try:
+                    res = await client.get(url)
+                except httpx.HTTPError as exc:
+                    last_err = str(exc)[:160]
+                    continue
+                if res.status_code != 200:
+                    last_err = f"HTTP {res.status_code}"
+                    continue
+                try:
+                    data = res.json()
+                except ValueError:
+                    last_err = "invalid JSON"
+                    continue
+                summary = summarize_lhm_tree(data)
+                if summary.get("ram_used_mb") is None or summary.get("ram_total_mb") is None:
+                    summary = {**summary, **{k: v for k, v in _ram_from_os().items() if v is not None}}
+                return {
+                    "ok": True,
+                    "message": "ok",
+                    "source": "libre_hardware_monitor",
+                    "url": url,
+                    **summary,
+                }
 
     return {
         "ok": False,
@@ -409,7 +482,7 @@ async def fetch_host_metrics(settings: Settings) -> dict[str, Any]:
             "请确认已安装并开启 Remote Web Server。"
         ),
         "source": "libre_hardware_monitor",
-        "url": f"{base}/Data.json",
+        "url": f"{primary}/Data.json",
         "cpu_name": None,
         "gpu_name": None,
         "cpu_temp_c": None,

@@ -181,9 +181,17 @@ export type HostServiceItem = {
 export type HostServicesResponse = {
   enabled: boolean
   services: HostServiceItem[]
+  step_up_remaining_seconds?: number
 }
 
 export type HostServiceAction = 'start' | 'stop' | 'force_stop' | 'restart'
+
+export type HostServiceActionResult = {
+  ok: boolean
+  message: string
+  services: HostServiceItem[]
+  step_up_remaining_seconds?: number
+}
 
 export function fetchHostServices() {
   return api<HostServicesResponse>('/v1/admin/host-services')
@@ -192,13 +200,10 @@ export function fetchHostServices() {
 export function hostServiceAction(
   service: 'comfy' | 'api' | 'frp' | 'lhm',
   action: HostServiceAction,
-  totpCode: string
+  totpCode = ''
 ) {
-  return api<{ ok: boolean; message: string; services: HostServiceItem[] }>(
-    '/v1/admin/host-services/action',
-    {
-      method: 'POST',
-      body: JSON.stringify({ service, action, totp_code: totpCode.trim() })
-    }
-  )
+  return api<HostServiceActionResult>('/v1/admin/host-services/action', {
+    method: 'POST',
+    body: JSON.stringify({ service, action, totp_code: totpCode.trim() })
+  })
 }

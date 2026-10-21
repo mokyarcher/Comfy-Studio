@@ -359,21 +359,24 @@ GET {COMFYUI_URL}/system_stats  → 200 视为可达
 
 ```text
 GET  /v1/admin/host-services
-  → { enabled, services: [{ id, label, ok, state, message, pid?, configured, detail }] }
+  → { enabled, services: [...], step_up_remaining_seconds }
 
 POST /v1/admin/host-services/action
   body: {
-    "service": "comfy"|"api"|"frp",
+    "service": "comfy"|"api"|"frp"|"lhm",
     "action": "start"|"stop"|"force_stop"|"restart",
-    "totp_code": "123456"   // Authenticator 六位动态码（每次启停必填）
+    "totp_code": "123456"   // 免验证窗口外必填；窗口内可空
   }
-  → { ok, message, services }
+  → { ok, message, services, step_up_remaining_seconds }
 ```
 
 - `comfy`：start / stop / force_stop  
 - `frp`：start / stop（停止会断开公网隧道）  
 - `api`：仅 restart（远程无法在 API 已离线时再拉起）  
-- 动态码错误 → `401`；未配置 `ADMIN_TOTP_SECRET` → `503`；未启用 / 未配置路径 → `400` 类业务错误  
+- `lhm`：start / stop（LibreHardwareMonitor）  
+- 登录 TOTP 或成功启停校验后授予 `HOST_ACTION_STEP_UP_SECONDS`（默认 300）免重复动态码  
+- 动态码错误 / 免验证已过期且未传码 → `401`；未配置 `ADMIN_TOTP_SECRET` → `503`  
+
 
 Electron Gateway 仍可本机直接启停 ComfyUI / API / FRP（不经此接口），设置里可勾选开机自启三项。
 

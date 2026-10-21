@@ -739,6 +739,7 @@ class HostServiceItem(BaseModel):
 class HostServicesResponse(BaseModel):
     enabled: bool
     services: list[HostServiceItem]
+    step_up_remaining_seconds: int = 0
 
 
 class HostServiceActionRequest(BaseModel):
@@ -746,14 +747,15 @@ class HostServiceActionRequest(BaseModel):
 
     service: Literal["comfy", "api", "frp", "lhm"]
     action: Literal["start", "stop", "force_stop", "restart"]
-    # Re-auth: Authenticator 6-digit code required for every start/stop/restart
-    totp_code: str = Field(..., min_length=6, max_length=8)
+    # Required when step-up window expired; empty OK within HOST_ACTION_STEP_UP_SECONDS.
+    totp_code: str = Field(default="", max_length=8)
 
 
 class HostServiceActionResponse(BaseModel):
     ok: bool
     message: str
     services: list[HostServiceItem] = Field(default_factory=list)
+    step_up_remaining_seconds: int = 0
 
 
 class AdminUserResponse(BaseModel):

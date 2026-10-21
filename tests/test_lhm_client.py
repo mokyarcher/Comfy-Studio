@@ -125,6 +125,56 @@ def test_summarize_lhm_tree_cpu_gpu():
     assert s["total_power_w"] == 438.0
 
 
+def test_summarize_ignores_cpu_distance_to_tjmax():
+    """Distance-to-TjMax is headroom (~70°C idle), not die temperature."""
+    tree = {
+        "Text": "Sensor",
+        "Children": [
+            {
+                "Text": "12th Gen Intel Core i5-12400F",
+                "Children": [
+                    {
+                        "Text": "Temperatures",
+                        "Children": [
+                            {"Text": "CPU Package", "Value": "34.0 °C"},
+                            {"Text": "Core Max", "Value": "33.0 °C"},
+                            {"Text": "Core Average", "Value": "32.0 °C"},
+                            {"Text": "CPU Core #1", "Value": "31.0 °C"},
+                            {"Text": "CPU Distance to TjMax", "Value": "68.0 °C"},
+                            {"Text": "CPU Core #1 Distance to TjMax", "Value": "72.0 °C"},
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+    s = summarize_lhm_tree(tree)
+    assert s["cpu_temp_c"] == 32.0
+
+
+def test_summarize_cpu_temp_falls_back_to_core_sensors():
+    tree = {
+        "Text": "Sensor",
+        "Children": [
+            {
+                "Text": "12th Gen Intel Core i5-12400F",
+                "Children": [
+                    {
+                        "Text": "Temperatures",
+                        "Children": [
+                            {"Text": "CPU Core #1 Distance to TjMax", "Value": "72.0 °C"},
+                            {"Text": "CPU Core #1", "Value": "31.0 °C"},
+                            {"Text": "CPU Core #2", "Value": "33.0 °C"},
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+    s = summarize_lhm_tree(tree)
+    assert s["cpu_temp_c"] == 33.0
+
+
 def test_summarize_ignores_d3d_shared_memory_for_vram():
     """NVIDIA LHM lists Shared after Used; Shared must not overwrite VRAM."""
     tree = {

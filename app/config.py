@@ -185,6 +185,8 @@ class Settings(BaseSettings):
     admin_phone: str = ""
     admin_session_secret: str = Field(default="")
     admin_session_ttl_seconds: int = 12 * 3600
+    # After TOTP for host-services (or admin login), skip re-TOTP for this long.
+    host_action_step_up_seconds: int = 5 * 60
     admin_sms_db_path: Path = PROJECT_ROOT / "data" / "admin_sms.db"
     sms_cooldown_seconds: int = 60
     sms_daily_limit: int = 10

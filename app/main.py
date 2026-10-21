@@ -121,6 +121,7 @@ from app.sms_auth import (
     send_tencent_sms,
 )
 from app.totp import verify_totp
+from app import admin_step_up
 from app.email_auth import EmailResetStore, generate_otp_code, send_reset_email
 from app.user_store import normalize_email
 import secrets as _secrets
@@ -1256,12 +1257,20 @@ def create_app() -> FastAPI:
         _set_admin_cookie(
             response, token, state.settings.admin_session_ttl_seconds, request=request
         )
+        # Login TOTP already proved — grant short host-action step-up window.
+        admin_step_up.mark_elevated(
+            admin_step_up.elevation_key(session_token=token, user_id=None),
+            ttl_seconds=state.settings.host_action_step_up_seconds,
+        )
         logger.info("admin TOTP login ok")
         return AdminTotpLoginResponse()
 
     @app.post("/v1/auth/admin/logout", tags=["auth"])
     async def auth_admin_logout(request: Request, response: Response) -> dict[str, bool]:
         token = request.cookies.get(COOKIE_NAME)
+        admin_step_up.clear_elevated(
+            admin_step_up.elevation_key(session_token=token, user_id=None)
+        )
         state.sms_auth.revoke_session(token)
         _clear_admin_cookie(response, request=request)
         return {"ok": True}
@@ -1747,7 +1756,15 @@ def create_app() -> FastAPI:
         )
         return LocalHoldResponse(**snap.to_public_dict())
 
-    def _host_services_response() -> HostServicesResponse:
+    def _step_up_key_for_request(request: Request, auth: AuthContext) -> str | None:
+        return admin_step_up.elevation_key(
+            session_token=request.cookies.get(COOKIE_NAME),
+            user_id=auth.user.id if auth.user else None,
+        )
+
+    def _host_services_response(
+        *, step_up_remaining: int = 0
+    ) -> HostServicesResponse:
         settings = get_settings()
         items = [
             HostServiceItem(
@@ -1762,12 +1779,22 @@ def create_app() -> FastAPI:
             )
             for s in host_services_status(settings)
         ]
-        return HostServicesResponse(enabled=settings.host_services_enabled, services=items)
+        return HostServicesResponse(
+            enabled=settings.host_services_enabled,
+            services=items,
+            step_up_remaining_seconds=step_up_remaining,
+        )
 
     @app.get("/v1/admin/host-services", response_model=HostServicesResponse, tags=["admin"])
-    async def admin_host_services(auth: AuthContext = Depends(admin_auth)) -> HostServicesResponse:
-        _ = auth
-        return await asyncio.to_thread(_host_services_response)
+    async def admin_host_services(
+        request: Request,
+        auth: AuthContext = Depends(admin_auth),
+    ) -> HostServicesResponse:
+        key = _step_up_key_for_request(request, auth)
+        remaining = admin_step_up.remaining_seconds(key)
+        return await asyncio.to_thread(
+            _host_services_response, step_up_remaining=remaining
+        )
 
     @app.post(
         "/v1/admin/host-services/action",
@@ -1776,6 +1803,7 @@ def create_app() -> FastAPI:
     )
     async def admin_host_service_action(
         body: HostServiceActionRequest,
+        request: Request,
         auth: AuthContext = Depends(admin_auth),
     ) -> HostServiceActionResponse:
         settings = get_settings()
@@ -1785,11 +1813,26 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="未配置 ADMIN_TOTP_SECRET，无法二次校验启停操作",
             )
-        if not verify_totp(secret, body.totp_code):
+        step_key = _step_up_key_for_request(request, auth)
+        code = (body.totp_code or "").strip()
+        if admin_step_up.is_elevated(step_key):
+            pass
+        elif not code:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="需要动态码确认（或等待重新登录后的短时免验证已过期）",
+            )
+        elif not verify_totp(secret, code):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="动态码错误或已过期",
             )
+        else:
+            admin_step_up.mark_elevated(
+                step_key,
+                ttl_seconds=settings.host_action_step_up_seconds,
+            )
+
         ok, message = await asyncio.to_thread(
             host_service_run_action, settings, body.service, body.action
         )
@@ -1808,8 +1851,16 @@ def create_app() -> FastAPI:
                 os._exit(0)
 
             asyncio.create_task(_exit_soon())
-        snap = await asyncio.to_thread(_host_services_response)
-        return HostServiceActionResponse(ok=ok, message=message, services=snap.services)
+        remaining = admin_step_up.remaining_seconds(step_key)
+        snap = await asyncio.to_thread(
+            _host_services_response, step_up_remaining=remaining
+        )
+        return HostServiceActionResponse(
+            ok=ok,
+            message=message,
+            services=snap.services,
+            step_up_remaining_seconds=remaining,
+        )
 
     def _prompt_library_response() -> PromptLibraryResponse:
         doc = state.prompt_library.get()

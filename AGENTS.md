@@ -15,7 +15,7 @@ Gateway（本机 Electron）
  → 启停 ComfyUI / FastAPI / frpc、开机自启勾选、用户与监控、提示词库、工作流运维
 
 Gateway Admin Web（外网）
- → 审用户 / hold / 注销；总览可远程启停本机 ComfyUI·FRP·重启 API（需 HOST_* + 每次 TOTP）
+ → 审用户 / hold / 注销；总览可远程启停本机 ComfyUI·FRP·重启 API（需 HOST_* + TOTP；验证后默认 5 分钟免重复）
 ```
 
 推理永远在本机 GPU；**权威用户内容按 `INSTANCE_ID` 落在云机**（见 `docs/ARCHITECTURE_CLOUD_DATA.md`）。**不要**把 ComfyUI `8188` 暴露到公网。共用隧道时不同产品链必须不同 `INSTANCE_ID` / Meta 进程，禁止串库。
@@ -64,7 +64,7 @@ Gateway Admin Web（外网）
 - AI 润色：`/v1/prompt/polish*` —— **上游 Key 只留服务端**（`POLISH_*`）；Studio 默认走网关代理
 - 隐私：成功下载后可清理任务与 Comfy 输入输出；不要在日志打印完整 Key
 - 本地占用：`local_hold` —— Gateway 可「本地占用 GPU」，避免与远程任务抢卡
-- 本机服务启停：`app/host_services.py` + `GET|POST /v1/admin/host-services*`；`.env` 配 `HOST_COMFY_DIR` / `HOST_COMFY_LAUNCH`（须用 ComfyUI 自己的 `.venv`，勿用系统 Python）/ `HOST_FRPC_*` / `HOST_LHM_PATH`（LibreHardwareMonitor）；可用 `HOST_SERVICES_ENABLED=false` 关掉远程启停。每次 action 须再填 Authenticator 动态码
+- 本机服务启停：`app/host_services.py` + `GET|POST /v1/admin/host-services*`；`.env` 配 `HOST_COMFY_DIR` / `HOST_COMFY_LAUNCH`（须用 ComfyUI 自己的 `.venv`，勿用系统 Python）/ `HOST_FRPC_*` / `HOST_LHM_PATH`（LibreHardwareMonitor）；可用 `HOST_SERVICES_ENABLED=false` 关掉远程启停。action 须 Authenticator 动态码；登录或校验成功后 `HOST_ACTION_STEP_UP_SECONDS`（默认 300）内免重复输入
 - 主机传感器：`GET /v1/system/host-metrics`（生成面）代理本机 LHM `Data.json` 摘要；**勿**把 `8085` 暴露公网
 
 测试：

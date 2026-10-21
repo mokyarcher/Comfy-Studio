@@ -29,6 +29,17 @@ export function DashboardPage() {
   const [actionBusy, setActionBusy] = useState('')
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [totp, setTotp] = useState('')
+  /** Epoch ms until which host actions skip TOTP (server step-up window). */
+  const [stepUpUntil, setStepUpUntil] = useState(0)
+
+  function applyStepUpRemaining(seconds?: number) {
+    const sec = Math.max(0, Math.floor(seconds ?? 0))
+    setStepUpUntil(sec > 0 ? Date.now() + sec * 1000 : 0)
+  }
+
+  function stepUpActive() {
+    return Date.now() < stepUpUntil
+  }
 
   async function reload() {
     setError('')
@@ -43,6 +54,7 @@ export function DashboardPage() {
       if (hs) {
         setServices(hs.services)
         setServicesEnabled(hs.enabled)
+        applyStepUpRemaining(hs.step_up_remaining_seconds)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败')
@@ -70,28 +82,18 @@ export function DashboardPage() {
     }
   }
 
-  function requestAction(next: PendingAction) {
-    setError('')
-    setTotp('')
-    setPending(next)
-  }
-
-  async function confirmAction() {
-    if (!pending) return
-    const code = totp.trim()
-    if (!/^\d{6}$/.test(code)) {
-      setError('请输入 6 位动态码')
-      return
-    }
-    const { service, action } = pending
+  async function runHostAction(
+    service: PendingAction['service'],
+    action: PendingAction['action'],
+    totpCode: string
+  ) {
     const key = `${service}:${action}`
     setActionBusy(key)
     setError('')
     try {
-      const res = await hostServiceAction(service, action, code)
+      const res = await hostServiceAction(service, action, totpCode)
       setServices(res.services)
-      setPending(null)
-      setTotp('')
+      applyStepUpRemaining(res.step_up_remaining_seconds)
       if (!res.ok) setError(res.message)
       if (service === 'api' && action === 'restart' && res.ok) {
         setError('')
@@ -100,10 +102,37 @@ export function DashboardPage() {
         void reload()
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '操作失败')
+      const msg = err instanceof Error ? err.message : '操作失败'
+      setError(msg)
+      // Step-up expired / missing code → force TOTP modal next time.
+      if (msg.includes('动态码') || msg.includes('401')) {
+        setStepUpUntil(0)
+      }
+      void reload()
     } finally {
       setActionBusy('')
     }
+  }
+
+  function requestAction(next: PendingAction) {
+    setError('')
+    setTotp('')
+    setPending(next)
+  }
+
+  async function confirmAction() {
+    if (!pending) return
+    const skipTotp = stepUpActive()
+    const code = totp.trim()
+    if (!skipTotp && !/^\d{6}$/.test(code)) {
+      setError('请输入 6 位动态码')
+      return
+    }
+    const { service, action } = pending
+    // Close dialog immediately — host actions (esp. LHM) can take many seconds.
+    setPending(null)
+    setTotp('')
+    await runHostAction(service, action, skipTotp ? '' : code)
   }
 
   return (
@@ -121,7 +150,14 @@ export function DashboardPage() {
         <div>
           <h2 className="text-sm font-medium">本机服务</h2>
           <p className="mt-1 text-xs text-muted">
-            启停需再次输入 Authenticator 六位动态码。停 FRP 或重启 API 会短暂断开公网。
+            启停需 Authenticator 动态码；验证后 5 分钟内免重复输入。停 FRP 或重启 API
+            会短暂断开公网。
+            {stepUpActive() ? (
+              <span className="text-success">
+                {' '}
+                · 免验证剩余约 {Math.max(1, Math.ceil((stepUpUntil - Date.now()) / 60000))} 分钟
+              </span>
+            ) : null}
           </p>
         </div>
         {!servicesEnabled ? (
@@ -168,9 +204,10 @@ export function DashboardPage() {
       </div>
 
       {pending ? (
-        <TotpModal
+        <ConfirmActionModal
           title={pending.title}
           hint={pending.hint}
+          needTotp={!stepUpActive()}
           totp={totp}
           busy={Boolean(actionBusy)}
           onTotp={setTotp}
@@ -185,9 +222,10 @@ export function DashboardPage() {
   )
 }
 
-function TotpModal({
+function ConfirmActionModal({
   title,
   hint,
+  needTotp,
   totp,
   busy,
   onTotp,
@@ -196,6 +234,7 @@ function TotpModal({
 }: {
   title: string
   hint?: string
+  needTotp: boolean
   totp: string
   busy: boolean
   onTotp: (v: string) => void
@@ -207,7 +246,7 @@ function TotpModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
-      aria-label="二次校验"
+      aria-label={needTotp ? '二次校验' : '确认操作'}
       onClick={onCancel}
     >
       <div
@@ -216,30 +255,45 @@ function TotpModal({
       >
         <div>
           <h3 className="text-base font-semibold">{title}</h3>
-          <p className="mt-1 text-xs text-muted">请输入 Authenticator 当前 6 位动态码确认操作</p>
+          <p className="mt-1 text-xs text-muted">
+            {needTotp
+              ? '请输入 Authenticator 当前 6 位动态码确认操作'
+              : '免验证窗口内，确认后将立即执行（无需动态码）'}
+          </p>
           {hint ? <p className="mt-2 text-xs text-warning">{hint}</p> : null}
         </div>
-        <div>
-          <label className="label">动态码</label>
-          <input
-            className="input font-mono tracking-[0.35em]"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-            maxLength={6}
-            placeholder="••••••"
-            value={totp}
-            onChange={(e) => onTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onConfirm()
-            }}
-          />
-        </div>
+        {needTotp ? (
+          <div>
+            <label className="label">动态码</label>
+            <input
+              className="input font-mono tracking-[0.35em]"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={6}
+              placeholder="••••••"
+              value={totp}
+              onChange={(e) => onTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onConfirm()
+              }}
+            />
+          </div>
+        ) : null}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={onCancel}>
             取消
           </button>
-          <button type="button" className="btn-primary text-sm" disabled={busy} onClick={onConfirm}>
+          <button
+            type="button"
+            className="btn-primary text-sm"
+            disabled={busy || (needTotp && totp.trim().length !== 6)}
+            autoFocus={!needTotp}
+            onClick={onConfirm}
+            onKeyDown={(e) => {
+              if (!needTotp && e.key === 'Enter') onConfirm()
+            }}
+          >
             {busy ? '提交中…' : '确认'}
           </button>
         </div>
