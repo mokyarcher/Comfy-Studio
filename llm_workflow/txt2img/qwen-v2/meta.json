@@ -1,0 +1,6 @@
+{
+  "id": "qwen-t2i-v2",
+  "display_name": "Qwen T2I V2",
+  "description": "Qwen T2I V2 文生图v2版本",
+  "default": false
+}
