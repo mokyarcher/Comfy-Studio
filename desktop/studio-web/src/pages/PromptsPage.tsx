@@ -15,6 +15,8 @@ import { useToast } from '@/store/toast'
 type Tab = 'official' | 'shared' | 'local'
 
 const LOCAL_KEY = 'comfy-studio-web-local-prompts'
+/** 3×3 grid — keep DOM light so tab/tag transitions stay smooth. */
+const PAGE_SIZE = 9
 
 function itemTags(item: PromptTemplate | SharedPrompt): string[] {
   return Array.isArray(item.tags) ? item.tags.map((t) => String(t).trim()).filter(Boolean) : []
@@ -29,6 +31,7 @@ export function PromptsPage() {
   const [shared, setShared] = useState<SharedPrompt[]>([])
   const [local, setLocal] = useState<PromptTemplate[]>([])
   const [tagFilter, setTagFilter] = useState('')
+  const [page, setPage] = useState(1)
   const [draft, setDraft] = useState({ title: '', prompt: '', negative: '', tags: '' })
 
   useEffect(() => {
@@ -88,26 +91,48 @@ export function PromptsPage() {
 
   const list = tab === 'official' ? official : tab === 'shared' ? shared : local
 
-  const allTags = useMemo(() => {
+  const tagFreq = useMemo(() => {
     const freq = new Map<string, number>()
     for (const item of list) {
       for (const tag of itemTags(item)) {
         freq.set(tag, (freq.get(tag) ?? 0) + 1)
       }
     }
-    return [...freq.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
-      .map(([tag]) => tag)
+    return freq
   }, [list])
+
+  const allTags = useMemo(
+    () =>
+      [...tagFreq.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
+        .map(([tag]) => tag),
+    [tagFreq]
+  )
 
   const filtered = useMemo(() => {
     if (!tagFilter) return list
     return list.filter((item) => itemTags(item).includes(tagFilter))
   }, [list, tagFilter])
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageItems = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, safePage])
+
   useEffect(() => {
     setTagFilter('')
+    setPage(1)
   }, [tab])
+
+  useEffect(() => {
+    setPage(1)
+  }, [tagFilter])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   return (
     <div className="page space-y-4">
@@ -134,19 +159,16 @@ export function PromptsPage() {
           >
             全部 ({list.length})
           </button>
-          {allTags.map((tag) => {
-            const count = list.filter((item) => itemTags(item).includes(tag)).length
-            return (
-              <button
-                key={tag}
-                type="button"
-                className={`px-2.5 py-1 text-xs ${tagFilter === tag ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setTagFilter((cur) => (cur === tag ? '' : tag))}
-              >
-                {tag} ({count})
-              </button>
-            )
-          })}
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              className={`px-2.5 py-1 text-xs ${tagFilter === tag ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setTagFilter((cur) => (cur === tag ? '' : tag))}
+            >
+              {tag} ({tagFreq.get(tag) ?? 0})
+            </button>
+          ))}
         </div>
       ) : null}
 
@@ -213,68 +235,95 @@ export function PromptsPage() {
           <p className="text-sm text-muted">{list.length ? '该标签下暂无模板' : '暂无模板'}</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item) => {
-            const tags = itemTags(item)
-            return (
-              <div
-                key={item.id}
-                role="button"
-                tabIndex={0}
-                className="card flex cursor-pointer flex-col p-4 text-left transition hover:border-white/30"
-                onClick={() => usePrompt(item.prompt, item.negative_prompt)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    usePrompt(item.prompt, item.negative_prompt)
-                  }
-                }}
-              >
-                <h3 className="text-sm font-medium text-text">{item.title}</h3>
-                {'author_name' in item && item.author_name ? (
-                  <p className="mt-0.5 text-[11px] text-muted">来自 {item.author_name}</p>
-                ) : null}
-                {tags.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-                    {tags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] leading-4 ${
-                          tagFilter === tag
-                            ? 'bg-white/25 text-text'
-                            : 'bg-white/10 text-muted hover:bg-white/16 hover:text-text'
-                        }`}
-                        onClick={() => setTagFilter((cur) => (cur === tag ? '' : tag))}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <p className="mt-2 line-clamp-4 flex-1 text-xs leading-relaxed text-muted">{item.prompt}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <PromptTranslateButton text={item.prompt} stopPropagation />
-                  {'mine' in item && item.mine ? (
-                    <button
-                      type="button"
-                      className="btn-danger text-xs"
-                      onClick={async () => {
-                        await deleteSharedPrompt({ apiKey, itemId: item.id })
-                        push('已删除', 'success')
-                        setTab('shared')
-                        const r = await listSharedPrompts({ apiKey })
-                        setShared(r.items || [])
-                      }}
-                    >
-                      删除
-                    </button>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {pageItems.map((item) => {
+              const tags = itemTags(item)
+              return (
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  className="card flex cursor-pointer flex-col p-4 text-left transition hover:border-white/30"
+                  onClick={() => usePrompt(item.prompt, item.negative_prompt)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      usePrompt(item.prompt, item.negative_prompt)
+                    }
+                  }}
+                >
+                  <h3 className="text-sm font-medium text-text">{item.title}</h3>
+                  {'author_name' in item && item.author_name ? (
+                    <p className="mt-0.5 text-[11px] text-muted">来自 {item.author_name}</p>
                   ) : null}
+                  {tags.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                      {tags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] leading-4 ${
+                            tagFilter === tag
+                              ? 'bg-white/25 text-text'
+                              : 'bg-white/10 text-muted hover:bg-white/16 hover:text-text'
+                          }`}
+                          onClick={() => setTagFilter((cur) => (cur === tag ? '' : tag))}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="mt-2 line-clamp-4 flex-1 text-xs leading-relaxed text-muted">{item.prompt}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <PromptTranslateButton text={item.prompt} stopPropagation />
+                    {'mine' in item && item.mine ? (
+                      <button
+                        type="button"
+                        className="btn-danger text-xs"
+                        onClick={async () => {
+                          await deleteSharedPrompt({ apiKey, itemId: item.id })
+                          push('已删除', 'success')
+                          setTab('shared')
+                          const r = await listSharedPrompts({ apiKey })
+                          setShared(r.items || [])
+                        }}
+                      >
+                        删除
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+
+          {filtered.length > PAGE_SIZE ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                上一页
+              </button>
+              <span className="min-w-[5.5rem] text-center text-xs tabular-nums text-muted">
+                {safePage} / {totalPages}
+                <span className="ml-1.5 text-[11px] opacity-70">共 {filtered.length}</span>
+              </span>
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                下一页
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   )

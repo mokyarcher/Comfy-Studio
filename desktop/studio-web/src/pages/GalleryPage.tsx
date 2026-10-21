@@ -40,16 +40,17 @@ type GalleryRow = GalleryCacheRow
 type BusyAction = 'share' | 'favorite' | 'delete' | 'export' | null
 
 const THUMB_BATCH = 3
-const PAGE = 12
-/** Prefetch a few tiles past the fold so scroll feels instant. */
-const PREFETCH = 6
+/** 6×2 dense grid per page — fill complete rows (not 9 leaving a half row). */
+const PAGE_SIZE = 12
+/** Prefetch next page thumbs so flipping pages feels instant. */
+const PREFETCH = PAGE_SIZE
 
 export function GalleryPage() {
   const apiKey = useSession((s) => s.user!.apiKey)
   const push = useToast((s) => s.push)
   const navigate = useNavigate()
   const [items, setItems] = useState<GalleryRow[]>([])
-  const [visibleCount, setVisibleCount] = useState(PAGE)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<GalleryRow | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -61,7 +62,6 @@ export function GalleryPage() {
   const blobsRef = useRef(new Map<string, Blob>())
   const thumbInflight = useRef(new Set<string>())
   const genGen = useRef(0)
-  const sentinelRef = useRef<HTMLDivElement>(null)
 
   function revokeUrls(rows: GalleryRow[]) {
     for (const i of rows) {
@@ -80,11 +80,12 @@ export function GalleryPage() {
     return { ...meta, thumbUrl: '', fullUrl: '' }
   }
 
-  /** Build thumbs only for [0, until) — not the whole library. */
-  async function ensureThumbs(until: number, generation: number) {
+  /** Build thumbs for [from, until) — not the whole library. */
+  async function ensureThumbs(from: number, until: number, generation: number) {
+    const start = Math.max(0, from)
     const target = Math.min(until + PREFETCH, itemsRef.current.length)
     const pending = itemsRef.current
-      .slice(0, target)
+      .slice(start, target)
       .filter((r) => !r.thumbUrl && !thumbInflight.current.has(r.id))
     if (!pending.length) return
 
@@ -144,10 +145,10 @@ export function GalleryPage() {
 
     const metas = rows.map(toRow)
     setItems(metas)
-    setVisibleCount(PAGE)
+    setPage(1)
     setLoading(false)
     itemsRef.current = metas
-    await ensureThumbs(PAGE, generation)
+    await ensureThumbs(0, PAGE_SIZE, generation)
   }
 
   async function syncCloud() {
@@ -200,9 +201,9 @@ export function GalleryPage() {
         blobsRef.current = cached.blobs
         setItems(cached.rows)
         itemsRef.current = cached.rows
-        setVisibleCount(PAGE)
+        setPage(1)
         setLoading(false)
-        await ensureThumbs(PAGE, genGen.current)
+        await ensureThumbs(0, PAGE_SIZE, genGen.current)
       } else {
         await reload()
       }
@@ -221,11 +222,20 @@ export function GalleryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey])
 
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageStart = (safePage - 1) * PAGE_SIZE
+  const visible = items.slice(pageStart, pageStart + PAGE_SIZE)
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
   useEffect(() => {
     if (loading || !items.length) return
-    void ensureThumbs(visibleCount, genGen.current)
+    void ensureThumbs(pageStart, pageStart + PAGE_SIZE, genGen.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleCount, items.length, loading])
+  }, [safePage, pageStart, items.length, loading])
 
   useEffect(() => {
     if (!active && !fullscreen) return
@@ -244,20 +254,6 @@ export function GalleryPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [active, fullscreen, confirmDelete])
-
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el || visibleCount >= items.length) return
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return
-        setVisibleCount((n) => Math.min(items.length, n + PAGE))
-      },
-      { rootMargin: '320px 0px' }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [items.length, visibleCount])
 
   function getBlob(id: string): Blob | undefined {
     return blobsRef.current.get(id)
@@ -404,7 +400,6 @@ export function GalleryPage() {
     }
   }
 
-  const visible = items.slice(0, visibleCount)
   const isVideo = Boolean(active?.mimeType.startsWith('video/'))
   const mediaSrc = active ? active.fullUrl || active.thumbUrl : ''
 
@@ -462,8 +457,29 @@ export function GalleryPage() {
               </button>
             ))}
           </div>
-          {visibleCount < items.length ? (
-            <div ref={sentinelRef} className="h-8" aria-hidden />
+          {items.length > PAGE_SIZE ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                上一页
+              </button>
+              <span className="min-w-[5.5rem] text-center text-xs tabular-nums text-muted">
+                {safePage} / {totalPages}
+                <span className="ml-1.5 text-[11px] opacity-70">共 {items.length}</span>
+              </span>
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                下一页
+              </button>
+            </div>
           ) : null}
         </>
       )}

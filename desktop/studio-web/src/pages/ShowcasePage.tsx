@@ -32,6 +32,9 @@ import { useToast } from '@/store/toast'
 type Row = ShowcaseItem & { thumb?: string }
 type BusyAction = 'download' | 'unlist' | 'like' | 'favorite' | 'comment' | null
 
+/** 6×2 dense grid — only decode thumbs for the current page. */
+const PAGE_SIZE = 12
+
 function applyEngagement(row: Row, eng: ShowcaseEngagement): Row {
   return { ...row, ...eng }
 }
@@ -41,6 +44,7 @@ export function ShowcasePage() {
   const push = useToast((s) => s.push)
   const navigate = useNavigate()
   const [items, setItems] = useState<Row[]>([])
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<Row | null>(null)
   const [activeUrl, setActiveUrl] = useState<string | null>(null)
@@ -53,7 +57,11 @@ export function ShowcasePage() {
   /** Keep full-res object URLs across open/close — avoid re-download every click. */
   const fullCacheRef = useRef(new Map<string, string>())
   const inflightRef = useRef(new Map<string, Promise<string>>())
+  const thumbInflight = useRef(new Set<string>())
+  const listGen = useRef(0)
   const activeIdRef = useRef<string | null>(null)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
 
   function clearFullCache() {
     for (const url of fullCacheRef.current.values()) URL.revokeObjectURL(url)
@@ -99,24 +107,54 @@ export function ShowcasePage() {
     return task
   }
 
-  async function reload() {
-    setLoading(true)
-    try {
-      const { items: list } = await listShowcase({ apiKey, limit: 48 })
-      const withThumbs: Row[] = []
-      for (const item of list) {
-        const path = item.thumb_url || item.image_url
+  async function ensurePageThumbs(from: number, until: number, generation: number) {
+    const slice = itemsRef.current.slice(from, until)
+    const pending = slice.filter((r) => !r.thumb && !thumbInflight.current.has(r.id))
+    if (!pending.length) return
+
+    for (const row of pending) thumbInflight.current.add(row.id)
+    const results = await Promise.all(
+      pending.map(async (row) => {
+        const path = row.thumb_url || row.image_url
         try {
           const blob = await fetchAuthedBlob({ apiKey, path })
-          withThumbs.push({ ...item, thumb: URL.createObjectURL(blob) })
+          return { id: row.id, thumb: URL.createObjectURL(blob) }
         } catch {
-          withThumbs.push(item)
+          return { id: row.id, thumb: '' }
         }
+      })
+    )
+    if (generation !== listGen.current) {
+      for (const r of results) {
+        if (r.thumb) URL.revokeObjectURL(r.thumb)
+        thumbInflight.current.delete(r.id)
       }
+      return
+    }
+    const byId = new Map(results.map((r) => [r.id, r.thumb]))
+    setItems((prev) =>
+      prev.map((row) => {
+        const thumb = byId.get(row.id)
+        if (!thumb || row.thumb) return row
+        return { ...row, thumb }
+      })
+    )
+    for (const row of pending) thumbInflight.current.delete(row.id)
+  }
+
+  async function reload() {
+    const generation = ++listGen.current
+    thumbInflight.current.clear()
+    setLoading(true)
+    setPage(1)
+    try {
+      const { items: list } = await listShowcase({ apiKey, limit: 100 })
+      if (generation !== listGen.current) return
       setItems((prev) => {
         prev.forEach((p) => p.thumb && URL.revokeObjectURL(p.thumb))
-        return withThumbs
+        return list
       })
+      itemsRef.current = list
       // Drop stale full cache entries that are no longer in the list.
       const keep = new Set(list.map((i) => i.id))
       for (const [id, url] of fullCacheRef.current) {
@@ -126,13 +164,14 @@ export function ShowcasePage() {
         }
       }
       if (activeIdRef.current) {
-        const fresh = withThumbs.find((i) => i.id === activeIdRef.current)
+        const fresh = list.find((i) => i.id === activeIdRef.current)
         if (fresh) setActive((cur) => (cur ? { ...fresh, thumb: cur.thumb } : fresh))
       }
+      await ensurePageThumbs(0, PAGE_SIZE, generation)
     } catch (err) {
       push(err instanceof Error ? err.message : '加载失败', 'error')
     } finally {
-      setLoading(false)
+      if (generation === listGen.current) setLoading(false)
     }
   }
 
@@ -151,11 +190,29 @@ export function ShowcasePage() {
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageStart = (safePage - 1) * PAGE_SIZE
+  const pageItems = items.slice(pageStart, pageStart + PAGE_SIZE)
+
   useEffect(() => {
     void reload()
-    return () => clearFullCache()
+    return () => {
+      listGen.current += 1
+      clearFullCache()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  useEffect(() => {
+    if (loading || !items.length) return
+    void ensurePageThumbs(pageStart, pageStart + PAGE_SIZE, listGen.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safePage, pageStart, items.length, loading])
 
   useEffect(() => {
     if (!active && !fullscreen) return
@@ -361,53 +418,79 @@ export function ShowcasePage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="card gallery-card overflow-hidden text-left transition hover:border-white/30"
-            onClick={() => void openItem(item)}
-          >
-            <div className="media-thumb">
-              {item.thumb ? (
-                <img src={item.thumb} alt="" loading="lazy" decoding="async" />
-              ) : (
-                <span className="absolute inset-0 flex items-center justify-center text-xs text-muted">
-                  无预览
-                </span>
-              )}
+      {!loading && items.length ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            {pageItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="card gallery-card overflow-hidden text-left transition hover:border-white/30"
+                onClick={() => void openItem(item)}
+              >
+                <div className="media-thumb">
+                  {item.thumb ? (
+                    <img src={item.thumb} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    <div className="h-full w-full animate-pulse bg-white/5" aria-hidden />
+                  )}
+                </div>
+                <div className="space-y-1.5 p-2.5">
+                  <p className="line-clamp-2 text-xs leading-relaxed text-text">{item.prompt}</p>
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-muted">
+                    <span className="truncate">
+                      {item.author_name} · {modeLabel(item.mode)}
+                    </span>
+                    {item.mine ? <span className="shrink-0 text-accent">我的</span> : null}
+                  </div>
+                  <div className="flex items-center gap-2.5 text-[10px] text-muted">
+                    <span className="inline-flex items-center gap-0.5">
+                      <Heart
+                        className={`h-3 w-3 ${item.liked_by_me ? 'fill-primary text-primary' : ''}`}
+                      />
+                      {item.like_count || 0}
+                    </span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <Bookmark
+                        className={`h-3 w-3 ${item.favorited_by_me ? 'fill-primary text-primary' : ''}`}
+                      />
+                      {item.favorite_count || 0}
+                    </span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <MessageCircle className="h-3 w-3" />
+                      {item.comment_count || 0}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          {items.length > PAGE_SIZE ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                上一页
+              </button>
+              <span className="min-w-[5.5rem] text-center text-xs tabular-nums text-muted">
+                {safePage} / {totalPages}
+                <span className="ml-1.5 text-[11px] opacity-70">共 {items.length}</span>
+              </span>
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                下一页
+              </button>
             </div>
-            <div className="space-y-1.5 p-2.5">
-              <p className="line-clamp-2 text-xs leading-relaxed text-text">{item.prompt}</p>
-              <div className="flex items-center justify-between gap-2 text-[10px] text-muted">
-                <span className="truncate">
-                  {item.author_name} · {modeLabel(item.mode)}
-                </span>
-                {item.mine ? <span className="shrink-0 text-accent">我的</span> : null}
-              </div>
-              <div className="flex items-center gap-2.5 text-[10px] text-muted">
-                <span className="inline-flex items-center gap-0.5">
-                  <Heart
-                    className={`h-3 w-3 ${item.liked_by_me ? 'fill-primary text-primary' : ''}`}
-                  />
-                  {item.like_count || 0}
-                </span>
-                <span className="inline-flex items-center gap-0.5">
-                  <Bookmark
-                    className={`h-3 w-3 ${item.favorited_by_me ? 'fill-primary text-primary' : ''}`}
-                  />
-                  {item.favorite_count || 0}
-                </span>
-                <span className="inline-flex items-center gap-0.5">
-                  <MessageCircle className="h-3 w-3" />
-                  {item.comment_count || 0}
-                </span>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
+          ) : null}
+        </>
+      ) : null}
 
       {active ? (
         <div
