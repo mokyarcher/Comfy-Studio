@@ -159,6 +159,20 @@ def _pick_better(store: dict[str, float], key: str, value: float, *, prefer_max:
         store[key] = value
 
 
+def _gpu_mem_used_priority(sensor: str) -> int:
+    """Rank VRAM-used sensors. Shared memory must not win (often ~0.4G vs multi-GB VRAM)."""
+    s = sensor.lower().strip()
+    if "shared" in s:
+        return -1
+    if s in ("gpu memory used", "memory used") or s.endswith("gpu memory used"):
+        return 3
+    if "dedicated" in s and "used" in s:
+        return 2
+    if "used" in s or "dedicated" in s:
+        return 1
+    return 0
+
+
 def _ingest_sensor(
     store: dict[str, float],
     hw: str,
@@ -223,9 +237,19 @@ def _ingest_sensor(
             return
         if "load" in s:
             _pick_better(store, "gpu_mem_load", value, prefer_max=True)
+        elif "shared" in s:
+            # D3D Shared Memory Used is system RAM mapped for GPU — not VRAM.
+            return
         elif "used" in s or "dedicated" in s:
-            store["gpu_mem_used"] = mb
-        elif "total" in s:
+            # Prefer "GPU Memory Used" / dedicated VRAM over other "… Used" sensors.
+            prio = _gpu_mem_used_priority(s)
+            if prio < 0:
+                return
+            prev = int(store.get("_gpu_mem_used_prio", -1))
+            if prio >= prev:
+                store["gpu_mem_used"] = mb
+                store["_gpu_mem_used_prio"] = float(prio)
+        elif "total" in s and "shared" not in s:
             store["gpu_mem_total"] = mb
         elif "available" in s or "free" in s:
             store["gpu_mem_free"] = mb

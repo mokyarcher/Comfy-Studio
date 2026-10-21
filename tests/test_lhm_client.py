@@ -123,3 +123,30 @@ def test_summarize_lhm_tree_cpu_gpu():
     assert s["ram_used_mb"] == 13.6 * 1024
     assert s["ram_total_mb"] == round(13.6 * 1024 + 18.4 * 1024, 1)
     assert s["total_power_w"] == 438.0
+
+
+def test_summarize_ignores_d3d_shared_memory_for_vram():
+    """NVIDIA LHM lists Shared after Used; Shared must not overwrite VRAM."""
+    tree = {
+        "Text": "Sensor",
+        "Children": [
+            {
+                "Text": "NVIDIA GeForce RTX 5070",
+                "Children": [
+                    {
+                        "Text": "Data",
+                        "Children": [
+                            {"Text": "GPU Memory Free", "Value": "9534.0 MB"},
+                            {"Text": "GPU Memory Used", "Value": "2692.0 MB"},
+                            {"Text": "GPU Memory Total", "Value": "12227.0 MB"},
+                            {"Text": "D3D Dedicated Memory Used", "Value": "2428.3 MB"},
+                            {"Text": "D3D Shared Memory Used", "Value": "432.6 MB"},
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+    s = summarize_lhm_tree(tree)
+    assert s["gpu_mem_used_mb"] == 2692.0
+    assert s["gpu_mem_total_mb"] == 12227.0
