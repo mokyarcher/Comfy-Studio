@@ -10,6 +10,7 @@ import {
   Trash2,
   X
 } from 'lucide-react'
+import { ImageLightbox } from '@/components/ImageLightbox'
 import { WorkDetailMeta } from '@/components/WorkDetailMeta'
 import {
   deleteGallery,
@@ -670,29 +671,8 @@ export function GalleryPage() {
         </div>
       ) : null}
 
-      {fullscreen && active && !isVideo ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 p-4"
-          onClick={() => setFullscreen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="全屏预览"
-        >
-          <button
-            type="button"
-            className="absolute right-4 top-4 z-10 rounded-xl border border-white/20 bg-black/50 p-2 text-white hover:bg-black/70"
-            title="关闭全屏（Esc）"
-            onClick={() => setFullscreen(false)}
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <img
-            src={mediaSrc}
-            alt=""
-            className="max-h-full max-w-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+      {fullscreen && active && !isVideo && mediaSrc ? (
+        <ImageLightbox src={mediaSrc} onClose={() => setFullscreen(false)} />
       ) : null}
     </div>
   )

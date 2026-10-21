@@ -13,13 +13,25 @@ type Props = {
   onChange: (value: string) => void
   className?: string
   disabled?: boolean
+  id?: string
   'aria-label'?: string
 }
 
 type MenuPos = { top: number; left: number; width: number }
 
-/** Custom select with glass-like panel (native <select> popup cannot be frosted). */
-export function GlassSelect({ value, options, onChange, className = '', disabled, 'aria-label': ariaLabel }: Props) {
+/**
+ * Studio-wide dropdown. Prefer this over native <select> — OS popups cannot match
+ * liquid-glass (see Settings「语言」). Keep using GlassSelect for every new select.
+ */
+export function GlassSelect({
+  value,
+  options,
+  onChange,
+  className = '',
+  disabled,
+  id,
+  'aria-label': ariaLabel
+}: Props) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<MenuPos | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -71,6 +83,7 @@ export function GlassSelect({ value, options, onChange, className = '', disabled
     <div ref={rootRef} className={`glass-select ${open ? 'glass-select-open' : ''} ${className}`}>
       <button
         type="button"
+        id={id}
         className="glass-select-trigger"
         disabled={disabled}
         aria-haspopup="listbox"

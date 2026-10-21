@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PromptTranslateButton } from '@/components/PromptTranslateButton'
 import { SlidingSeg } from '@/components/SlidingSeg'
@@ -16,6 +16,10 @@ type Tab = 'official' | 'shared' | 'local'
 
 const LOCAL_KEY = 'comfy-studio-web-local-prompts'
 
+function itemTags(item: PromptTemplate | SharedPrompt): string[] {
+  return Array.isArray(item.tags) ? item.tags.map((t) => String(t).trim()).filter(Boolean) : []
+}
+
 export function PromptsPage() {
   const apiKey = useSession((s) => s.user!.apiKey)
   const push = useToast((s) => s.push)
@@ -24,6 +28,7 @@ export function PromptsPage() {
   const [official, setOfficial] = useState<PromptTemplate[]>([])
   const [shared, setShared] = useState<SharedPrompt[]>([])
   const [local, setLocal] = useState<PromptTemplate[]>([])
+  const [tagFilter, setTagFilter] = useState('')
   const [draft, setDraft] = useState({ title: '', prompt: '', negative: '', tags: '' })
 
   useEffect(() => {
@@ -83,6 +88,27 @@ export function PromptsPage() {
 
   const list = tab === 'official' ? official : tab === 'shared' ? shared : local
 
+  const allTags = useMemo(() => {
+    const freq = new Map<string, number>()
+    for (const item of list) {
+      for (const tag of itemTags(item)) {
+        freq.set(tag, (freq.get(tag) ?? 0) + 1)
+      }
+    }
+    return [...freq.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
+      .map(([tag]) => tag)
+  }, [list])
+
+  const filtered = useMemo(() => {
+    if (!tagFilter) return list
+    return list.filter((item) => itemTags(item).includes(tagFilter))
+  }, [list, tagFilter])
+
+  useEffect(() => {
+    setTagFilter('')
+  }, [tab])
+
   return (
     <div className="page space-y-4">
       <div className="page-header mb-0">
@@ -98,6 +124,31 @@ export function PromptsPage() {
           ]}
         />
       </div>
+
+      {allTags.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className={`px-2.5 py-1 text-xs ${tagFilter === '' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTagFilter('')}
+          >
+            全部 ({list.length})
+          </button>
+          {allTags.map((tag) => {
+            const count = list.filter((item) => itemTags(item).includes(tag)).length
+            return (
+              <button
+                key={tag}
+                type="button"
+                className={`px-2.5 py-1 text-xs ${tagFilter === tag ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setTagFilter((cur) => (cur === tag ? '' : tag))}
+              >
+                {tag} ({count})
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
 
       {tab === 'local' ? (
         <div className="card grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
@@ -157,51 +208,72 @@ export function PromptsPage() {
         </div>
       ) : null}
 
-      {!list.length ? (
+      {!filtered.length ? (
         <div className="empty-state min-h-[12rem]">
-          <p className="text-sm text-muted">暂无模板</p>
+          <p className="text-sm text-muted">{list.length ? '该标签下暂无模板' : '暂无模板'}</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {list.map((item) => (
-            <div
-              key={item.id}
-              role="button"
-              tabIndex={0}
-              className="card flex cursor-pointer flex-col p-4 text-left transition hover:border-white/30"
-              onClick={() => usePrompt(item.prompt, item.negative_prompt)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  usePrompt(item.prompt, item.negative_prompt)
-                }
-              }}
-            >
-              <h3 className="text-sm font-medium text-text">{item.title}</h3>
-              {'author_name' in item && item.author_name ? (
-                <p className="mt-0.5 text-[11px] text-muted">来自 {item.author_name}</p>
-              ) : null}
-              <p className="mt-2 line-clamp-4 flex-1 text-xs leading-relaxed text-muted">{item.prompt}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <PromptTranslateButton text={item.prompt} stopPropagation />
-                {'mine' in item && item.mine ? (
-                  <button
-                    type="button"
-                    className="btn-danger text-xs"
-                    onClick={async () => {
-                      await deleteSharedPrompt({ apiKey, itemId: item.id })
-                      push('已删除', 'success')
-                      setTab('shared')
-                      const r = await listSharedPrompts({ apiKey })
-                      setShared(r.items || [])
-                    }}
-                  >
-                    删除
-                  </button>
+          {filtered.map((item) => {
+            const tags = itemTags(item)
+            return (
+              <div
+                key={item.id}
+                role="button"
+                tabIndex={0}
+                className="card flex cursor-pointer flex-col p-4 text-left transition hover:border-white/30"
+                onClick={() => usePrompt(item.prompt, item.negative_prompt)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    usePrompt(item.prompt, item.negative_prompt)
+                  }
+                }}
+              >
+                <h3 className="text-sm font-medium text-text">{item.title}</h3>
+                {'author_name' in item && item.author_name ? (
+                  <p className="mt-0.5 text-[11px] text-muted">来自 {item.author_name}</p>
                 ) : null}
+                {tags.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                    {tags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] leading-4 ${
+                          tagFilter === tag
+                            ? 'bg-white/25 text-text'
+                            : 'bg-white/10 text-muted hover:bg-white/16 hover:text-text'
+                        }`}
+                        onClick={() => setTagFilter((cur) => (cur === tag ? '' : tag))}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="mt-2 line-clamp-4 flex-1 text-xs leading-relaxed text-muted">{item.prompt}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <PromptTranslateButton text={item.prompt} stopPropagation />
+                  {'mine' in item && item.mine ? (
+                    <button
+                      type="button"
+                      className="btn-danger text-xs"
+                      onClick={async () => {
+                        await deleteSharedPrompt({ apiKey, itemId: item.id })
+                        push('已删除', 'success')
+                        setTab('shared')
+                        const r = await listSharedPrompts({ apiKey })
+                        setShared(r.items || [])
+                      }}
+                    >
+                      删除
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

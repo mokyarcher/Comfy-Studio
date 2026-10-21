@@ -13,7 +13,8 @@ import {
   X
 } from 'lucide-react'
 import {
-  IMAGE_MAX_SIDE,
+  IMAGE_MAX_HEIGHT,
+  IMAGE_MAX_WIDTH,
   SIZE_PRESETS,
   VIDEO_MAX_LONG,
   VIDEO_MAX_SHORT,
@@ -398,7 +399,7 @@ export function CreatePage() {
                 <input
                   type="number"
                   min={64}
-                  max={draft.mode === 'image_to_video' ? VIDEO_MAX_LONG : IMAGE_MAX_SIDE}
+                  max={draft.mode === 'image_to_video' ? VIDEO_MAX_LONG : IMAGE_MAX_WIDTH}
                   step={8}
                   className="input"
                   value={draft.width}
@@ -418,7 +419,7 @@ export function CreatePage() {
                 <input
                   type="number"
                   min={64}
-                  max={draft.mode === 'image_to_video' ? VIDEO_MAX_LONG : IMAGE_MAX_SIDE}
+                  max={draft.mode === 'image_to_video' ? VIDEO_MAX_LONG : IMAGE_MAX_HEIGHT}
                   step={8}
                   className="input"
                   value={draft.height}
@@ -437,7 +438,7 @@ export function CreatePage() {
             <p className="mt-1.5 text-[11px] text-muted">
               {draft.mode === 'image_to_video'
                 ? `上限 ${VIDEO_MAX_LONG}×${VIDEO_MAX_SHORT} 或 ${VIDEO_MAX_SHORT}×${VIDEO_MAX_LONG}（8 的倍数）；上传起始图会按比例建议。`
-                : `上限 ${IMAGE_MAX_SIDE}×${IMAGE_MAX_SIDE}（8 的倍数）。`}
+                : `上限 ${IMAGE_MAX_WIDTH}×${IMAGE_MAX_HEIGHT}（8 的倍数）。`}
               当前 {draft.width}×{draft.height}
               {draft.width >= draft.height ? ' · 横/方' : ' · 竖版'}
             </p>

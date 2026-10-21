@@ -1,13 +1,16 @@
 import { Eraser, ImageIcon, ImagePlus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GlassButton } from '@/components/GlassButton'
+import { GlassSelect } from '@/components/GlassSelect'
 import { GlassSwitch } from '@/components/GlassSwitch'
+import { ImageLightbox } from '@/components/ImageLightbox'
 import { SlidingSeg } from '@/components/SlidingSeg'
 import { listWorkflows, polishViaGateway, translateViaGateway } from '@/lib/api'
 import { listGallery, type GalleryRecord } from '@/lib/gallery-db'
 import { runGenerateJob } from '@/lib/generate'
 import {
-  IMAGE_MAX_SIDE,
+  IMAGE_MAX_HEIGHT,
+  IMAGE_MAX_WIDTH,
   IMAGE_SIZE_PRESETS,
   MAX_VIDEO_LENGTH,
   SIZE_MULTIPLE,
@@ -119,6 +122,7 @@ export function CreatePage() {
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [previewIsVideo, setPreviewIsVideo] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const [historyId, setHistoryId] = useState<string | null>(null)
   const [status, setStatus] = useState('就绪')
   const [progressPercent, setProgressPercent] = useState<number | null>(null)
@@ -140,6 +144,7 @@ export function CreatePage() {
     setSeed('')
     setPreview(null)
     setPreviewIsVideo(false)
+    setLightboxOpen(false)
     setHistoryId(null)
     setStatus('就绪')
     setProgressPercent(null)
@@ -197,13 +202,14 @@ export function CreatePage() {
 
   const needsUpload = mode === 'image_edit' || mode === 'image_to_video'
   const isVideo = mode === 'image_to_video'
-  const imageMaxSide = Math.min(IMAGE_MAX_SIDE, maxWidth, maxHeight)
+  const imageMaxW = Math.min(IMAGE_MAX_WIDTH, maxWidth)
+  const imageMaxH = Math.min(IMAGE_MAX_HEIGHT, maxHeight)
   const sizePresets = isVideo ? VIDEO_SIZE_PRESETS : IMAGE_SIZE_PRESETS
 
   function applySize(nextW: number, nextH: number) {
     const sized = isVideo
       ? clampVideoSize(nextW, nextH)
-      : clampImageSize(nextW, nextH, imageMaxSide)
+      : clampImageSize(nextW, nextH, imageMaxW, imageMaxH)
     setWidth(sized.width)
     setHeight(sized.height)
   }
@@ -283,7 +289,9 @@ export function CreatePage() {
     setHistoryId(null)
     setPreviewIsVideo(mode === 'image_to_video')
     const localId = crypto.randomUUID()
-    const sized = isVideo ? clampVideoSize(width, height) : clampImageSize(width, height, imageMaxSide)
+    const sized = isVideo
+      ? clampVideoSize(width, height)
+      : clampImageSize(width, height, imageMaxW, imageMaxH)
     const safeSteps = clampSteps(steps, maxSteps)
     const safeLength = clampVideoLength(length)
     setWidth(sized.width)
@@ -358,6 +366,7 @@ export function CreatePage() {
     if (status !== '历史预览') return
     setPreview(null)
     setPreviewIsVideo(false)
+    setLightboxOpen(false)
     setHistoryId(null)
     setStatus('就绪')
   }
@@ -385,6 +394,7 @@ export function CreatePage() {
     if (historyId && pickedRecent.has(historyId)) {
       setPreview(null)
       setPreviewIsVideo(false)
+      setLightboxOpen(false)
       setHistoryId(null)
       setStatus('就绪')
     }
@@ -418,22 +428,19 @@ export function CreatePage() {
                 <label className="label" htmlFor="txt2img-workflow">
                   工作流
                 </label>
-                <select
+                <GlassSelect
                   id="txt2img-workflow"
-                  className="input"
+                  aria-label="工作流"
                   value={workflowId}
-                  onChange={(e) => {
-                    const next = e.target.value
+                  onChange={(next) => {
                     setWorkflowId(next)
                     if (next) saveWorkflowPref(next)
                   }}
-                >
-                  {workflows.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.display_name}
-                    </option>
-                  ))}
-                </select>
+                  options={workflows.map((w) => ({
+                    value: w.id,
+                    label: w.display_name
+                  }))}
+                />
               </div>
             ) : null}
 
@@ -517,7 +524,7 @@ export function CreatePage() {
                 <p className="mt-1 text-[11px] text-muted">
                   {isVideo
                     ? '图生视频：横版≤800×496 / 竖版≤496×800，边长为 8 的倍数'
-                    : `文生图/图编：每边≤${imageMaxSide}，且为 ${SIZE_MULTIPLE} 的倍数`}
+                    : `文生图/图编：宽≤${imageMaxW}、高≤${imageMaxH}，且为 ${SIZE_MULTIPLE} 的倍数`}
                 </p>
               </div>
               <div>
@@ -526,7 +533,7 @@ export function CreatePage() {
                   className="input"
                   type="number"
                   min={SIZE_MULTIPLE}
-                  max={isVideo ? VIDEO_MAX_LONG : imageMaxSide}
+                  max={isVideo ? VIDEO_MAX_LONG : imageMaxW}
                   step={SIZE_MULTIPLE}
                   value={width}
                   onChange={(e) => setWidth(Number(e.target.value))}
@@ -539,7 +546,7 @@ export function CreatePage() {
                   className="input"
                   type="number"
                   min={SIZE_MULTIPLE}
-                  max={isVideo ? VIDEO_MAX_LONG : imageMaxSide}
+                  max={isVideo ? VIDEO_MAX_LONG : imageMaxH}
                   step={SIZE_MULTIPLE}
                   value={height}
                   onChange={(e) => setHeight(Number(e.target.value))}
@@ -631,9 +638,22 @@ export function CreatePage() {
             {preview ? (
               <div
                 className={`flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-border bg-bg ${
-                  status === '历史预览' ? 'cursor-pointer' : ''
+                  !previewIsVideo ? 'cursor-zoom-in' : ''
                 }`}
-                onClick={status === '历史预览' ? closeHistoryPreview : undefined}
+                title={!previewIsVideo ? '点击查看大图' : undefined}
+                onClick={!previewIsVideo ? () => setLightboxOpen(true) : undefined}
+                role={!previewIsVideo ? 'button' : undefined}
+                tabIndex={!previewIsVideo ? 0 : undefined}
+                onKeyDown={
+                  !previewIsVideo
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setLightboxOpen(true)
+                        }
+                      }
+                    : undefined
+                }
               >
                 {previewIsVideo ? (
                   <video
@@ -780,6 +800,10 @@ export function CreatePage() {
           </div>
         </section>
       </div>
+
+      {lightboxOpen && preview && !previewIsVideo ? (
+        <ImageLightbox src={preview} alt="结果" onClose={() => setLightboxOpen(false)} />
+      ) : null}
     </div>
   )
 }

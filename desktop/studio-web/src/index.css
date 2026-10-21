@@ -755,20 +755,29 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.625rem 0.75rem;
+  border: 1px solid color-mix(in srgb, #ffffff 22%, transparent);
+  border-radius: 0.65rem;
+  padding: 0.625rem 0.8rem;
   font-size: 0.875rem;
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  background: color-mix(in srgb, #ffffff 10%, transparent);
+  background: color-mix(in srgb, #1a1f2c 28%, color-mix(in srgb, #ffffff 10%, transparent));
   backdrop-filter: var(--glass-filter-soft);
   -webkit-backdrop-filter: var(--glass-filter-soft);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.32) inset,
-    0 1px 2px rgba(255, 255, 255, 0.12) inset,
-    0 1px 3px rgba(0, 0, 0, 0.28);
+    0 0 0 0.5px rgba(255, 255, 255, 0.22) inset,
+    0 1px 2px rgba(255, 255, 255, 0.1) inset,
+    0 2px 8px rgba(0, 0, 0, 0.28);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.glass-select-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #ffffff 32%, transparent);
+  background: color-mix(in srgb, #1a1f2c 34%, color-mix(in srgb, #ffffff 14%, transparent));
 }
 
 .glass-select-trigger:disabled {
@@ -777,8 +786,10 @@ body {
 }
 
 .glass-select-open .glass-select-trigger {
+  border-color: color-mix(in srgb, #ffffff 40%, transparent);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.4) inset,
+    0 0 0 0.5px rgba(255, 255, 255, 0.35) inset,
+    0 1px 2px rgba(255, 255, 255, 0.12) inset,
     var(--glass-focus-ring);
 }
 
@@ -786,17 +797,20 @@ body {
   position: fixed;
   z-index: 9999;
   margin: 0;
-  padding: 0.35rem;
+  padding: 0.4rem;
   list-style: none;
   border-radius: 0.75rem;
-  overflow: hidden;
-  background: color-mix(in srgb, #12151f 62%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 20%, transparent);
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: min(18rem, calc(100vh - 1.5rem));
+  background: color-mix(in srgb, #12151f 72%, transparent);
   backdrop-filter: var(--glass-filter);
   -webkit-backdrop-filter: var(--glass-filter);
   box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.4),
-    0 0 0 0.5px rgba(255, 255, 255, 0.3) inset,
-    0 1px 3px rgba(255, 255, 255, 0.16) inset;
+    0 18px 44px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(255, 255, 255, 0.28) inset,
+    0 1px 3px rgba(255, 255, 255, 0.14) inset;
   animation: glass-select-pop 0.18s ease-out;
 }
 
@@ -825,24 +839,26 @@ body {
   display: block;
   width: 100%;
   border: none;
-  border-radius: 0.45rem;
-  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
   font-size: 0.875rem;
   color: #e8eaf0;
   text-align: left;
   cursor: pointer;
   background: transparent;
-  transition: background 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .glass-select-option:hover {
-  background: color-mix(in srgb, #ffffff 12%, transparent);
+  background: color-mix(in srgb, #ffffff 11%, transparent);
 }
 
 .glass-select-option-active {
   color: #fff;
   background: var(--glass-pill-sheen), var(--glass-pill-fill);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .glass-select-option-active:hover {
@@ -1013,6 +1029,7 @@ body {
       0 1px 3px rgba(255, 255, 255, 0.16) inset,
       var(--glass-focus-ring);
   }
+  /* Prefer GlassSelect — native <select> popups cannot frost. Kept as dark fallback only. */
   select.input {
     color: var(--text);
     color-scheme: dark;
@@ -1412,4 +1429,107 @@ body {
     content-visibility: auto;
     contain-intrinsic-size: 280px;
   }
+}
+
+/* Fullscreen image zoom viewer — body portal (avoid workspace-shell containing block) */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.94);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.image-lightbox-toolbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, #ffffff 22%, transparent);
+  background: color-mix(in srgb, #12151f 72%, transparent);
+  backdrop-filter: var(--glass-filter-soft);
+  -webkit-backdrop-filter: var(--glass-filter-soft);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.image-lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 0.55rem;
+  color: #f2f4f8;
+  background: color-mix(in srgb, #ffffff 8%, transparent);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.image-lightbox-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, #ffffff 16%, transparent);
+}
+
+.image-lightbox-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.image-lightbox-zoom-label {
+  min-width: 3.25rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: #d7dce8;
+}
+
+.image-lightbox-stage {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.image-lightbox-img {
+  display: block;
+  margin: auto;
+  max-width: min(96vw, 100%);
+  max-height: calc(100dvh - 5rem);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 0.05s linear;
+  pointer-events: none;
+}
+
+.image-lightbox-hint {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #ffffff 16%, transparent);
+  background: color-mix(in srgb, #000000 55%, transparent);
+  font-size: 0.7rem;
+  color: #c5cad6;
+  white-space: nowrap;
+  pointer-events: none;
 }

@@ -1,6 +1,9 @@
 /** Mirror desktop/studio/src/shared/types.ts size helpers. */
 
-export const IMAGE_MAX_SIDE = 1024
+/** @deprecated Prefer IMAGE_MAX_WIDTH / IMAGE_MAX_HEIGHT (asymmetric). */
+export const IMAGE_MAX_SIDE = 1928
+export const IMAGE_MAX_WIDTH = 1928
+export const IMAGE_MAX_HEIGHT = 1088
 export const VIDEO_MAX_LONG = 800
 export const VIDEO_MAX_SHORT = 496
 export const MAX_VIDEO_LENGTH = 161
@@ -8,8 +11,8 @@ export const SIZE_MULTIPLE = 8
 
 export const DEFAULT_SERVER_LIMITS = {
   maxSteps: 40,
-  maxWidth: 1024,
-  maxHeight: 1024
+  maxWidth: IMAGE_MAX_WIDTH,
+  maxHeight: IMAGE_MAX_HEIGHT
 } as const
 
 export type ServerLimits = {
@@ -19,6 +22,7 @@ export type ServerLimits = {
 }
 
 export const IMAGE_SIZE_PRESETS = [
+  { id: 'fhd-wide', label: '1928×1088', width: 1928, height: 1088 },
   { id: '1024', label: '1024²', width: 1024, height: 1024 },
   { id: 'portrait', label: '768×1024', width: 768, height: 1024 },
   { id: 'landscape', label: '1024×768', width: 1024, height: 768 },
@@ -34,7 +38,7 @@ export const VIDEO_SIZE_PRESETS = [
   { id: 'v-square', label: '496²', width: 496, height: 496 }
 ] as const
 
-export function snapSizeMultiple(n: number, multiple = SIZE_MULTIPLE, maxSide = IMAGE_MAX_SIDE): number {
+export function snapSizeMultiple(n: number, multiple = SIZE_MULTIPLE, maxSide = IMAGE_MAX_WIDTH): number {
   if (!Number.isFinite(n)) return multiple
   const m = Math.max(multiple, Math.round(n / multiple) * multiple)
   return Math.min(maxSide, Math.max(multiple, m))
@@ -43,12 +47,14 @@ export function snapSizeMultiple(n: number, multiple = SIZE_MULTIPLE, maxSide = 
 export function clampImageSize(
   width: number,
   height: number,
-  maxSide = IMAGE_MAX_SIDE
+  maxWidth = IMAGE_MAX_WIDTH,
+  maxHeight = IMAGE_MAX_HEIGHT
 ): { width: number; height: number } {
-  const side = Math.min(IMAGE_MAX_SIDE, Math.max(SIZE_MULTIPLE, maxSide))
+  const maxW = Math.min(IMAGE_MAX_WIDTH, Math.max(SIZE_MULTIPLE, maxWidth))
+  const maxH = Math.min(IMAGE_MAX_HEIGHT, Math.max(SIZE_MULTIPLE, maxHeight))
   return {
-    width: snapSizeMultiple(width, SIZE_MULTIPLE, side),
-    height: snapSizeMultiple(height, SIZE_MULTIPLE, side)
+    width: snapSizeMultiple(width, SIZE_MULTIPLE, maxW),
+    height: snapSizeMultiple(height, SIZE_MULTIPLE, maxH)
   }
 }
 

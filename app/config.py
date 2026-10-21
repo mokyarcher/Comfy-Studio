@@ -97,9 +97,9 @@ class Settings(BaseSettings):
     max_prompt_length: int = 2000
     max_negative_prompt_length: int = 2000
     # Image modes (txt2img / image_edit): each side ≤ 1024
-    max_width: int = 1024
-    max_height: int = 1024
-    max_image_pixels: int = 1_048_576  # 1024²
+    max_width: int = 1928
+    max_height: int = 1088
+    max_image_pixels: int = 2_097_664  # 1928×1088
     # Video (image_to_video): landscape ≤ 800×496, portrait ≤ 496×800
     # (500 is not a multiple of size_multiple; use 496 as the ≤500 ceiling)
     max_video_long_side: int = 800

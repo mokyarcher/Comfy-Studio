@@ -5,7 +5,8 @@ import { GlassSwitch } from '@/components/GlassSwitch'
 import { BACKGROUNDS, BACKGROUND_PAGE_SIZE, preloadBackground } from '@/lib/backgrounds'
 import { authBindEmail, authChangePassword, authProfile, testConnection } from '@/lib/api'
 import {
-  IMAGE_MAX_SIDE,
+  IMAGE_MAX_HEIGHT,
+  IMAGE_MAX_WIDTH,
   SIZE_MULTIPLE,
   clampImageSize,
   clampSteps
@@ -32,7 +33,8 @@ export function SettingsPage() {
   const maxSteps = useServerLimits((s) => s.maxSteps)
   const maxWidth = useServerLimits((s) => s.maxWidth)
   const maxHeight = useServerLimits((s) => s.maxHeight)
-  const imageMaxSide = Math.min(IMAGE_MAX_SIDE, maxWidth, maxHeight)
+  const imageMaxW = Math.min(IMAGE_MAX_WIDTH, maxWidth)
+  const imageMaxH = Math.min(IMAGE_MAX_HEIGHT, maxHeight)
   const push = useToast((s) => s.push)
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -362,12 +364,17 @@ export function SettingsPage() {
             className="input"
             type="number"
             min={SIZE_MULTIPLE}
-            max={imageMaxSide}
+            max={imageMaxW}
             step={SIZE_MULTIPLE}
             value={settings.defaultWidth}
             onChange={(e) => patch({ defaultWidth: Number(e.target.value) })}
             onBlur={() => {
-              const sized = clampImageSize(settings.defaultWidth, settings.defaultHeight, imageMaxSide)
+              const sized = clampImageSize(
+                settings.defaultWidth,
+                settings.defaultHeight,
+                imageMaxW,
+                imageMaxH
+              )
               patch({ defaultWidth: sized.width, defaultHeight: sized.height })
             }}
           />
@@ -378,12 +385,17 @@ export function SettingsPage() {
             className="input"
             type="number"
             min={SIZE_MULTIPLE}
-            max={imageMaxSide}
+            max={imageMaxH}
             step={SIZE_MULTIPLE}
             value={settings.defaultHeight}
             onChange={(e) => patch({ defaultHeight: Number(e.target.value) })}
             onBlur={() => {
-              const sized = clampImageSize(settings.defaultWidth, settings.defaultHeight, imageMaxSide)
+              const sized = clampImageSize(
+                settings.defaultWidth,
+                settings.defaultHeight,
+                imageMaxW,
+                imageMaxH
+              )
               patch({ defaultWidth: sized.width, defaultHeight: sized.height })
             }}
           />

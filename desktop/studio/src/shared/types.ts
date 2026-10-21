@@ -312,8 +312,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   }
 }
 
-/** Image modes: each side ≤ 1024. */
-export const IMAGE_MAX_SIDE = 1024
+/** @deprecated Prefer IMAGE_MAX_WIDTH / IMAGE_MAX_HEIGHT. */
+export const IMAGE_MAX_SIDE = 1928
+/** Image modes: width ≤ 1928, height ≤ 1088 (×8). */
+export const IMAGE_MAX_WIDTH = 1928
+export const IMAGE_MAX_HEIGHT = 1088
 
 /**
  * Video: landscape ≤ 800×496, portrait ≤ 496×800.
@@ -323,6 +326,7 @@ export const VIDEO_MAX_LONG = 800
 export const VIDEO_MAX_SHORT = 496
 
 export const SIZE_PRESETS = [
+  { id: 'fhd-wide', label: '横版 1928×1088', width: 1928, height: 1088 },
   { id: '512', label: '512²', width: 512, height: 512 },
   { id: '768', label: '768²', width: 768, height: 768 },
   { id: '1024', label: '1024²', width: 1024, height: 1024 },
@@ -338,15 +342,20 @@ export const VIDEO_SIZE_PRESETS = [
   { id: 'v-square', label: '方版 496²', width: 496, height: 496 }
 ] as const
 
-export function snapSizeMultiple(n: number, multiple = 8, maxSide = IMAGE_MAX_SIDE): number {
+export function snapSizeMultiple(n: number, multiple = 8, maxSide = IMAGE_MAX_WIDTH): number {
   const m = Math.max(multiple, Math.round(n / multiple) * multiple)
   return Math.min(maxSide, Math.max(multiple, m))
 }
 
-export function clampImageSize(width: number, height: number): { width: number; height: number } {
+export function clampImageSize(
+  width: number,
+  height: number,
+  maxWidth = IMAGE_MAX_WIDTH,
+  maxHeight = IMAGE_MAX_HEIGHT
+): { width: number; height: number } {
   return {
-    width: snapSizeMultiple(width, 8, IMAGE_MAX_SIDE),
-    height: snapSizeMultiple(height, 8, IMAGE_MAX_SIDE)
+    width: snapSizeMultiple(width, 8, Math.min(IMAGE_MAX_WIDTH, maxWidth)),
+    height: snapSizeMultiple(height, 8, Math.min(IMAGE_MAX_HEIGHT, maxHeight))
   }
 }
 

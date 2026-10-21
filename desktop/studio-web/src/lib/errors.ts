@@ -62,6 +62,10 @@ export function mapHttpError(status: number, detail?: unknown): string {
     case 502:
     case 503:
     case 504:
+      // Prefer server message for polish/translate misconfig (still append status).
+      if (detailText && /润色|译文|翻译|POLISH|上游|未启用|未配置/.test(detailText)) {
+        return `${detailText}（${status}）`
+      }
       return connectionFailed(status)
     default:
       if (status >= 500) return connectionFailed(status)

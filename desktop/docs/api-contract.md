@@ -90,7 +90,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
 - `length`：仅图生视频可选帧长
 - `seed` 省略时由服务端随机
 - 尺寸需为 `SIZE_MULTIPLE`（默认 8）的倍数
-- 文生图 / 图像编辑：每边 ≤ `MAX_WIDTH`/`MAX_HEIGHT`（默认 1024），且像素 ≤ `MAX_IMAGE_PIXELS`（默认 1024²）
+- 文生图 / 图像编辑：宽 ≤ `MAX_WIDTH`、高 ≤ `MAX_HEIGHT`（默认 1928×1088），且像素 ≤ `MAX_IMAGE_PIXELS`（默认 1928×1088）
 - 图生视频：须落在 `MAX_VIDEO_LONG_SIDE`×`MAX_VIDEO_SHORT_SIDE` 框内（默认 800×496 或 496×800）
 
 成功 `202`：
