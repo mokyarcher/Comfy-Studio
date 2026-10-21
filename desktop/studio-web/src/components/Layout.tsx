@@ -11,6 +11,7 @@ import {
   Wand2
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   comfyClearQueue,
   comfyFreeMemory,
@@ -484,44 +485,47 @@ export function Layout() {
           </div>
         </main>
       </div>
-      {comfyConfirm ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
-          role="presentation"
-          onClick={() => !comfyBusy && setComfyConfirm(null)}
-        >
-          <div
-            className="glass-panel w-full max-w-sm space-y-3 border border-white/15 p-4 shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="comfy-confirm-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="comfy-confirm-title" className="text-sm font-semibold text-text">
-              {comfyConfirm.title}
-            </h2>
-            <p className="text-xs leading-relaxed text-muted">{comfyConfirm.detail}</p>
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                className="btn-ghost"
-                disabled={comfyBusy}
-                onClick={() => setComfyConfirm(null)}
+      {comfyConfirm
+        ? createPortal(
+            <div
+              className="glass-confirm-overlay"
+              role="presentation"
+              onClick={() => !comfyBusy && setComfyConfirm(null)}
+            >
+              <div
+                className="glass-confirm"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="comfy-confirm-title"
+                onClick={(e) => e.stopPropagation()}
               >
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn-danger"
-                disabled={comfyBusy}
-                onClick={() => void runComfyControl()}
-              >
-                {comfyConfirm.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <h2 id="comfy-confirm-title" className="glass-confirm-title">
+                  {comfyConfirm.title}
+                </h2>
+                <p className="glass-confirm-detail">{comfyConfirm.detail}</p>
+                <div className="glass-confirm-actions">
+                  <button
+                    type="button"
+                    className="glass-confirm-cancel"
+                    disabled={comfyBusy}
+                    onClick={() => setComfyConfirm(null)}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="glass-confirm-ok"
+                    disabled={comfyBusy}
+                    onClick={() => void runComfyControl()}
+                  >
+                    {comfyConfirm.confirmLabel}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       <ToastHost />
     </div>
   )
