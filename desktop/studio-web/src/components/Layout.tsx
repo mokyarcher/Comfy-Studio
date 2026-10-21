@@ -41,6 +41,13 @@ const nav = [
 
 type PillBox = { top: number; left: number; width: number; height: number }
 
+type ComfyConfirm = {
+  title: string
+  detail: string
+  confirmLabel: string
+  run: () => Promise<{ ok: boolean; message: string }>
+}
+
 function readPillBox(navEl: HTMLElement, itemEl: HTMLElement): PillBox {
   const navBox = navEl.getBoundingClientRect()
   const box = itemEl.getBoundingClientRect()
@@ -79,6 +86,7 @@ export function Layout() {
   const [connected, setConnected] = useState(false)
   const [bgHint, setBgHint] = useState(false)
   const [comfyBusy, setComfyBusy] = useState(false)
+  const [comfyConfirm, setComfyConfirm] = useState<ComfyConfirm | null>(null)
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === '1'
@@ -282,15 +290,19 @@ export function Layout() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
-  const runComfyControl = async (
-    label: string,
-    fn: () => Promise<{ ok: boolean; message: string }>
-  ) => {
-    if (comfyBusy) return
+  const askComfyControl = (confirm: ComfyConfirm) => {
+    if (comfyBusy || !connected) return
+    setComfyConfirm(confirm)
+  }
+
+  const runComfyControl = async () => {
+    if (!comfyConfirm || comfyBusy) return
+    const pending = comfyConfirm
+    setComfyConfirm(null)
     setComfyBusy(true)
     try {
-      const res = await fn()
-      pushToast(res.message || label, res.ok ? 'success' : 'error')
+      const res = await pending.run()
+      pushToast(res.message || pending.title, res.ok ? 'success' : 'error')
     } finally {
       setComfyBusy(false)
     }
@@ -409,7 +421,12 @@ export function Layout() {
               disabled={comfyBusy || !connected}
               title="打断 ComfyUI 当前任务"
               onClick={() =>
-                runComfyControl('打断', () => comfyInterrupt({ apiKey: user.apiKey }))
+                askComfyControl({
+                  title: '打断当前任务？',
+                  detail: '将请求打断 ComfyUI 正在执行的工作流。无任务在跑时通常无影响。',
+                  confirmLabel: '确认打断',
+                  run: () => comfyInterrupt({ apiKey: user.apiKey })
+                })
               }
             >
               <span className="glass-cta-btn-label">打断</span>
@@ -420,7 +437,12 @@ export function Layout() {
               disabled={comfyBusy || !connected}
               title="清空 ComfyUI 等待队列"
               onClick={() =>
-                runComfyControl('清队列', () => comfyClearQueue({ apiKey: user.apiKey }))
+                askComfyControl({
+                  title: '清空等待队列？',
+                  detail: '将清空 ComfyUI 中尚未开始的排队任务，不影响已完成记录。',
+                  confirmLabel: '确认清空',
+                  run: () => comfyClearQueue({ apiKey: user.apiKey })
+                })
               }
             >
               <span className="glass-cta-btn-label">清队列</span>
@@ -431,9 +453,17 @@ export function Layout() {
               disabled={comfyBusy || !connected}
               title="卸载模型并清理执行缓存（释放显存）"
               onClick={() =>
-                runComfyControl('清显存', () =>
-                  comfyFreeMemory({ apiKey: user.apiKey, unloadModels: true, freeMemory: true })
-                )
+                askComfyControl({
+                  title: '清理显存？',
+                  detail: '将卸载已加载模型并清理执行缓存。下次出图需重新加载，会稍慢。',
+                  confirmLabel: '确认清理',
+                  run: () =>
+                    comfyFreeMemory({
+                      apiKey: user.apiKey,
+                      unloadModels: true,
+                      freeMemory: true
+                    })
+                })
               }
             >
               <span className="glass-cta-btn-label">清显存</span>
@@ -454,6 +484,44 @@ export function Layout() {
           </div>
         </main>
       </div>
+      {comfyConfirm ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
+          role="presentation"
+          onClick={() => !comfyBusy && setComfyConfirm(null)}
+        >
+          <div
+            className="glass-panel w-full max-w-sm space-y-3 border border-white/15 p-4 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="comfy-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="comfy-confirm-title" className="text-sm font-semibold text-text">
+              {comfyConfirm.title}
+            </h2>
+            <p className="text-xs leading-relaxed text-muted">{comfyConfirm.detail}</p>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={comfyBusy}
+                onClick={() => setComfyConfirm(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn-danger"
+                disabled={comfyBusy}
+                onClick={() => void runComfyControl()}
+              >
+                {comfyConfirm.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ToastHost />
     </div>
   )
