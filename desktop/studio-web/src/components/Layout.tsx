@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   fetchGpuStatus,
   fetchHostMetrics,
-  formatHostMetricsChip,
+  formatHostMetricsChips,
   testConnection
 } from '@/lib/api'
 import { preloadBackground } from '@/lib/backgrounds'
@@ -69,7 +69,7 @@ export function Layout() {
   const pillReadyRef = useRef(false)
   const pillAnimRef = useRef<Animation | null>(null)
   const [gpu, setGpu] = useState('—')
-  const [hostChip, setHostChip] = useState<string | null>(null)
+  const [hostChips, setHostChips] = useState<string[]>([])
   const [health, setHealth] = useState('检测中…')
   const [connected, setConnected] = useState(false)
   const [bgHint, setBgHint] = useState(false)
@@ -250,7 +250,7 @@ export function Layout() {
       setConnected(h.ok)
       setHealth(h.ok ? `已连接 · ${h.latencyMs} ms` : h.message)
       setGpu(g.ok ? (g.state === 'idle' ? 'GPU 空闲' : 'GPU 繁忙') : g.message)
-      setHostChip(formatHostMetricsChip(m))
+      setHostChips(formatHostMetricsChips(m))
       if (h.ok) {
         setFromHealth({
           maxSteps: h.maxSteps,
@@ -377,11 +377,11 @@ export function Layout() {
         <header className="glass-panel flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2 sm:px-5">
           <span className={`status-chip ${connected ? 'status-chip-ok' : ''}`}>{health}</span>
           <span className="status-chip">{gpu}</span>
-          {hostChip ? (
-            <span className="status-chip" title="本机 LibreHardwareMonitor">
-              {hostChip}
+          {hostChips.map((chip) => (
+            <span key={chip} className="status-chip" title="本机 LibreHardwareMonitor">
+              {chip}
             </span>
-          ) : null}
+          ))}
           {bgHint ? (
             <span className="status-chip border-warning/40 bg-warning/10 text-warning">
               标签页在后台时轮询可能变慢

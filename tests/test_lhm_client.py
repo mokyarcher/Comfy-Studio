@@ -71,6 +71,36 @@ def test_summarize_lhm_tree_cpu_gpu():
                             },
                         ],
                     },
+                    {
+                        "Text": "Virtual Memory",
+                        "Children": [
+                            {
+                                "Text": "Data",
+                                "Children": [
+                                    {"Text": "Memory Used", "Value": "40.0 GB"},
+                                    {"Text": "Memory Available", "Value": "20.0 GB"},
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "Text": "Total Memory",
+                        "Children": [
+                            {
+                                "Text": "Load",
+                                "Children": [
+                                    {"Text": "Memory", "Value": "42.5 %"},
+                                ],
+                            },
+                            {
+                                "Text": "Data",
+                                "Children": [
+                                    {"Text": "Memory Used", "Value": "13.6 GB"},
+                                    {"Text": "Memory Available", "Value": "18.4 GB"},
+                                ],
+                            },
+                        ],
+                    },
                 ],
             }
         ],
@@ -80,6 +110,7 @@ def test_summarize_lhm_tree_cpu_gpu():
     assert s["gpu_name"] and "4090" in s["gpu_name"]
     assert s["cpu_temp_c"] == 62.4
     assert s["cpu_load_pct"] == 18.5
+    assert s["cpu_power_w"] == 88.0
     assert s["gpu_temp_c"] == 71.0
     assert s["gpu_hotspot_c"] == 82.0
     assert s["gpu_load_pct"] == 95.0
@@ -88,3 +119,7 @@ def test_summarize_lhm_tree_cpu_gpu():
     assert s["gpu_mem_total_mb"] == 24576.0
     assert s["gpu_power_w"] == 350.0
     assert s["gpu_fan_rpm"] == 2100.0
+    assert s["ram_load_pct"] == 42.5
+    assert s["ram_used_mb"] == 13.6 * 1024
+    assert s["ram_total_mb"] == round(13.6 * 1024 + 18.4 * 1024, 1)
+    assert s["total_power_w"] == 438.0

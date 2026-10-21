@@ -136,12 +136,18 @@ Header：`X-API-Key`、`Content-Type: application/json`
   "gpu_load_pct": 95.0,
   "gpu_mem_used_mb": 10240,
   "gpu_mem_total_mb": 24576,
+  "gpu_power_w": 350.0,
   "cpu_temp_c": 62.4,
-  "cpu_load_pct": 18.5
+  "cpu_load_pct": 18.5,
+  "cpu_power_w": 88.0,
+  "ram_used_mb": 13926.4,
+  "ram_total_mb": 32768.0,
+  "ram_load_pct": 42.5,
+  "total_power_w": 438.0
 }
 ```
 
-需 `X-API-Key`。LHM 未开时 `ok=false`。nginx 须把本路径指到 GPU。Gateway Admin 可通过 host-services 的 `lhm` 启停（`.env`：`HOST_LHM_PATH`）。
+`total_power_w` = CPU + GPU 封装功耗（非整机 PSU）。需 `X-API-Key`。LHM 未开时 `ok=false`。nginx 须把本路径指到 GPU。Gateway Admin 可通过 host-services 的 `lhm` 启停（`.env`：`HOST_LHM_PATH`）。
 
 ### `GET /v1/tasks/{task_id}`
 

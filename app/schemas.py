@@ -690,6 +690,10 @@ class HostMetricsResponse(BaseModel):
     gpu_power_w: float | None = None
     gpu_fan_rpm: float | None = None
     gpu_clock_mhz: float | None = None
+    ram_used_mb: float | None = None
+    ram_total_mb: float | None = None
+    ram_load_pct: float | None = None
+    total_power_w: float | None = None
 
 
 class AdminStatsResponse(BaseModel):

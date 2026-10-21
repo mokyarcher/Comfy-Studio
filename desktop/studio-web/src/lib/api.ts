@@ -642,6 +642,17 @@ export type HostMetrics = {
   gpu_power_w?: number | null
   cpu_temp_c?: number | null
   cpu_load_pct?: number | null
+  cpu_power_w?: number | null
+  ram_used_mb?: number | null
+  ram_total_mb?: number | null
+  ram_load_pct?: number | null
+  total_power_w?: number | null
+}
+
+function formatMemPair(usedMb: number, totalMb: number): string {
+  const used = usedMb >= 1024 ? `${(usedMb / 1024).toFixed(1)}G` : `${Math.round(usedMb)}M`
+  const total = totalMb >= 1024 ? `${(totalMb / 1024).toFixed(0)}G` : `${Math.round(totalMb)}M`
+  return `${used}/${total}`
 }
 
 export async function fetchHostMetrics(opts: {
@@ -669,31 +680,62 @@ export async function fetchHostMetrics(opts: {
       gpu_mem_total_mb: body.gpu_mem_total_mb,
       gpu_power_w: body.gpu_power_w,
       cpu_temp_c: body.cpu_temp_c,
-      cpu_load_pct: body.cpu_load_pct
+      cpu_load_pct: body.cpu_load_pct,
+      cpu_power_w: body.cpu_power_w,
+      ram_used_mb: body.ram_used_mb,
+      ram_total_mb: body.ram_total_mb,
+      ram_load_pct: body.ram_load_pct,
+      total_power_w: body.total_power_w
     }
   } catch (err) {
     return { ok: false, message: mapNetworkError(err) }
   }
 }
 
-/** Compact chip text for the Studio top bar. */
-export function formatHostMetricsChip(m: HostMetrics): string | null {
-  if (!m.ok) return null
-  const parts: string[] = []
-  if (m.gpu_temp_c != null) parts.push(`${Math.round(m.gpu_temp_c)}°C`)
-  if (m.gpu_load_pct != null) parts.push(`${Math.round(m.gpu_load_pct)}%`)
+/** Compact status chips for the Studio top bar (CPU / GPU / RAM / power). */
+export function formatHostMetricsChips(m: HostMetrics): string[] {
+  if (!m.ok) return []
+  const chips: string[] = []
+
+  const cpu: string[] = []
+  if (m.cpu_load_pct != null) cpu.push(`${Math.round(m.cpu_load_pct)}%`)
+  if (m.cpu_temp_c != null) cpu.push(`${Math.round(m.cpu_temp_c)}°C`)
+  if (cpu.length) chips.push(`CPU ${cpu.join(' · ')}`)
+
+  const gpu: string[] = []
+  if (m.gpu_load_pct != null) gpu.push(`${Math.round(m.gpu_load_pct)}%`)
+  if (m.gpu_temp_c != null) gpu.push(`${Math.round(m.gpu_temp_c)}°C`)
   if (m.gpu_mem_used_mb != null && m.gpu_mem_total_mb != null) {
-    const used = m.gpu_mem_used_mb >= 1024 ? `${(m.gpu_mem_used_mb / 1024).toFixed(1)}G` : `${Math.round(m.gpu_mem_used_mb)}M`
-    const total =
-      m.gpu_mem_total_mb >= 1024
-        ? `${(m.gpu_mem_total_mb / 1024).toFixed(0)}G`
-        : `${Math.round(m.gpu_mem_total_mb)}M`
-    parts.push(`${used}/${total}`)
+    gpu.push(formatMemPair(m.gpu_mem_used_mb, m.gpu_mem_total_mb))
   } else if (m.gpu_mem_load_pct != null) {
-    parts.push(`显存 ${Math.round(m.gpu_mem_load_pct)}%`)
+    gpu.push(`显存 ${Math.round(m.gpu_mem_load_pct)}%`)
   }
-  if (!parts.length) return null
-  return `GPU ${parts.join(' · ')}`
+  if (gpu.length) chips.push(`GPU ${gpu.join(' · ')}`)
+
+  const ram: string[] = []
+  if (m.ram_used_mb != null && m.ram_total_mb != null) {
+    ram.push(formatMemPair(m.ram_used_mb, m.ram_total_mb))
+  } else if (m.ram_load_pct != null) {
+    ram.push(`${Math.round(m.ram_load_pct)}%`)
+  }
+  if (ram.length) chips.push(`内存 ${ram.join(' · ')}`)
+
+  const powerW =
+    m.total_power_w ??
+    (m.cpu_power_w != null || m.gpu_power_w != null
+      ? (m.cpu_power_w ?? 0) + (m.gpu_power_w ?? 0)
+      : null)
+  if (powerW != null && powerW > 0) {
+    chips.push(`功耗 ${Math.round(powerW)}W`)
+  }
+
+  return chips
+}
+
+/** @deprecated Prefer formatHostMetricsChips */
+export function formatHostMetricsChip(m: HostMetrics): string | null {
+  const chips = formatHostMetricsChips(m)
+  return chips.length ? chips.join(' · ') : null
 }
 
 export async function fetchPromptLibrary(opts: { apiKey: string }) {

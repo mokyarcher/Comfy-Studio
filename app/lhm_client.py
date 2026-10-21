@@ -36,6 +36,20 @@ def _parse_number(value: Any) -> float | None:
         return None
 
 
+def _parse_memory_mb(value: Any) -> float | None:
+    """Parse LHM memory Value strings that may use MB / GB / TB."""
+    n = _parse_number(value)
+    if n is None:
+        return None
+    text = str(value).strip().lower().replace(",", "")
+    if "tb" in text or "tib" in text:
+        return n * 1024 * 1024
+    if "gb" in text or "gib" in text:
+        return n * 1024
+    # MB / MiB / bare number (LHM Data sensors are usually MB)
+    return n
+
+
 def _text(node: dict[str, Any]) -> str:
     return str(node.get("Text") or node.get("text") or "").strip()
 
@@ -63,6 +77,78 @@ def _is_cpu_hw(name: str) -> bool:
     )
 
 
+def _is_ram_hw(name: str) -> bool:
+    """System RAM nodes (Total / Generic Memory). Skip Virtual Memory and DIMM sticks."""
+    n = name.lower().strip()
+    if _is_gpu_hw(name) or _is_cpu_hw(name):
+        return False
+    if "virtual" in n:
+        return False
+    # DIMM part numbers e.g. "Samsung - M425R2GA3…"
+    if any(k in n for k in ("dimm", "sodimm", "#0", "#1", "#2", "#3")):
+        return False
+    if n in ("memory", "generic memory", "total memory", "ram"):
+        return True
+    return n.endswith(" memory") or n.startswith("memory ")
+
+
+def _ram_from_os() -> dict[str, float | None]:
+    """Fallback physical RAM when LHM has no Memory node (Windows / Linux)."""
+    try:
+        import ctypes
+
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        stat = MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+            total = stat.ullTotalPhys / (1024 * 1024)
+            avail = stat.ullAvailPhys / (1024 * 1024)
+            used = max(0.0, total - avail)
+            return {
+                "ram_used_mb": round(used, 1),
+                "ram_total_mb": round(total, 1),
+                "ram_load_pct": float(stat.dwMemoryLoad),
+            }
+    except Exception:
+        pass
+    try:
+        meminfo: dict[str, int] = {}
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.split(":")
+                if len(parts) != 2:
+                    continue
+                key = parts[0].strip()
+                num = _NUM.search(parts[1])
+                if num:
+                    meminfo[key] = int(float(num.group(0)))
+        total_kb = meminfo.get("MemTotal")
+        avail_kb = meminfo.get("MemAvailable")
+        if total_kb and avail_kb is not None:
+            total = total_kb / 1024
+            used = (total_kb - avail_kb) / 1024
+            return {
+                "ram_used_mb": round(used, 1),
+                "ram_total_mb": round(total, 1),
+                "ram_load_pct": round(100.0 * used / total, 1) if total else None,
+            }
+    except Exception:
+        pass
+    return {"ram_used_mb": None, "ram_total_mb": None, "ram_load_pct": None}
+
+
 def _pick_better(store: dict[str, float], key: str, value: float, *, prefer_max: bool) -> None:
     if key not in store:
         store[key] = value
@@ -73,7 +159,15 @@ def _pick_better(store: dict[str, float], key: str, value: float, *, prefer_max:
         store[key] = value
 
 
-def _ingest_sensor(store: dict[str, float], hw: str, group: str, sensor: str, value: float) -> None:
+def _ingest_sensor(
+    store: dict[str, float],
+    hw: str,
+    group: str,
+    sensor: str,
+    value: float,
+    *,
+    raw_value: Any = None,
+) -> None:
     g = group.lower()
     s = sensor.lower()
 
@@ -101,21 +195,40 @@ def _ingest_sensor(store: dict[str, float], hw: str, group: str, sensor: str, va
                 store["cpu_load"] = value
             elif "cpu_load" not in store and "core" in s:
                 store["cpu_load"] = value
+        elif hw == "ram":
+            if "virtual" in s:
+                return
+            if "memory" in s or s in ("ram", "used", "load"):
+                store["ram_load"] = value
         return
 
     if "memory" in g or "内存" in g or g == "data":
+        if hw == "ram":
+            mb = _parse_memory_mb(raw_value if raw_value is not None else value)
+            if mb is None:
+                return
+            if "used" in s and "virtual" not in s:
+                store["ram_used"] = mb
+            elif "available" in s or "free" in s:
+                store["ram_free"] = mb
+            elif "total" in s and "virtual" not in s:
+                store["ram_total"] = mb
+            return
         if hw != "gpu":
             return
         if "memory" not in s and "mem" not in s and "vram" not in s and g != "memory" and "内存" not in g:
             return
+        mb = _parse_memory_mb(raw_value if raw_value is not None else value)
+        if mb is None:
+            return
         if "load" in s:
             _pick_better(store, "gpu_mem_load", value, prefer_max=True)
         elif "used" in s or "dedicated" in s:
-            store["gpu_mem_used"] = value
+            store["gpu_mem_used"] = mb
         elif "total" in s:
-            store["gpu_mem_total"] = value
+            store["gpu_mem_total"] = mb
         elif "available" in s or "free" in s:
-            store["gpu_mem_free"] = value
+            store["gpu_mem_free"] = mb
         return
 
     if "power" in g or "功率" in g:
@@ -151,14 +264,16 @@ def summarize_lhm_tree(root: Any) -> dict[str, Any]:
                     if _children(sensor_node) and _parse_number(sensor_node.get("Value")) is None:
                         visit_hw(sensor_node, hw)
                         continue
-                    val = _parse_number(sensor_node.get("Value"))
+                    raw = sensor_node.get("Value")
+                    val = _parse_number(raw)
                     if val is None:
                         continue
-                    _ingest_sensor(store, hw, group, _text(sensor_node), val)
+                    _ingest_sensor(store, hw, group, _text(sensor_node), val, raw_value=raw)
             else:
-                val = _parse_number(group_node.get("Value"))
+                raw = group_node.get("Value")
+                val = _parse_number(raw)
                 if val is not None:
-                    _ingest_sensor(store, hw, "", group, val)
+                    _ingest_sensor(store, hw, "", group, val, raw_value=raw)
 
     def walk(node: dict[str, Any]) -> None:
         nonlocal cpu_name, gpu_name
@@ -172,6 +287,9 @@ def summarize_lhm_tree(root: Any) -> dict[str, Any]:
             if not cpu_name:
                 cpu_name = name
             visit_hw(node, "cpu")
+            return
+        if _is_ram_hw(name):
+            visit_hw(node, "ram")
             return
         for child in _children(node):
             walk(child)
@@ -189,21 +307,40 @@ def summarize_lhm_tree(root: Any) -> dict[str, Any]:
     if used is not None and free is not None and total is None:
         total = round(used + free, 1)
 
+    ram_used = f("ram_used")
+    ram_total = f("ram_total")
+    ram_free = f("ram_free")
+    if ram_used is not None and ram_free is not None and ram_total is None:
+        ram_total = round(ram_used + ram_free, 1)
+    ram_load = f("ram_load")
+    if ram_load is None and ram_used is not None and ram_total and ram_total > 0:
+        ram_load = round(100.0 * ram_used / ram_total, 1)
+
+    cpu_power = f("cpu_power")
+    gpu_power = f("gpu_power")
+    total_power: float | None = None
+    if cpu_power is not None or gpu_power is not None:
+        total_power = round((cpu_power or 0.0) + (gpu_power or 0.0), 1)
+
     return {
         "cpu_name": cpu_name or None,
         "gpu_name": gpu_name or None,
         "cpu_temp_c": f("cpu_temp"),
         "cpu_load_pct": f("cpu_load"),
-        "cpu_power_w": f("cpu_power"),
+        "cpu_power_w": cpu_power,
         "gpu_temp_c": f("gpu_temp"),
         "gpu_hotspot_c": f("gpu_hotspot"),
         "gpu_load_pct": f("gpu_load"),
         "gpu_mem_load_pct": f("gpu_mem_load"),
         "gpu_mem_used_mb": used,
         "gpu_mem_total_mb": total,
-        "gpu_power_w": f("gpu_power"),
+        "gpu_power_w": gpu_power,
         "gpu_fan_rpm": f("fan"),
         "gpu_clock_mhz": f("gpu_clock"),
+        "ram_used_mb": ram_used,
+        "ram_total_mb": ram_total,
+        "ram_load_pct": ram_load,
+        "total_power_w": total_power,
     }
 
 
@@ -231,6 +368,8 @@ async def fetch_host_metrics(settings: Settings) -> dict[str, Any]:
                 last_err = "invalid JSON"
                 continue
             summary = summarize_lhm_tree(data)
+            if summary.get("ram_used_mb") is None or summary.get("ram_total_mb") is None:
+                summary = {**summary, **{k: v for k, v in _ram_from_os().items() if v is not None}}
             return {
                 "ok": True,
                 "message": "ok",
@@ -261,4 +400,8 @@ async def fetch_host_metrics(settings: Settings) -> dict[str, Any]:
         "gpu_power_w": None,
         "gpu_fan_rpm": None,
         "gpu_clock_mhz": None,
+        "ram_used_mb": None,
+        "ram_total_mb": None,
+        "ram_load_pct": None,
+        "total_power_w": None,
     }
