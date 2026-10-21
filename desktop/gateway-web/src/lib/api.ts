@@ -190,7 +190,7 @@ export function fetchHostServices() {
 }
 
 export function hostServiceAction(
-  service: 'comfy' | 'api' | 'frp',
+  service: 'comfy' | 'api' | 'frp' | 'lhm',
   action: HostServiceAction,
   totpCode: string
 ) {

@@ -1,4 +1,5 @@
 import type { GalleryItem, GenerateMode } from './types'
+import { invalidateGallerySession } from './gallery-session'
 
 const DB_NAME = 'comfy-studio-web'
 const STORE = 'gallery'
@@ -105,6 +106,8 @@ export async function saveFromTask(opts: {
     cloudId: null
   }
   await putGallery(item)
+  // New work: drop session cache so next gallery visit picks it up
+  invalidateGallerySession()
   return item
 }
 

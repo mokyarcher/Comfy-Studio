@@ -123,6 +123,26 @@ Header：`X-API-Key`、`Content-Type: application/json`
 
 需 `X-API-Key`。云端分流须把 `/v1/workflows` 指到 GPU，勿进 Meta。
 
+### `GET /v1/system/host-metrics`
+
+生成面（GPU）。从本机 LibreHardwareMonitor Remote Web Server（默认 `http://127.0.0.1:8085/Data.json`）拉取并裁剪摘要：
+
+```json
+{
+  "ok": true,
+  "message": "ok",
+  "gpu_name": "NVIDIA GeForce RTX 4090",
+  "gpu_temp_c": 71.0,
+  "gpu_load_pct": 95.0,
+  "gpu_mem_used_mb": 10240,
+  "gpu_mem_total_mb": 24576,
+  "cpu_temp_c": 62.4,
+  "cpu_load_pct": 18.5
+}
+```
+
+需 `X-API-Key`。LHM 未开时 `ok=false`。nginx 须把本路径指到 GPU。Gateway Admin 可通过 host-services 的 `lhm` 启停（`.env`：`HOST_LHM_PATH`）。
+
 ### `GET /v1/tasks/{task_id}`
 
 状态：`queued` | `running` | `succeeded` | `failed`

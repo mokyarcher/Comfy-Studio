@@ -13,7 +13,7 @@ import {
 } from '@/lib/api'
 
 type PendingAction = {
-  service: 'comfy' | 'api' | 'frp'
+  service: 'comfy' | 'api' | 'frp' | 'lhm'
   action: HostServiceAction
   title: string
   hint?: string
@@ -259,7 +259,7 @@ function ServiceCard({
   busyKey: string
   onAction: (next: PendingAction) => void
 }) {
-  const id = svc.id as 'comfy' | 'api' | 'frp'
+  const id = svc.id as 'comfy' | 'api' | 'frp' | 'lhm'
   const stateColor = svc.ok ? 'text-success' : svc.state === 'starting' ? 'text-warning' : 'text-danger'
 
   return (

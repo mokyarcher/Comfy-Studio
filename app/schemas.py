@@ -669,6 +669,29 @@ class GpuStatusResponse(BaseModel):
     local_hold: bool = False
 
 
+class HostMetricsResponse(BaseModel):
+    """Hardware sensors from LibreHardwareMonitor (GPU plane)."""
+
+    ok: bool
+    message: str = ""
+    source: str = "libre_hardware_monitor"
+    url: str | None = None
+    cpu_name: str | None = None
+    gpu_name: str | None = None
+    cpu_temp_c: float | None = None
+    cpu_load_pct: float | None = None
+    cpu_power_w: float | None = None
+    gpu_temp_c: float | None = None
+    gpu_hotspot_c: float | None = None
+    gpu_load_pct: float | None = None
+    gpu_mem_load_pct: float | None = None
+    gpu_mem_used_mb: float | None = None
+    gpu_mem_total_mb: float | None = None
+    gpu_power_w: float | None = None
+    gpu_fan_rpm: float | None = None
+    gpu_clock_mhz: float | None = None
+
+
 class AdminStatsResponse(BaseModel):
     queue_open: int
     queue_queued: int
@@ -707,7 +730,7 @@ class HostServicesResponse(BaseModel):
 class HostServiceActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    service: Literal["comfy", "api", "frp"]
+    service: Literal["comfy", "api", "frp", "lhm"]
     action: Literal["start", "stop", "force_stop", "restart"]
     # Re-auth: Authenticator 6-digit code required for every start/stop/restart
     totp_code: str = Field(..., min_length=6, max_length=8)

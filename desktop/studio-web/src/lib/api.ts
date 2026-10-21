@@ -630,6 +630,72 @@ export async function fetchGpuStatus(opts: {
   }
 }
 
+export type HostMetrics = {
+  ok: boolean
+  message: string
+  gpu_name?: string | null
+  gpu_temp_c?: number | null
+  gpu_load_pct?: number | null
+  gpu_mem_load_pct?: number | null
+  gpu_mem_used_mb?: number | null
+  gpu_mem_total_mb?: number | null
+  gpu_power_w?: number | null
+  cpu_temp_c?: number | null
+  cpu_load_pct?: number | null
+}
+
+export async function fetchHostMetrics(opts: {
+  apiKey: string
+}): Promise<HostMetrics> {
+  if (!opts.apiKey) return { ok: false, message: '未登录' }
+  const url = joinUrl(apiBase(), '/v1/system/host-metrics')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      timeoutMs: 8_000,
+      headers: authHeaders(opts.apiKey)
+    })
+    const data = await parseJsonSafe(res)
+    if (!res.ok) return { ok: false, message: mapHttpError(res.status, data) }
+    const body = (data ?? {}) as HostMetrics
+    return {
+      ok: Boolean(body.ok),
+      message: body.message || (body.ok ? 'ok' : '无数据'),
+      gpu_name: body.gpu_name,
+      gpu_temp_c: body.gpu_temp_c,
+      gpu_load_pct: body.gpu_load_pct,
+      gpu_mem_load_pct: body.gpu_mem_load_pct,
+      gpu_mem_used_mb: body.gpu_mem_used_mb,
+      gpu_mem_total_mb: body.gpu_mem_total_mb,
+      gpu_power_w: body.gpu_power_w,
+      cpu_temp_c: body.cpu_temp_c,
+      cpu_load_pct: body.cpu_load_pct
+    }
+  } catch (err) {
+    return { ok: false, message: mapNetworkError(err) }
+  }
+}
+
+/** Compact chip text for the Studio top bar. */
+export function formatHostMetricsChip(m: HostMetrics): string | null {
+  if (!m.ok) return null
+  const parts: string[] = []
+  if (m.gpu_temp_c != null) parts.push(`${Math.round(m.gpu_temp_c)}°C`)
+  if (m.gpu_load_pct != null) parts.push(`${Math.round(m.gpu_load_pct)}%`)
+  if (m.gpu_mem_used_mb != null && m.gpu_mem_total_mb != null) {
+    const used = m.gpu_mem_used_mb >= 1024 ? `${(m.gpu_mem_used_mb / 1024).toFixed(1)}G` : `${Math.round(m.gpu_mem_used_mb)}M`
+    const total =
+      m.gpu_mem_total_mb >= 1024
+        ? `${(m.gpu_mem_total_mb / 1024).toFixed(0)}G`
+        : `${Math.round(m.gpu_mem_total_mb)}M`
+    parts.push(`${used}/${total}`)
+  } else if (m.gpu_mem_load_pct != null) {
+    parts.push(`显存 ${Math.round(m.gpu_mem_load_pct)}%`)
+  }
+  if (!parts.length) return null
+  return `GPU ${parts.join(' · ')}`
+}
+
 export async function fetchPromptLibrary(opts: { apiKey: string }) {
   const url = joinUrl(apiBase(), '/v1/prompt-library')
   const res = await fetchWithTimeout(url, {

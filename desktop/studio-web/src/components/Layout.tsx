@@ -11,7 +11,12 @@ import {
   Wand2
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { fetchGpuStatus, testConnection } from '@/lib/api'
+import {
+  fetchGpuStatus,
+  fetchHostMetrics,
+  formatHostMetricsChip,
+  testConnection
+} from '@/lib/api'
 import { preloadBackground } from '@/lib/backgrounds'
 import { useServerLimits } from '@/store/serverLimits'
 import { useSession } from '@/store/session'
@@ -64,6 +69,7 @@ export function Layout() {
   const pillReadyRef = useRef(false)
   const pillAnimRef = useRef<Animation | null>(null)
   const [gpu, setGpu] = useState('—')
+  const [hostChip, setHostChip] = useState<string | null>(null)
   const [health, setHealth] = useState('检测中…')
   const [connected, setConnected] = useState(false)
   const [bgHint, setBgHint] = useState(false)
@@ -235,14 +241,16 @@ export function Layout() {
   useEffect(() => {
     let alive = true
     const tick = async () => {
-      const [h, g] = await Promise.all([
+      const [h, g, m] = await Promise.all([
         testConnection({ timeoutMs: 10_000 }),
-        fetchGpuStatus({ apiKey: user.apiKey })
+        fetchGpuStatus({ apiKey: user.apiKey }),
+        fetchHostMetrics({ apiKey: user.apiKey })
       ])
       if (!alive) return
       setConnected(h.ok)
       setHealth(h.ok ? `已连接 · ${h.latencyMs} ms` : h.message)
       setGpu(g.ok ? (g.state === 'idle' ? 'GPU 空闲' : 'GPU 繁忙') : g.message)
+      setHostChip(formatHostMetricsChip(m))
       if (h.ok) {
         setFromHealth({
           maxSteps: h.maxSteps,
@@ -252,7 +260,7 @@ export function Layout() {
       }
     }
     tick()
-    const id = window.setInterval(tick, 12_000)
+    const id = window.setInterval(tick, 5_000)
     return () => {
       alive = false
       clearInterval(id)
@@ -369,6 +377,11 @@ export function Layout() {
         <header className="glass-panel flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2 sm:px-5">
           <span className={`status-chip ${connected ? 'status-chip-ok' : ''}`}>{health}</span>
           <span className="status-chip">{gpu}</span>
+          {hostChip ? (
+            <span className="status-chip" title="本机 LibreHardwareMonitor">
+              {hostChip}
+            </span>
+          ) : null}
           {bgHint ? (
             <span className="status-chip border-warning/40 bg-warning/10 text-warning">
               标签页在后台时轮询可能变慢

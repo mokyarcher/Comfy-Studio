@@ -148,7 +148,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174"
     )
 
-    # --- Host service control (Gateway Web admin: start/stop ComfyUI / FRP) ---
+    # --- Host service control (Gateway Web admin: start/stop ComfyUI / FRP / LHM) ---
     host_services_enabled: bool = True
     host_comfy_dir: Path | None = None
     host_comfy_launch: str = (
@@ -156,6 +156,12 @@ class Settings(BaseSettings):
     )
     host_frpc_path: Path | None = None
     host_frpc_config_path: Path | None = None
+    # LibreHardwareMonitor.exe — Remote Web Server must be enabled once in the UI
+    host_lhm_path: Path | None = None
+
+    # LibreHardwareMonitor metrics (loopback only; FastAPI proxies a summary)
+    lhm_url: str = "http://127.0.0.1:8085"
+    lhm_timeout_seconds: float = 2.5
 
     # --- User email (register / bind / password reset) ---
     email_reset_db_path: Path = PROJECT_ROOT / "data" / "email_reset.db"
@@ -256,6 +262,7 @@ class Settings(BaseSettings):
         "host_comfy_dir",
         "host_frpc_path",
         "host_frpc_config_path",
+        "host_lhm_path",
         mode="before",
     )
     @classmethod

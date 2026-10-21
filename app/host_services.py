@@ -24,7 +24,7 @@ from app.config import PROJECT_ROOT, Settings
 
 logger = logging.getLogger(__name__)
 
-ServiceId = Literal["comfy", "api", "frp"]
+ServiceId = Literal["comfy", "api", "frp", "lhm"]
 ActionId = Literal["start", "stop", "force_stop", "restart"]
 
 _tracked: dict[str, int] = {}
@@ -202,6 +202,7 @@ def status_all(settings: Settings) -> list[ServiceSnapshot]:
         _status_comfy(settings),
         _status_api(settings),
         _status_frp(settings),
+        _status_lhm(settings),
     ]
 
 
@@ -285,6 +286,13 @@ def run_action(settings: Settings, service: ServiceId, action: ActionId) -> tupl
         if action in ("stop", "force_stop"):
             return _stop_frp(settings)
         return False, "FRP 不支持该操作"
+
+    if service == "lhm":
+        if action == "start":
+            return _start_lhm(settings)
+        if action in ("stop", "force_stop"):
+            return _stop_lhm(settings)
+        return False, "LibreHardwareMonitor 不支持该操作"
 
     if service == "api":
         if action == "restart":
@@ -491,6 +499,154 @@ def _stop_frp(settings: Settings) -> tuple[bool, str]:
     if not killed:
         return True, "没有发现 FRP 进程"
     return True, f"已停止 FRP（PID {killed}）。公网入口可能暂时不可达。"
+
+
+def _lhm_port(settings: Settings) -> int:
+    try:
+        u = urlparse(settings.lhm_url or "http://127.0.0.1:8085")
+        if u.port:
+            return int(u.port)
+    except Exception:
+        pass
+    return 8085
+
+
+def _find_lhm_pids(exe_path: Path | None) -> list[int]:
+    if sys.platform != "win32":
+        return []
+    try:
+        ps = (
+            "Get-CimInstance Win32_Process -Filter "
+            "\"Name='LibreHardwareMonitor.exe'\" | "
+            "Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"
+        )
+        out = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command", ps],
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        ).strip()
+        if not out:
+            return []
+        import json
+
+        data = json.loads(out)
+        rows = data if isinstance(data, list) else [data]
+        pids: list[int] = []
+        want = str(exe_path).lower().replace("/", "\\") if exe_path else ""
+        for row in rows:
+            pid = int(row.get("ProcessId") or 0)
+            if pid <= 0:
+                continue
+            exe = str(row.get("ExecutablePath") or row.get("CommandLine") or "").lower()
+            exe = exe.replace("/", "\\")
+            if want and want not in exe:
+                # Still accept any LibreHardwareMonitor.exe if path filter is set but
+                # ExecutablePath is empty (permissions)
+                if row.get("ExecutablePath"):
+                    continue
+            pids.append(pid)
+        return pids
+    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
+        return []
+
+
+def _status_lhm(settings: Settings) -> ServiceSnapshot:
+    path = settings.host_lhm_path
+    configured = bool(path and path.is_file())
+    port = _lhm_port(settings)
+    data_url = f"{(settings.lhm_url or 'http://127.0.0.1:8085').rstrip('/')}/Data.json"
+    ok, msg = _probe_http(data_url, timeout=2.0)
+    if not ok:
+        alt = data_url.replace("/Data.json", "/data.json")
+        ok, msg = _probe_http(alt, timeout=2.0)
+    tracked = _tracked.get("lhm")
+    pids: list[int] = []
+    if tracked and _pid_alive(tracked):
+        pids = [tracked]
+    else:
+        pids = _find_lhm_pids(path)
+        if not pids:
+            listeners = _find_listening_pids(port)
+            pids = listeners[:1]
+        if pids:
+            _tracked["lhm"] = pids[0]
+    detail = str(path) if path else "未配置 HOST_LHM_PATH"
+    return ServiceSnapshot(
+        id="lhm",
+        label="硬件监控",
+        ok=ok,
+        state="running" if ok else ("starting" if pids else "stopped"),
+        message=msg if ok else ("未配置 exe" if not configured else "Remote Web Server 未响应"),
+        pid=pids[0] if pids else None,
+        configured=configured or ok,
+        detail=f"{data_url} · {detail}",
+    )
+
+
+def _start_lhm(settings: Settings) -> tuple[bool, str]:
+    path = settings.host_lhm_path
+    if not path or not path.is_file():
+        return False, "请配置 HOST_LHM_PATH（LibreHardwareMonitor.exe）"
+    snap = _status_lhm(settings)
+    if snap.ok:
+        return True, f"硬件监控已在运行（PID {snap.pid}）"
+    # LHM is a WinForms tray app — do not CREATE_NO_WINDOW (breaks UI / saved remote server).
+    if sys.platform == "win32":
+        proc = subprocess.Popen(
+            [str(path)],
+            cwd=str(path.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+    else:
+        proc = subprocess.Popen(
+            [str(path)],
+            cwd=str(path.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    if proc.pid:
+        _tracked["lhm"] = proc.pid
+    logger.info("host_services start lhm pid=%s", proc.pid)
+    time.sleep(1.2)
+    again = _status_lhm(settings)
+    if again.ok:
+        return True, f"硬件监控已启动（PID {proc.pid}）"
+    return (
+        True,
+        f"已启动 LibreHardwareMonitor（PID {proc.pid}）；"
+        "若 Data.json 仍不可用，请在程序里开启 Remote Web Server 并保存。",
+    )
+
+
+def _stop_lhm(settings: Settings) -> tuple[bool, str]:
+    path = settings.host_lhm_path
+    killed: list[int] = []
+    tracked = _tracked.pop("lhm", None)
+    if tracked:
+        _kill_tree(tracked)
+        killed.append(tracked)
+    for pid in _find_lhm_pids(path):
+        if pid in killed:
+            continue
+        _kill_tree(pid)
+        killed.append(pid)
+    port = _lhm_port(settings)
+    for pid in _find_listening_pids(port):
+        if pid in killed:
+            continue
+        _kill_tree(pid)
+        killed.append(pid)
+    time.sleep(0.5)
+    if _status_lhm(settings).ok:
+        return False, "硬件监控 Web 仍在响应，请本机检查进程"
+    if not killed:
+        return True, "没有发现 LibreHardwareMonitor 进程"
+    return True, f"已停止硬件监控（PID {killed}）"
 
 
 def _restart_api(settings: Settings) -> tuple[bool, str]:

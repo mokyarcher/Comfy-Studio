@@ -56,6 +56,7 @@ from app.schemas import (
     GenerateImageRequest,
     GenerateImageResponse,
     GpuStatusResponse,
+    HostMetricsResponse,
     HealthLiveResponse,
     HealthReadyResponse,
     HostServiceActionRequest,
@@ -1625,6 +1626,20 @@ def create_app() -> FastAPI:
     async def get_gpu_status(auth: AuthContext = Depends(require_auth)) -> GpuStatusResponse:
         _ = auth
         return _gpu_status_response()
+
+    @app.get(
+        "/v1/system/host-metrics",
+        response_model=HostMetricsResponse,
+        tags=["system"],
+    )
+    async def get_host_metrics(auth: AuthContext = Depends(require_auth)) -> HostMetricsResponse:
+        """GPU-host sensors via LibreHardwareMonitor (loopback Data.json)."""
+        _ = auth
+        _require_generation()
+        from app.lhm_client import fetch_host_metrics
+
+        data = await fetch_host_metrics(state.settings)
+        return HostMetricsResponse(**data)
 
     @app.get("/v1/local-hold", response_model=LocalHoldResponse, tags=["system"])
     async def get_local_hold(auth: AuthContext = Depends(require_auth)) -> LocalHoldResponse:

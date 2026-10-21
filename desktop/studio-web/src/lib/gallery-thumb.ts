@@ -11,7 +11,7 @@ export function yieldToMain(): Promise<void> {
 }
 
 /** Downscale a still image blob for grid tiles (videos keep object URL). */
-export async function blobToThumbUrl(blob: Blob, maxEdge = 480): Promise<string> {
+export async function blobToThumbUrl(blob: Blob, maxEdge = 360): Promise<string> {
   if (blob.type.startsWith('video/') || typeof createImageBitmap !== 'function') {
     return URL.createObjectURL(blob)
   }
@@ -31,7 +31,7 @@ export async function blobToThumbUrl(blob: Blob, maxEdge = 480): Promise<string>
     ctx.drawImage(bmp, 0, 0, w, h)
     bmp.close()
     const thumb = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.72)
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7)
     )
     if (!thumb) return URL.createObjectURL(blob)
     return URL.createObjectURL(thumb)

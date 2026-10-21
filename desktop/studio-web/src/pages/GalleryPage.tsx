@@ -13,7 +13,6 @@ import {
 import { WorkDetailMeta } from '@/components/WorkDetailMeta'
 import {
   deleteGallery,
-  findByCloudId,
   listGallery,
   newGalleryId,
   putGallery,
@@ -22,17 +21,27 @@ import {
   type GalleryRecord
 } from '@/lib/gallery-db'
 import { blobToThumbUrl, yieldToMain } from '@/lib/gallery-thumb'
+import {
+  peekGallerySession,
+  removeGallerySessionItem,
+  saveGallerySession,
+  type GalleryCacheRow
+} from '@/lib/gallery-session'
 import { fetchAuthedBlob, listCloudGallery, shareToShowcase, unlistShowcase } from '@/lib/api'
 import { formatDateTime, modeLabel } from '@/lib/format'
 import type { GenerateMode } from '@/lib/types'
 import { useSession } from '@/store/session'
 import { useToast } from '@/store/toast'
 
-type GalleryRow = GalleryRecord & { thumbUrl: string; fullUrl: string }
+/** Grid row: metadata + URLs only (full blobs live in blobsRef). */
+type GalleryRow = GalleryCacheRow
+
 type BusyAction = 'share' | 'favorite' | 'delete' | 'export' | null
 
-const BATCH = 4
+const THUMB_BATCH = 3
 const PAGE = 12
+/** Prefetch a few tiles past the fold so scroll feels instant. */
+const PREFETCH = 6
 
 export function GalleryPage() {
   const apiKey = useSession((s) => s.user!.apiKey)
@@ -45,13 +54,17 @@ export function GalleryPage() {
   const [fullscreen, setFullscreen] = useState(false)
   const [busy, setBusy] = useState<BusyAction>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
   const itemsRef = useRef(items)
   itemsRef.current = items
+  const blobsRef = useRef(new Map<string, Blob>())
+  const thumbInflight = useRef(new Set<string>())
+  const genGen = useRef(0)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  function revokeAll(rows: GalleryRow[]) {
+  function revokeUrls(rows: GalleryRow[]) {
     for (const i of rows) {
-      URL.revokeObjectURL(i.thumbUrl)
+      if (i.thumbUrl) URL.revokeObjectURL(i.thumbUrl)
       if (i.fullUrl && i.fullUrl !== i.thumbUrl) URL.revokeObjectURL(i.fullUrl)
     }
   }
@@ -61,39 +74,90 @@ export function GalleryPage() {
     setActive((cur) => (cur && cur.id === id ? { ...cur, ...patch } : cur))
   }
 
-  async function reload() {
-    const rows = await listGallery()
-    setItems((prev) => {
-      revokeAll(prev)
-      return []
-    })
-    setVisibleCount(PAGE)
-    setLoading(false)
+  function toRow(r: GalleryRecord): GalleryRow {
+    const { blob: _blob, ...meta } = r
+    return { ...meta, thumbUrl: '', fullUrl: '' }
+  }
 
-    const built: GalleryRow[] = []
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const slice = rows.slice(i, i + BATCH)
-      const chunk = await Promise.all(
-        slice.map(async (r) => {
-          const thumbUrl = await blobToThumbUrl(r.blob)
-          return { ...r, thumbUrl, fullUrl: '' }
+  /** Build thumbs only for [0, until) — not the whole library. */
+  async function ensureThumbs(until: number, generation: number) {
+    const target = Math.min(until + PREFETCH, itemsRef.current.length)
+    const pending = itemsRef.current
+      .slice(0, target)
+      .filter((r) => !r.thumbUrl && !thumbInflight.current.has(r.id))
+    if (!pending.length) return
+
+    for (let i = 0; i < pending.length; i += THUMB_BATCH) {
+      if (generation !== genGen.current) return
+      const slice = pending.slice(i, i + THUMB_BATCH)
+      for (const row of slice) thumbInflight.current.add(row.id)
+
+      const results = await Promise.all(
+        slice.map(async (row) => {
+          const blob = blobsRef.current.get(row.id)
+          if (!blob) return { id: row.id, thumbUrl: '' }
+          try {
+            const thumbUrl = await blobToThumbUrl(blob)
+            return { id: row.id, thumbUrl }
+          } catch {
+            return { id: row.id, thumbUrl: '' }
+          }
         })
       )
-      built.push(...chunk)
+
+      if (generation !== genGen.current) {
+        for (const r of results) {
+          if (r.thumbUrl) URL.revokeObjectURL(r.thumbUrl)
+          thumbInflight.current.delete(r.id)
+        }
+        return
+      }
+
+      const byId = new Map(results.map((r) => [r.id, r.thumbUrl]))
       startTransition(() => {
-        setItems([...built])
+        setItems((prev) =>
+          prev.map((row) => {
+            const url = byId.get(row.id)
+            if (!url || row.thumbUrl) return row
+            return { ...row, thumbUrl: url }
+          })
+        )
       })
+      for (const row of slice) thumbInflight.current.delete(row.id)
       await yieldToMain()
     }
   }
 
+  async function reload() {
+    const generation = ++genGen.current
+    thumbInflight.current.clear()
+
+    const rows = await listGallery()
+    if (generation !== genGen.current) return
+
+    setItems((prev) => {
+      revokeUrls(prev)
+      return []
+    })
+    blobsRef.current = new Map(rows.map((r) => [r.id, r.blob]))
+
+    const metas = rows.map(toRow)
+    setItems(metas)
+    setVisibleCount(PAGE)
+    setLoading(false)
+    itemsRef.current = metas
+    await ensureThumbs(PAGE, generation)
+  }
+
   async function syncCloud() {
     try {
+      const known = new Set(
+        itemsRef.current.map((r) => r.cloudId).filter((id): id is string => Boolean(id))
+      )
       const { items: cloud } = await listCloudGallery({ apiKey, limit: 100 })
       let added = 0
       for (const c of cloud) {
-        const existing = await findByCloudId(c.id)
-        if (existing) continue
+        if (known.has(c.id)) continue
         const blob = await fetchAuthedBlob({ apiKey, path: c.image_url })
         await putGallery({
           id: newGalleryId(),
@@ -112,6 +176,7 @@ export function GalleryPage() {
           showcaseId: null,
           cloudId: c.id
         })
+        known.add(c.id)
         added += 1
         await yieldToMain()
       }
@@ -127,19 +192,39 @@ export function GalleryPage() {
       await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
       await yieldToMain()
       if (cancelled) return
-      await reload()
+
+      const cached = peekGallerySession()
+      if (cached && cached.rows.length) {
+        // Reuse thumbs from last visit — no full decode pass
+        blobsRef.current = cached.blobs
+        setItems(cached.rows)
+        itemsRef.current = cached.rows
+        setVisibleCount(PAGE)
+        setLoading(false)
+        await ensureThumbs(PAGE, genGen.current)
+      } else {
+        await reload()
+      }
       if (cancelled) return
       window.setTimeout(() => {
         if (!cancelled) void syncCloud()
-      }, 600)
+      }, 800)
     }
     void boot()
     return () => {
       cancelled = true
-      revokeAll(itemsRef.current)
+      genGen.current += 1
+      // Keep object URLs alive in module session for next visit
+      saveGallerySession(itemsRef.current, blobsRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey])
+
+  useEffect(() => {
+    if (loading || !items.length) return
+    void ensureThumbs(visibleCount, genGen.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCount, items.length, loading])
 
   useEffect(() => {
     if (!active && !fullscreen) return
@@ -167,15 +252,21 @@ export function GalleryPage() {
         if (!entry?.isIntersecting) return
         setVisibleCount((n) => Math.min(items.length, n + PAGE))
       },
-      { rootMargin: '240px 0px' }
+      { rootMargin: '320px 0px' }
     )
     io.observe(el)
     return () => io.disconnect()
   }, [items.length, visibleCount])
 
+  function getBlob(id: string): Blob | undefined {
+    return blobsRef.current.get(id)
+  }
+
   async function ensureFullUrl(item: GalleryRow): Promise<GalleryRow> {
     if (item.fullUrl) return item
-    const fullUrl = URL.createObjectURL(item.blob)
+    const blob = getBlob(item.id)
+    if (!blob) return item
+    const fullUrl = URL.createObjectURL(blob)
     const next = { ...item, fullUrl }
     patchRow(item.id, { fullUrl })
     return next
@@ -197,6 +288,11 @@ export function GalleryPage() {
 
   async function onShareOrUnlist(item: GalleryRow) {
     if (busy) return
+    const blob = getBlob(item.id)
+    if (!blob) {
+      push('本地文件缺失', 'error')
+      return
+    }
     setBusy('share')
     try {
       if (item.showcaseId) {
@@ -214,7 +310,7 @@ export function GalleryPage() {
           height: item.height,
           steps: item.steps,
           seed: item.seed,
-          image: item.blob
+          image: blob
         })
         await setGalleryShowcaseId(item.id, shared.id)
         patchRow(item.id, { showcaseId: shared.id })
@@ -275,6 +371,7 @@ export function GalleryPage() {
     setBusy('export')
     try {
       const ready = await ensureFullUrl(item)
+      if (!ready.fullUrl) throw new Error('本地文件缺失')
       const a = document.createElement('a')
       a.href = ready.fullUrl
       a.download = `${item.id}.${item.mimeType.includes('video') ? 'mp4' : 'png'}`
@@ -292,11 +389,9 @@ export function GalleryPage() {
     setBusy('delete')
     try {
       await deleteGallery(item.id)
-      setItems((prev) => {
-        const gone = prev.find((r) => r.id === item.id)
-        if (gone) revokeAll([gone])
-        return prev.filter((r) => r.id !== item.id)
-      })
+      blobsRef.current.delete(item.id)
+      removeGallerySessionItem(item.id)
+      setItems((prev) => prev.filter((r) => r.id !== item.id))
       setActive(null)
       setConfirmDelete(false)
       setFullscreen(false)
@@ -338,16 +433,20 @@ export function GalleryPage() {
                 onClick={() => void openItem(item)}
               >
                 <div className="media-thumb">
-                  {item.mimeType.startsWith('video/') ? (
-                    <video src={item.thumbUrl} muted preload="metadata" />
+                  {item.thumbUrl ? (
+                    item.mimeType.startsWith('video/') ? (
+                      <video src={item.thumbUrl} muted preload="metadata" />
+                    ) : (
+                      <img
+                        src={item.thumbUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="transition duration-200 group-hover:scale-[1.02]"
+                      />
+                    )
                   ) : (
-                    <img
-                      src={item.thumbUrl}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="transition duration-200 group-hover:scale-[1.02]"
-                    />
+                    <div className="h-full w-full animate-pulse bg-white/5" aria-hidden />
                   )}
                   {item.favorite ? (
                     <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 p-1">
@@ -376,7 +475,6 @@ export function GalleryPage() {
           aria-modal="true"
           aria-label="作品详情"
         >
-          {/* Left: full-size original — replaces the old dimmed gallery area */}
           <div
             className="relative flex min-w-0 flex-1 items-center justify-center p-3 sm:p-5"
             onClick={closeDetail}
@@ -411,7 +509,6 @@ export function GalleryPage() {
             )}
           </div>
 
-          {/* Right: params + actions only */}
           <aside
             className="glass-panel flex h-full w-full max-w-md shrink-0 flex-col border-l border-white/10 shadow-panel sm:max-w-lg"
             onClick={(e) => e.stopPropagation()}
