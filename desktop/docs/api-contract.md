@@ -149,6 +149,24 @@ Header：`X-API-Key`、`Content-Type: application/json`
 
 `total_power_w` = CPU + GPU 封装功耗（非整机 PSU）。需 `X-API-Key`。LHM 未开时 `ok=false`。nginx 须把本路径指到 GPU。Gateway Admin 可通过 host-services 的 `lhm` 启停（`.env`：`HOST_LHM_PATH`）。
 
+### ComfyUI 控制（生成面）
+
+均需 `X-API-Key`；nginx 须把 `/v1/system/comfy/` 指到 GPU。只代理本机 `8188`，勿把 ComfyUI 暴露公网。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/v1/system/comfy/interrupt` | 打断当前执行（Comfy `/interrupt`） |
+| `POST` | `/v1/system/comfy/queue/clear` | 清空 Comfy 等待队列（`/queue` `clear:true`） |
+| `POST` | `/v1/system/comfy/free` | 卸模型 / 清缓存（`/free`） |
+
+`POST /v1/system/comfy/free` body：
+
+```json
+{ "unload_models": true, "free_memory": true }
+```
+
+成功均返回 `{ "ok": true, "message": "…" }`。作用于共享 GPU，慎用。
+
 ### `GET /v1/tasks/{task_id}`
 
 状态：`queued` | `running` | `succeeded` | `failed`

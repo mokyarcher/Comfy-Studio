@@ -56,6 +56,8 @@ from app.schemas import (
     GenerateImageRequest,
     GenerateImageResponse,
     GpuStatusResponse,
+    ComfyControlResponse,
+    ComfyFreeRequest,
     HostMetricsResponse,
     HealthLiveResponse,
     HealthReadyResponse,
@@ -1640,6 +1642,80 @@ def create_app() -> FastAPI:
 
         data = await fetch_host_metrics(state.settings)
         return HostMetricsResponse(**data)
+
+    async def _comfy_control(action: str) -> ComfyControlResponse:
+        """Proxy a ComfyUI control call; never expose 8188 publicly."""
+        _require_generation()
+        if state.comfy is None:
+            raise HTTPException(status_code=503, detail="ComfyUI client unavailable")
+        from app.comfy_client import ComfyClientError
+
+        try:
+            if action == "interrupt":
+                await state.comfy.interrupt()
+                msg = "已请求打断当前任务"
+            elif action == "clear_queue":
+                await state.comfy.clear_queue()
+                msg = "已清空 ComfyUI 等待队列"
+            else:
+                raise HTTPException(status_code=400, detail="unknown action")
+        except ComfyClientError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.info("comfy control action=%s", action)
+        return ComfyControlResponse(ok=True, message=msg)
+
+    @app.post(
+        "/v1/system/comfy/interrupt",
+        response_model=ComfyControlResponse,
+        tags=["system"],
+    )
+    async def comfy_interrupt(auth: AuthContext = Depends(require_auth)) -> ComfyControlResponse:
+        _ = auth
+        return await _comfy_control("interrupt")
+
+    @app.post(
+        "/v1/system/comfy/queue/clear",
+        response_model=ComfyControlResponse,
+        tags=["system"],
+    )
+    async def comfy_queue_clear(auth: AuthContext = Depends(require_auth)) -> ComfyControlResponse:
+        _ = auth
+        return await _comfy_control("clear_queue")
+
+    @app.post(
+        "/v1/system/comfy/free",
+        response_model=ComfyControlResponse,
+        tags=["system"],
+    )
+    async def comfy_free(
+        body: ComfyFreeRequest,
+        auth: AuthContext = Depends(require_auth),
+    ) -> ComfyControlResponse:
+        _ = auth
+        _require_generation()
+        if state.comfy is None:
+            raise HTTPException(status_code=503, detail="ComfyUI client unavailable")
+        from app.comfy_client import ComfyClientError
+
+        try:
+            await state.comfy.free_memory(
+                unload_models=body.unload_models,
+                free_memory=body.free_memory,
+            )
+        except ComfyClientError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        parts: list[str] = []
+        if body.unload_models:
+            parts.append("卸载模型")
+        if body.free_memory:
+            parts.append("清缓存")
+        msg = "已请求" + "·".join(parts) if parts else "ok"
+        logger.info(
+            "comfy free unload_models=%s free_memory=%s",
+            body.unload_models,
+            body.free_memory,
+        )
+        return ComfyControlResponse(ok=True, message=msg)
 
     @app.get("/v1/local-hold", response_model=LocalHoldResponse, tags=["system"])
     async def get_local_hold(auth: AuthContext = Depends(require_auth)) -> LocalHoldResponse:

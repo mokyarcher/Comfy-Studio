@@ -738,6 +738,55 @@ export function formatHostMetricsChip(m: HostMetrics): string | null {
   return chips.length ? chips.join(' · ') : null
 }
 
+export type ComfyControlResult = { ok: boolean; message: string }
+
+async function postComfyControl(
+  path: string,
+  opts: { apiKey: string; body?: Record<string, unknown> }
+): Promise<ComfyControlResult> {
+  if (!opts.apiKey) return { ok: false, message: '未登录' }
+  const url = joinUrl(apiBase(), path)
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      timeoutMs: 30_000,
+      headers: {
+        ...authHeaders(opts.apiKey),
+        'Content-Type': 'application/json'
+      },
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    })
+    const data = await parseJsonSafe(res)
+    if (!res.ok) return { ok: false, message: mapHttpError(res.status, data) }
+    const body = (data ?? {}) as ComfyControlResult
+    return { ok: Boolean(body.ok ?? true), message: body.message || 'ok' }
+  } catch (err) {
+    return { ok: false, message: mapNetworkError(err) }
+  }
+}
+
+export function comfyInterrupt(opts: { apiKey: string }) {
+  return postComfyControl('/v1/system/comfy/interrupt', opts)
+}
+
+export function comfyClearQueue(opts: { apiKey: string }) {
+  return postComfyControl('/v1/system/comfy/queue/clear', opts)
+}
+
+export function comfyFreeMemory(opts: {
+  apiKey: string
+  unloadModels?: boolean
+  freeMemory?: boolean
+}) {
+  return postComfyControl('/v1/system/comfy/free', {
+    apiKey: opts.apiKey,
+    body: {
+      unload_models: opts.unloadModels !== false,
+      free_memory: opts.freeMemory !== false
+    }
+  })
+}
+
 export async function fetchPromptLibrary(opts: { apiKey: string }) {
   const url = joinUrl(apiBase(), '/v1/prompt-library')
   const res = await fetchWithTimeout(url, {

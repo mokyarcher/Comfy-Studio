@@ -696,6 +696,16 @@ class HostMetricsResponse(BaseModel):
     total_power_w: float | None = None
 
 
+class ComfyFreeRequest(BaseModel):
+    unload_models: bool = True
+    free_memory: bool = True
+
+
+class ComfyControlResponse(BaseModel):
+    ok: bool = True
+    message: str = "ok"
+
+
 class AdminStatsResponse(BaseModel):
     queue_open: int
     queue_queued: int

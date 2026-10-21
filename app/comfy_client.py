@@ -325,3 +325,56 @@ class ComfyClient:
             )
             return False
         return True
+
+    async def interrupt(self) -> None:
+        """Stop the currently executing workflow (POST /interrupt)."""
+        try:
+            response = await self._client.post("/interrupt")
+        except httpx.HTTPError as exc:
+            raise ComfyClientError(
+                f"Failed to reach ComfyUI /interrupt: {exc}",
+                code="comfy_unreachable",
+            ) from exc
+        if response.status_code >= 400:
+            raise ComfyClientError(
+                f"ComfyUI /interrupt failed ({response.status_code})",
+                code="comfy_interrupt_failed",
+            )
+
+    async def clear_queue(self) -> None:
+        """Clear pending prompts in ComfyUI (POST /queue {clear:true})."""
+        try:
+            response = await self._client.post("/queue", json={"clear": True})
+        except httpx.HTTPError as exc:
+            raise ComfyClientError(
+                f"Failed to reach ComfyUI /queue: {exc}",
+                code="comfy_unreachable",
+            ) from exc
+        if response.status_code >= 400:
+            raise ComfyClientError(
+                f"ComfyUI /queue clear failed ({response.status_code})",
+                code="comfy_queue_clear_failed",
+            )
+
+    async def free_memory(
+        self, *, unload_models: bool = True, free_memory: bool = True
+    ) -> None:
+        """Unload models and/or clear execution cache (POST /free)."""
+        if not unload_models and not free_memory:
+            raise ComfyClientError(
+                "unload_models or free_memory required",
+                code="comfy_free_noop",
+            )
+        payload = {"unload_models": unload_models, "free_memory": free_memory}
+        try:
+            response = await self._client.post("/free", json=payload)
+        except httpx.HTTPError as exc:
+            raise ComfyClientError(
+                f"Failed to reach ComfyUI /free: {exc}",
+                code="comfy_unreachable",
+            ) from exc
+        if response.status_code >= 400:
+            raise ComfyClientError(
+                f"ComfyUI /free failed ({response.status_code})",
+                code="comfy_free_failed",
+            )

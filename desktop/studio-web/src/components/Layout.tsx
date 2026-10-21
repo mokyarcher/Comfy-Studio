@@ -12,6 +12,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  comfyClearQueue,
+  comfyFreeMemory,
+  comfyInterrupt,
   fetchGpuStatus,
   fetchHostMetrics,
   formatHostMetricsChips,
@@ -21,6 +24,7 @@ import { preloadBackground } from '@/lib/backgrounds'
 import { useServerLimits } from '@/store/serverLimits'
 import { useSession } from '@/store/session'
 import { useSettings } from '@/store/settings'
+import { useToast } from '@/store/toast'
 import { ToastHost } from './ToastHost'
 import { WorkspaceBackground } from './WorkspaceBackground'
 
@@ -60,6 +64,7 @@ export function Layout() {
   const user = useSession((s) => s.user)!
   const backgroundId = useSettings((s) => s.backgroundId)
   const setFromHealth = useServerLimits((s) => s.setFromHealth)
+  const pushToast = useToast((s) => s.push)
   const location = useLocation()
   const mainRef = useRef<HTMLElement>(null)
   const asideRef = useRef<HTMLElement>(null)
@@ -73,6 +78,7 @@ export function Layout() {
   const [health, setHealth] = useState('检测中…')
   const [connected, setConnected] = useState(false)
   const [bgHint, setBgHint] = useState(false)
+  const [comfyBusy, setComfyBusy] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === '1'
@@ -276,6 +282,20 @@ export function Layout() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
+  const runComfyControl = async (
+    label: string,
+    fn: () => Promise<{ ok: boolean; message: string }>
+  ) => {
+    if (comfyBusy) return
+    setComfyBusy(true)
+    try {
+      const res = await fn()
+      pushToast(res.message || label, res.ok ? 'success' : 'error')
+    } finally {
+      setComfyBusy(false)
+    }
+  }
+
   return (
     <div
       className="workspace-shell flex h-full min-h-0"
@@ -382,6 +402,43 @@ export function Layout() {
               {chip}
             </span>
           ))}
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              className="glass-cta-btn glass-cta-btn-sm"
+              disabled={comfyBusy || !connected}
+              title="打断 ComfyUI 当前任务"
+              onClick={() =>
+                runComfyControl('打断', () => comfyInterrupt({ apiKey: user.apiKey }))
+              }
+            >
+              <span className="glass-cta-btn-label">打断</span>
+            </button>
+            <button
+              type="button"
+              className="glass-cta-btn glass-cta-btn-sm"
+              disabled={comfyBusy || !connected}
+              title="清空 ComfyUI 等待队列"
+              onClick={() =>
+                runComfyControl('清队列', () => comfyClearQueue({ apiKey: user.apiKey }))
+              }
+            >
+              <span className="glass-cta-btn-label">清队列</span>
+            </button>
+            <button
+              type="button"
+              className="glass-cta-btn glass-cta-btn-sm"
+              disabled={comfyBusy || !connected}
+              title="卸载模型并清理执行缓存（释放显存）"
+              onClick={() =>
+                runComfyControl('清显存', () =>
+                  comfyFreeMemory({ apiKey: user.apiKey, unloadModels: true, freeMemory: true })
+                )
+              }
+            >
+              <span className="glass-cta-btn-label">清显存</span>
+            </button>
+          </div>
           {bgHint ? (
             <span className="status-chip border-warning/40 bg-warning/10 text-warning">
               标签页在后台时轮询可能变慢
