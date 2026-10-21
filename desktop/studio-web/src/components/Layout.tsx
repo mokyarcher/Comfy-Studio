@@ -45,7 +45,6 @@ type PillBox = { top: number; left: number; width: number; height: number }
 type ComfyConfirm = {
   title: string
   detail: string
-  confirmLabel: string
   run: () => Promise<{ ok: boolean; message: string }>
 }
 
@@ -425,7 +424,6 @@ export function Layout() {
                 askComfyControl({
                   title: '打断当前任务？',
                   detail: '将请求打断 ComfyUI 正在执行的工作流。无任务在跑时通常无影响。',
-                  confirmLabel: '确认打断',
                   run: () => comfyInterrupt({ apiKey: user.apiKey })
                 })
               }
@@ -441,7 +439,6 @@ export function Layout() {
                 askComfyControl({
                   title: '清空等待队列？',
                   detail: '将清空 ComfyUI 中尚未开始的排队任务，不影响已完成记录。',
-                  confirmLabel: '确认清空',
                   run: () => comfyClearQueue({ apiKey: user.apiKey })
                 })
               }
@@ -457,7 +454,6 @@ export function Layout() {
                 askComfyControl({
                   title: '清理显存？',
                   detail: '将卸载已加载模型并清理执行缓存。下次出图需重新加载，会稍慢。',
-                  confirmLabel: '确认清理',
                   run: () =>
                     comfyFreeMemory({
                       apiKey: user.apiKey,
@@ -518,7 +514,7 @@ export function Layout() {
                     disabled={comfyBusy}
                     onClick={() => void runComfyControl()}
                   >
-                    {comfyConfirm.confirmLabel}
+                    确认
                   </button>
                 </div>
               </div>

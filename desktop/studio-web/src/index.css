@@ -374,15 +374,16 @@ body {
 .glass-confirm-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.65rem;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
   margin-top: 1.05rem;
 }
 
 .glass-confirm-cancel {
   border: none;
   background: transparent;
-  padding: 0.45rem 0.7rem;
+  padding: 0.45rem 0.15rem;
   border-radius: 0.65rem;
   font-size: 0.85rem;
   color: var(--muted);
@@ -391,7 +392,6 @@ body {
 
 .glass-confirm-cancel:hover:not(:disabled) {
   color: var(--text);
-  background: color-mix(in srgb, #ffffff 8%, transparent);
 }
 
 .glass-confirm-ok {
@@ -400,11 +400,12 @@ body {
   backdrop-filter: var(--glass-filter-soft);
   -webkit-backdrop-filter: var(--glass-filter-soft);
   color: var(--danger);
-  padding: 0.45rem 0.95rem;
+  padding: 0.45rem 1.1rem;
   border-radius: 0.75rem;
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
+  margin-left: auto;
 }
 
 .glass-confirm-ok:hover:not(:disabled) {
