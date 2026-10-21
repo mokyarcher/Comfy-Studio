@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,6 +72,8 @@ from app.schemas import (
     SharedPromptListResponse,
     SharedPromptShareRequest,
     UploadImageResponse,
+    WorkflowInfoResponse,
+    WorkflowListResponse,
     WorkflowModesResponse,
     PurgeTaskResponse,
     CloudGalleryItemResponse,
@@ -97,7 +99,12 @@ from app.schemas import (
 )
 from app.shared_prompt_store import SharedPromptStore
 from app.user_store import STATUS_ACTIVE, STATUS_DISABLED, STATUS_PENDING, STATUS_REJECTED
-from app.task_service import QueueFullError, TaskService, UnsupportedModeError
+from app.task_service import (
+    QueueFullError,
+    TaskService,
+    UnknownWorkflowError,
+    UnsupportedModeError,
+)
 from app.user_store import UserStore
 from app.cloud_gallery_store import CloudGalleryStore
 from app.showcase_store import ShowcaseStore
@@ -200,7 +207,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         state.db = None
         state.comfy = None
-        state.registry = WorkflowRegistry(bundles={})
+        state.registry = WorkflowRegistry()
         state.task_service = None
         state.worker = None
         logger.info(
@@ -341,6 +348,11 @@ def create_app() -> FastAPI:
         assert state.task_service is not None
         try:
             task = state.task_service.submit(body)
+        except UnknownWorkflowError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "unknown_workflow", "message": str(exc)},
+            ) from exc
         except UnsupportedModeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -381,7 +393,40 @@ def create_app() -> FastAPI:
         tags=["images"],
     )
     async def list_workflow_modes() -> WorkflowModesResponse:
+        _require_generation()
         return WorkflowModesResponse(modes=state.registry.modes, default="txt2img")
+
+    @app.get(
+        "/v1/workflows",
+        response_model=WorkflowListResponse,
+        dependencies=[Depends(verify_api_key)],
+        tags=["images"],
+    )
+    async def list_workflows(
+        mode: Literal["txt2img", "image_edit", "image_to_video"] = "txt2img",
+    ) -> WorkflowListResponse:
+        """List concrete pipelines under a mode (from GPU plane, not Meta)."""
+        _require_generation()
+        if not state.registry.has(mode):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "unsupported_mode", "message": f"mode={mode!r} not loaded"},
+            )
+        items = state.registry.list_workflows(mode)
+        return WorkflowListResponse(
+            mode=mode,
+            default=state.registry.default_id(mode),
+            workflows=[
+                WorkflowInfoResponse(
+                    id=i.id,
+                    display_name=i.display_name,
+                    description=i.description,
+                    default=i.default,
+                    mode=i.mode,
+                )
+                for i in items
+            ],
+        )
 
     @app.post(
         "/v1/images/upload",

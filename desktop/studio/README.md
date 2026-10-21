@@ -1,6 +1,6 @@
 # Comfy Studio
 
-远程文生图桌面客户端（Electron + React + TypeScript + Vite + Tailwind）。通过现有 FastAPI 异步任务接口生成图片。
+远程创作桌面客户端（Electron + React + TypeScript + Vite + Tailwind）。经 FastAPI 异步任务出图；账号 / 展馆等数据可走云 Meta（与 Web Studio 同一契约）。
 
 ## 开发
 
@@ -17,39 +17,39 @@ npm run dev
 | `npm run dev` | 开发模式 |
 | `npm run typecheck` | TypeScript 检查 |
 | `npm run build` | 生产构建 |
-| `npm run dist` | 打包 Windows NSIS + Portable → `release/` |
+| `npm run dist:dir` | 打包 Windows 解压目录 → `release/win-unpacked/` |
 
-## 首次使用
+## 首次使用（账号）
 
-1. 打开 **API 连接**
-2. 新建配置，填写：
-   - **Base URL**（不要末尾斜杠；可含路径前缀），例如 `http://111.229.166.216:8080/qwen-image`
-   - **API Key**（与服务端 `.env` 中的 `API_KEY` 一致）
-   - **超时**（默认 900 秒）
-3. 点击 **测试连接**（`GET {base}/health/ready`，无需 Key）
-4. 保存并设为默认后，到 **开始创作** 生图
+1. 配置 **Base URL**（公网 Studio/API 入口，无末尾斜杠；可含路径前缀）
+2. **注册 / 登录**（用户名+密码；登录亦可用已绑定邮箱——与 Web 一致，取决于服务端是否已开邮箱能力）
+3. 等待管理员审核通过后即可创作
+4. 「测试连接」走健康检查；登录成功后的个人 Key 由主进程 `safeStorage` 保管，勿在渲染进程明文落盘
+
+> 旧「只填管理员 API_KEY」仍可用于运维自测；普通玩家请走注册审核。
+
+## 展馆
+
+- 从画廊分享到展馆 / 下架
+- 点赞、收藏、评论（API：`/v1/showcase/{id}/like|favorite|comments`，与 Web Studio 相同）
+- 契约见 [`../docs/api-contract.md`](../docs/api-contract.md)
 
 ## Base URL 说明（路径前缀）
 
 若公网经 Nginx 挂在子路径下，Base URL 必须包含该前缀，例如：
 
 ```text
-http://111.229.166.216:8080/qwen-image
+https://app.comfy-studio.sharex.team
 ```
 
-客户端会拼接为：
+或带前缀的自建入口。客户端会拼接 `/health/ready`、`/v1/images/generate`、`/v1/tasks/...` 等。
 
-- `GET {base}/health/ready`
-- `POST {base}/v1/images/generate`
-- `GET {base}/v1/tasks/{id}`
-- `GET {base}/v1/tasks/{id}/images/0`
+## API 契约（生成）
 
-## API 契约
-
-- 生图 Header：`X-API-Key`
-- 请求体仅：`prompt`、`negative_prompt?`、`width?`、`height?`、`steps?`、`seed?`
+- 生图 Header：`X-API-Key`（登录会话带上）
+- 请求体：`prompt`、`negative_prompt?`、`width?`、`height?`、`steps?`、`seed?`、模式相关字段
 - **不发送** cfg / sampler / batch
-- `202` 返回 `task_id` 后每 **2 秒** 轮询，直至 `succeeded` / `failed`
+- `202` 返回 `task_id` 后轮询，直至 `succeeded` / `failed`
 - 超时可配置，默认 **900 秒**
 - 主进程串行队列，默认并发 **1**
 
@@ -67,12 +67,12 @@ http://111.229.166.216:8080/qwen-image
 
 本地规则润色偏公式化。默认走 **网关代理**（方案 B）：
 
-1. 先在 **API 连接** 配好 Base URL + 与服务端一致的 `API_KEY`
-2. 服务端 `.env` 开启润色代理（见仓库根 `.env.example` 的 `POLISH_*`）
+1. 先登录并配好 Base URL（会话已有个人 Key）
+2. 服务端 / 云 Meta `.env` 开启润色代理（见仓库根 `.env.example` 的 `POLISH_*`）
 3. **设置 → AI 智能润色 → 测试网关润色**
 4. 创作页选 **AI 智能润色（网关）** → 润色
 
-上游 DeepSeek/商汤 Key **只在服务器**，客户端拿不到；服务端可按 Key 指纹做日限额与每分钟限流。
+上游 DeepSeek/商汤 Key **只在服务器**，客户端拿不到；服务端可按用户做日限额与每分钟限流。
 
 高级选项里仍可「自备 Key 直连」（不推荐）。
 

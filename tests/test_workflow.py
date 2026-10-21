@@ -168,3 +168,65 @@ def test_load_workflow_registry_both_modes():
     assert registry.modes == ["image_edit", "image_to_video", "txt2img"]
     assert registry.has("image_edit")
     assert registry.has("image_to_video")
+    assert registry.default_id("txt2img") == "qwen-default"
+    assert registry.has_workflow("txt2img", "qwen-default")
+    items = registry.list_workflows("txt2img")
+    assert len(items) >= 1
+    assert any(i.id == "qwen-default" and i.default for i in items)
+    bundle = registry.get("txt2img")
+    assert bundle.workflow_id == "qwen-default"
+    bundle2 = registry.get("txt2img", "qwen-default")
+    assert bundle2.path.name == "workflow_api.json"
+
+
+def test_unknown_workflow_id_raises():
+    from app.workflow import UnknownWorkflowError, load_workflow_registry
+
+    root = Path(__file__).resolve().parent.parent
+    wf = root / "llm_workflow"
+    registry = load_workflow_registry(
+        txt2img_workflow=wf / "workflow_api.json",
+        txt2img_mapping=wf / "workflow_mapping.json",
+    )
+    with pytest.raises(UnknownWorkflowError, match="not-a-real-id"):
+        registry.get("txt2img", "not-a-real-id")
+
+
+def test_scan_txt2img_dir(tmp_path: Path, sample_mapping):
+    from app.workflow import scan_mode_workflows
+
+    # Minimal API workflow matching sample_mapping node ids from conftest
+    api = {
+        "10": {"class_type": "CLIPTextEncode", "inputs": {"text": ""}},
+        "11": {"class_type": "CLIPTextEncode", "inputs": {"text": ""}},
+        "12": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512}},
+        "13": {
+            "class_type": "KSampler",
+            "inputs": {"steps": 20, "seed": 0, "cfg": 7.0},
+        },
+        "14": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI"}},
+    }
+    slot = tmp_path / "flux-fast"
+    slot.mkdir()
+    (slot / "workflow_api.json").write_text(
+        __import__("json").dumps(api), encoding="utf-8"
+    )
+    (slot / "workflow_mapping.json").write_text(
+        __import__("json").dumps(sample_mapping), encoding="utf-8"
+    )
+    (slot / "meta.json").write_text(
+        __import__("json").dumps(
+            {
+                "id": "flux-fast",
+                "display_name": "Flux Fast",
+                "description": "test",
+                "default": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    scanned = scan_mode_workflows(tmp_path, mode="txt2img")
+    assert scanned is not None
+    bundles, default_id = scanned
+    assert default_id == "flux-fast"
+    assert "flux-fast" in bundles

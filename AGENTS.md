@@ -1,6 +1,7 @@
 # AGENTS.md — 给 AI / 开发者的工程指南
 
-> 面向改代码的人（含 Cursor Agent）。产品说明与快速上手见根目录 `README.md`；长篇设计/部署文见 `docs/`。
+> 面向改代码的人（含 Cursor Agent）。  
+> **新对话速览**先看 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md)；产品上手见根目录 `README.md`；长篇设计/部署见 `docs/`。
 
 ## 一句话架构
 
@@ -27,22 +28,22 @@ Gateway Admin Web（外网）
 | `llm_workflow/` | ComfyUI API/UI 工作流与 `*_mapping.json`（**运行时路径默认在这里**） |
 | `desktop/gateway` | Electron 服务端控制台（含 ComfyUI 启停与开机自启） |
 | `desktop/gateway-web` | 浏览器端 Gateway 管理台（TOTP；审用户 / 在线态 / hold / 注销 / 远程启停） |
-| `desktop/studio` | Electron 远程创作客户端 |
-| `desktop/studio-web` | 浏览器端 Studio 工作空间（Vite + React；云端画廊、最近预览清除） |
+| `desktop/studio` | Electron 远程创作客户端（账号登录、展馆点赞/收藏/评论） |
+| `desktop/studio-web` | 浏览器端 Studio（邮箱注册/找回、云画廊、展馆互动、最近预览清除） |
 | `desktop/shared` / `desktop/*/src/shared` | 桌面端共享类型与契约 |
 | `web/` | 官方网站（Astro）：毛玻璃气质 + ICP 页脚；介绍 / 演示 / 部署 / 下载 |
-| `scripts/` | 启动、巡检、UI→API 工作流转换；`start_stack.ps1` 一键 ComfyUI+API+frpc+Studio（路径见 `stack.local.json`） |
+| `scripts/` | 启动、巡检、UI→API 转换；`start_stack.ps1`；**`deploy_cloud_meta.ps1`**（云 Meta 部署，合并远端 `.env` 不整文件覆盖密钥）；`migrate_data_to_instance.py` |
 | `tests/` | pytest |
-| `docs/` | 实施/部署/排障长文 |
+| `docs/` | 实施/部署/排障长文（云数据面见 `ARCHITECTURE_CLOUD_DATA.md`；待办见 `TODO.md`） |
 | `other/` | 杂项资产（如本地润色库 JSON），**不进运行时默认路径** |
-| `data/` | 运行时 DB/图片（gitignore） |
-| `deploy/` | 云端/FRP 相关模板 |
+| `data/` | 运行时 DB/图片（gitignore；生产按 `INSTANCE_ID` 落 `data/instances/…`） |
+| `deploy/` | 云端/FRP 相关模板（含 `comfy-studio-app.split.nginx.conf` 数据面/生成面分流） |
 
 ## 生成模式（API / Studio）
 
 | mode | 工作流文件（均在 `llm_workflow/`） | 要点 |
 |------|----------------------------------|------|
-| `txt2img` | `workflow_api.json` + `workflow_mapping.json` | Qwen 文生图 |
+| `txt2img` | `txt2img/<workflow_id>/`（`workflow_api.json` + `workflow_mapping.json` + `meta.json`）；可多套，请求用 `workflow_id` | 默认 `qwen-default`；扁平旧路径仍作回退 |
 | `image_edit` | `workflow_image_edit_*` | 底图/参考图；提示词可用 `<image1>` / `<image2>` |
 | `image_to_video` | `workflow_image_to_video_*` | Wan TI2V；起始图 + 镜头提示；超时更长 |
 
@@ -79,8 +80,9 @@ Gateway Admin Web（外网）
 
 - **Gateway（Electron）**：本机 ComfyUI / FastAPI / frpc 启停与开机自启、用户审核、官方提示词库、玩家共享库审核删除、hold 开关等
 - **Gateway Admin Web**：外网审用户（含 `last_seen_at` 在线/离线）、hold、注销；总览远程启停（依赖台式机 FastAPI 已在跑 + `HOST_*`）
-- **Studio**：登录会话、创作（文生图/图编/图生视频）、队列、画廊、展馆、本地/官方/共享提示词库；Web Studio 另可「保存至云端」（私有 cloud gallery）
-- **Studio Web「最近作品 · 清除」**：仅从创作页预览隐藏（localStorage），**不删** IndexedDB / 云端画廊
+- **Studio**：登录会话、创作（文生图/图编/图生视频）、队列、画廊、展馆（含点赞/收藏/评论）、本地/官方/共享提示词库；Web Studio 另可「保存至云端」（私有 cloud gallery，权威在云 Meta）
+- **Studio Web 账号**：注册可填邮箱；设置页绑定找回邮箱；登录支持用户名或已绑定邮箱；忘记密码走邮件 OTP（`MAIL_*`）
+- **Studio Web「最近作品 · 清除」**：仅从创作页预览隐藏（localStorage），**不删** IndexedDB / 云端画廊 / works
 
 ### UI / 文案
 
@@ -113,7 +115,8 @@ npm install
 npm run dev
 ```
 
-Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。  
+Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。生产若已拆云 Meta，用 `deploy/comfy-studio-app.split.nginx.conf`（数据类 → Meta，生成类 → FRP）。  
+云 Meta 部署：`.\scripts\deploy_cloud_meta.ps1`（详见 `docs/ARCHITECTURE_CLOUD_DATA.md`）。  
 Gateway Admin Web：`desktop/gateway-web`（默认端口 5174）；部署见 `deploy/comfy-gateway-admin.nginx.conf`。本机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（Authenticator）；短信模式可选；远程启停另配 `HOST_*`。  
 API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 

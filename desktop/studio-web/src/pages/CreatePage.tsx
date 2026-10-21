@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { GlassButton } from '@/components/GlassButton'
 import { GlassSwitch } from '@/components/GlassSwitch'
 import { SlidingSeg } from '@/components/SlidingSeg'
-import { polishViaGateway, translateViaGateway } from '@/lib/api'
+import { listWorkflows, polishViaGateway, translateViaGateway } from '@/lib/api'
 import { listGallery, type GalleryRecord } from '@/lib/gallery-db'
 import { runGenerateJob } from '@/lib/generate'
 import {
@@ -18,7 +18,7 @@ import {
   clampVideoLength,
   clampVideoSize
 } from '@/lib/limits'
-import type { GenerateMode } from '@/lib/types'
+import type { GenerateMode, WorkflowInfo } from '@/lib/types'
 import { useQueue } from '@/store/queue'
 import { useServerLimits } from '@/store/serverLimits'
 import { useSession } from '@/store/session'
@@ -44,6 +44,24 @@ function loadHiddenRecent(userId: string): Set<string> {
 
 function saveHiddenRecent(userId: string, ids: Set<string>): void {
   localStorage.setItem(hiddenRecentKey(userId), JSON.stringify([...ids]))
+}
+
+const WORKFLOW_PREF_KEY = 'comfy-studio-web-txt2img-workflow'
+
+function loadWorkflowPref(): string | null {
+  try {
+    return localStorage.getItem(WORKFLOW_PREF_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveWorkflowPref(id: string): void {
+  try {
+    localStorage.setItem(WORKFLOW_PREF_KEY, id)
+  } catch {
+    /* ignore */
+  }
 }
 
 type ApplyDraft = {
@@ -78,6 +96,8 @@ export function CreatePage() {
   const apply = useMemo(() => readApplyDraft(), [])
 
   const [mode, setMode] = useState<GenerateMode>(apply?.mode || 'txt2img')
+  const [workflows, setWorkflows] = useState<WorkflowInfo[]>([])
+  const [workflowId, setWorkflowId] = useState<string>(() => loadWorkflowPref() || '')
   const [prompt, setPrompt] = useState(() => (apply?.prompt?.trim() ? apply.prompt : ''))
   const [negative, setNegative] = useState(() =>
     apply?.negative != null ? apply.negative : settings.defaultNegativePrompt
@@ -146,6 +166,34 @@ export function CreatePage() {
       })
     }
   }, [])
+
+  useEffect(() => {
+    if (mode !== 'txt2img') {
+      setWorkflows([])
+      return
+    }
+    let cancelled = false
+    void listWorkflows({ apiKey: user.apiKey, timeoutMs: settings.timeoutMs, mode: 'txt2img' })
+      .then((res) => {
+        if (cancelled) return
+        setWorkflows(res.workflows)
+        const pref = loadWorkflowPref()
+        const ids = new Set(res.workflows.map((w) => w.id))
+        const fallback =
+          (pref && ids.has(pref) ? pref : null) ||
+          res.default ||
+          res.workflows.find((w) => w.default)?.id ||
+          res.workflows[0]?.id ||
+          ''
+        setWorkflowId(fallback)
+      })
+      .catch(() => {
+        if (!cancelled) setWorkflows([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mode, user.apiKey, settings.timeoutMs])
 
   const needsUpload = mode === 'image_edit' || mode === 'image_to_video'
   const isVideo = mode === 'image_to_video'
@@ -246,6 +294,7 @@ export function CreatePage() {
       const result = await runGenerateJob({
         localId,
         mode,
+        workflowId: mode === 'txt2img' && workflowId ? workflowId : undefined,
         prompt: prompt.trim(),
         negativePrompt: negative.trim() || undefined,
         width: sized.width,
@@ -364,6 +413,30 @@ export function CreatePage() {
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-3.5 py-3.5 sm:px-4">
+            {mode === 'txt2img' && workflows.length > 1 ? (
+              <div>
+                <label className="label" htmlFor="txt2img-workflow">
+                  工作流
+                </label>
+                <select
+                  id="txt2img-workflow"
+                  className="input"
+                  value={workflowId}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setWorkflowId(next)
+                    if (next) saveWorkflowPref(next)
+                  }}
+                >
+                  {workflows.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
             {/* Prompt stack: with upload 50/25/25; without upload ~67/33 */}
             <div className="flex min-h-[14rem] flex-1 flex-col gap-2.5">
               <div className={`flex min-h-0 flex-col ${needsUpload ? 'basis-[50%] flex-[2]' : 'basis-[65%] flex-[2]'}`}>

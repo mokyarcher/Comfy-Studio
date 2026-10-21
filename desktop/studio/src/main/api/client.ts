@@ -667,7 +667,31 @@ export interface ShowcaseItemDto {
   created_at: string
   updated_at: string
   image_url: string
+  thumb_url?: string
   ref_urls: string[]
+  mine?: boolean
+  like_count?: number
+  favorite_count?: number
+  comment_count?: number
+  liked_by_me?: boolean
+  favorited_by_me?: boolean
+}
+
+export interface ShowcaseEngagementDto {
+  like_count: number
+  favorite_count: number
+  comment_count: number
+  liked_by_me: boolean
+  favorited_by_me: boolean
+}
+
+export interface ShowcaseCommentDto {
+  id: string
+  item_id: string
+  user_id: string
+  author_name: string
+  body: string
+  created_at: string
   mine?: boolean
 }
 
@@ -914,6 +938,121 @@ export async function unlistShowcase(opts: {
   if (res.status === 404) throw new ShowcaseNotFoundError()
   if (!res.ok) throw new Error(mapHttpError(res.status, data))
   return data as ShowcaseItemDto
+}
+
+export async function toggleShowcaseLike(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  itemId: string
+}): Promise<ShowcaseEngagementDto> {
+  const url = joinUrl(opts.baseUrl, `/v1/showcase/${opts.itemId}/like`)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'X-API-Key': opts.apiKey
+    }
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as ShowcaseEngagementDto
+}
+
+export async function toggleShowcaseFavorite(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  itemId: string
+}): Promise<ShowcaseEngagementDto> {
+  const url = joinUrl(opts.baseUrl, `/v1/showcase/${opts.itemId}/favorite`)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'X-API-Key': opts.apiKey
+    }
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as ShowcaseEngagementDto
+}
+
+export async function listShowcaseComments(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  itemId: string
+  limit?: number
+}): Promise<{ items: ShowcaseCommentDto[]; count: number }> {
+  const q = new URLSearchParams()
+  if (opts.limit != null) q.set('limit', String(opts.limit))
+  const qs = q.toString()
+  const url = joinUrl(
+    opts.baseUrl,
+    `/v1/showcase/${opts.itemId}/comments${qs ? `?${qs}` : ''}`
+  )
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'X-API-Key': opts.apiKey
+    }
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as { items: ShowcaseCommentDto[]; count: number }
+}
+
+export async function addShowcaseComment(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  itemId: string
+  body: string
+}): Promise<ShowcaseCommentDto> {
+  const url = joinUrl(opts.baseUrl, `/v1/showcase/${opts.itemId}/comments`)
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-API-Key': opts.apiKey
+    },
+    body: JSON.stringify({ body: opts.body })
+  })
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(mapHttpError(res.status, data))
+  return data as ShowcaseCommentDto
+}
+
+export async function deleteShowcaseComment(opts: {
+  baseUrl: string
+  apiKey: string
+  timeoutMs: number
+  itemId: string
+  commentId: string
+}): Promise<void> {
+  const url = joinUrl(
+    opts.baseUrl,
+    `/v1/showcase/${opts.itemId}/comments/${opts.commentId}`
+  )
+  const res = await fetchWithTimeout(url, {
+    method: 'DELETE',
+    timeoutMs: Math.min(opts.timeoutMs, 60_000),
+    headers: {
+      Accept: 'application/json',
+      'X-API-Key': opts.apiKey
+    }
+  })
+  if (!res.ok) {
+    const data = await parseJsonSafe(res)
+    throw new Error(mapHttpError(res.status, data))
+  }
 }
 
 export async function fetchShowcaseAsset(opts: {

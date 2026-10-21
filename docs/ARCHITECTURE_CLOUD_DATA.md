@@ -44,6 +44,11 @@ data/instances/{INSTANCE_ID}/
 
 多产品链：每个 `INSTANCE_ID` 一个 Meta 进程（不同端口）+ 独立 `server_name` 或独立 FRP `remotePort`，**禁止多个产品共用同一 `data/instances` 目录**。
 
+## 云 Meta 部署脚本
+
+`scripts/deploy_cloud_meta.ps1`：上传 Meta 代码并重启 systemd。  
+**`.env` 策略**：远端已有 `.env` 时只**补缺键**，不整文件覆盖（保留 `API_KEY` / `POLISH_*` / 邮件与 Admin 密钥）。仅首次无 `.env` 时才用本地 `-ApiKey` 引导写入。
+
 ## 迁移
 
 本机已有旧版 `data/users.db` 等时：

@@ -23,7 +23,12 @@ from app.schemas import (
     TaskStatus,
     TaskStatusResponse,
 )
-from app.workflow import WorkflowError, WorkflowRegistry, apply_parameters
+from app.workflow import (
+    UnknownWorkflowError,
+    WorkflowError,
+    WorkflowRegistry,
+    apply_parameters,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,15 @@ class QueueFullError(Exception):
 
 class UnsupportedModeError(Exception):
     pass
+
+
+# Re-export for API layer
+__all__ = [
+    "QueueFullError",
+    "UnsupportedModeError",
+    "UnknownWorkflowError",
+    "TaskService",
+]
 
 
 class TaskService:
@@ -71,6 +85,13 @@ class TaskService:
                 f"mode={request.mode!r} is not available "
                 f"(loaded: {', '.join(self.registry.modes)})"
             )
+        # Resolve / validate workflow_id early so bad ids never enter the queue
+        try:
+            bundle = self.registry.get(request.mode, request.workflow_id)
+        except UnknownWorkflowError:
+            raise
+        except WorkflowError as exc:
+            raise UnsupportedModeError(str(exc)) from exc
 
         open_count = self.db.count_open_tasks()
         if open_count >= self.settings.max_queue_size:
@@ -82,12 +103,14 @@ class TaskService:
         task_id = str(uuid.uuid4())
         payload = request.model_dump()
         payload["seed"] = seed
+        payload["workflow_id"] = bundle.workflow_id
         record = self.db.create_task(task_id, payload, seed=seed, status="queued")
         q = self.db.queue_info(task_id)
         logger.info(
-            "Queued task_id=%s mode=%s seed=%s position=%s ahead=%s prompt=%s",
+            "Queued task_id=%s mode=%s workflow_id=%s seed=%s position=%s ahead=%s prompt=%s",
             task_id,
             request.mode,
+            bundle.workflow_id,
             seed,
             q["queue_position"],
             q["queue_ahead"],
@@ -164,7 +187,10 @@ class TaskService:
         request = task.request
         try:
             mode = str(request.get("mode") or "txt2img")
-            bundle = self.registry.get(mode)
+            workflow_id = request.get("workflow_id")
+            bundle = self.registry.get(
+                mode, str(workflow_id) if workflow_id else None
+            )
             workflow = apply_parameters(
                 bundle,
                 prompt=request["prompt"],

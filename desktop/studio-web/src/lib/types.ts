@@ -3,6 +3,8 @@ export type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 
 export interface GenerateParams {
   mode?: GenerateMode
+  /** Concrete pipeline under mode (txt2img multi-bundle); omit = server default */
+  workflow_id?: string
   prompt: string
   negative_prompt?: string
   width?: number
@@ -11,6 +13,14 @@ export interface GenerateParams {
   seed?: number | null
   length?: number
   images?: string[]
+}
+
+export interface WorkflowInfo {
+  id: string
+  display_name: string
+  description: string
+  default: boolean
+  mode: string
 }
 
 export interface TaskProgressInfo {

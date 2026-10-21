@@ -22,6 +22,8 @@ class GenerateImageRequest(BaseModel):
 
     # txt2img | image_edit (Qwen) | image_to_video (Wan TI2V)
     mode: Literal["txt2img", "image_edit", "image_to_video"] = "txt2img"
+    # Optional pipeline under the mode (txt2img may have several); omit = mode default
+    workflow_id: str | None = None
     prompt: str = Field(..., min_length=1)
     negative_prompt: str | None = None
     width: int | None = None
@@ -32,6 +34,16 @@ class GenerateImageRequest(BaseModel):
     length: int | None = None
     # ComfyUI input filenames (from POST /v1/images/upload), order = image_1..image_N
     images: list[str] | None = None
+
+    @field_validator("workflow_id")
+    @classmethod
+    def _validate_workflow_id(cls, value: str | None) -> str | None:
+        from app.workflow import validate_workflow_id
+
+        try:
+            return validate_workflow_id(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
     @field_validator("prompt")
     @classmethod
@@ -166,6 +178,21 @@ class UploadImageResponse(BaseModel):
 class WorkflowModesResponse(BaseModel):
     modes: list[str]
     default: str = "txt2img"
+
+
+class WorkflowInfoResponse(BaseModel):
+    id: str
+    display_name: str
+    description: str = ""
+    default: bool = False
+    mode: str
+
+
+class WorkflowListResponse(BaseModel):
+    mode: str
+    default: str | None = None
+    workflows: list[WorkflowInfoResponse]
+    default: str | None = None
 
 
 class PurgeTaskResponse(BaseModel):

@@ -10,6 +10,9 @@ import {
   fetchTaskImage,
   listSharedPrompts,
   listShowcase,
+  listShowcaseComments,
+  addShowcaseComment,
+  deleteShowcaseComment,
   pollTask,
   sharePromptTemplate,
   shareToShowcase,
@@ -17,6 +20,8 @@ import {
   testConnection,
   translateViaGateway,
   fetchGpuStatus,
+  toggleShowcaseFavorite,
+  toggleShowcaseLike,
   unlistShowcase,
   ShowcaseNotFoundError,
   uploadImage
@@ -68,7 +73,7 @@ import {
 } from './store/taskHistory'
 import { getGalleryMediaInfo } from './galleryProtocol'
 import { getSettings, saveSettings } from './store/settings'
-import { GenerateParamsSchema, type LocalTask } from '../shared/types'
+import { GenerateParamsSchema, normalizeShowcaseItem, type LocalTask } from '../shared/types'
 import { isEncryptionAvailable } from './store/crypto'
 import { galleryDir, getUserDataRoot } from './store/paths'
 import {
@@ -498,10 +503,11 @@ export function registerIpc(): void {
       limit,
       offset
     })
-    for (const item of result.items) {
+    const items = result.items.map((item) => normalizeShowcaseItem(item))
+    for (const item of items) {
       upsertShowcaseMeta(item)
     }
-    return result
+    return { items, count: result.count }
   })
 
   ipcMain.handle('studio:shareGalleryToShowcase', async (event, raw) => {
@@ -576,6 +582,98 @@ export function registerIpc(): void {
       galleryItem: galleryId ? getGalleryItem(galleryId) : null,
       alreadyGone
     }
+  })
+
+  ipcMain.handle('studio:toggleShowcaseLike', async (event, raw) => {
+    assertSender(event)
+    const { profileId, showcaseId } = z
+      .object({
+        profileId: z.string().min(1),
+        showcaseId: z.string().min(1)
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(profileId)
+    return toggleShowcaseLike({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: sec.profile.timeoutMs,
+      itemId: showcaseId
+    })
+  })
+
+  ipcMain.handle('studio:toggleShowcaseFavorite', async (event, raw) => {
+    assertSender(event)
+    const { profileId, showcaseId } = z
+      .object({
+        profileId: z.string().min(1),
+        showcaseId: z.string().min(1)
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(profileId)
+    return toggleShowcaseFavorite({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: sec.profile.timeoutMs,
+      itemId: showcaseId
+    })
+  })
+
+  ipcMain.handle('studio:listShowcaseComments', async (event, raw) => {
+    assertSender(event)
+    const { profileId, showcaseId, limit } = z
+      .object({
+        profileId: z.string().min(1),
+        showcaseId: z.string().min(1),
+        limit: z.number().int().positive().optional()
+      })
+      .parse(raw ?? {})
+    const sec = requireProfileSecret(profileId)
+    return listShowcaseComments({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: sec.profile.timeoutMs,
+      itemId: showcaseId,
+      limit
+    })
+  })
+
+  ipcMain.handle('studio:addShowcaseComment', async (event, raw) => {
+    assertSender(event)
+    const { profileId, showcaseId, body } = z
+      .object({
+        profileId: z.string().min(1),
+        showcaseId: z.string().min(1),
+        body: z.string().trim().min(1).max(500)
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(profileId)
+    return addShowcaseComment({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: sec.profile.timeoutMs,
+      itemId: showcaseId,
+      body
+    })
+  })
+
+  ipcMain.handle('studio:deleteShowcaseComment', async (event, raw) => {
+    assertSender(event)
+    const { profileId, showcaseId, commentId } = z
+      .object({
+        profileId: z.string().min(1),
+        showcaseId: z.string().min(1),
+        commentId: z.string().min(1)
+      })
+      .parse(raw)
+    const sec = requireProfileSecret(profileId)
+    await deleteShowcaseComment({
+      baseUrl: sec.profile.baseUrl,
+      apiKey: sec.apiKey,
+      timeoutMs: sec.profile.timeoutMs,
+      itemId: showcaseId,
+      commentId
+    })
+    return { ok: true }
   })
 
   ipcMain.handle('studio:fetchShowcaseAsset', async (event, raw) => {

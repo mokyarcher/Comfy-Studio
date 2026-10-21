@@ -1,0 +1,8 @@
+{
+  "positive_prompt": { "node_id": "452", "input": "prompt" },
+  "negative_prompt": { "node_id": "452", "input": "negative_prompt" },
+  "width": { "node_id": "456", "input": "width" },
+  "height": { "node_id": "456", "input": "height" },
+  "steps": { "node_id": "458", "input": "steps" },
+  "seed": { "node_id": "458", "input": "seed" }
+}

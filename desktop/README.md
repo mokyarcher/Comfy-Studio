@@ -5,8 +5,8 @@
 | 应用 | 目录 | 用途 |
 |------|------|------|
 | **Comfy Gateway** | `desktop/gateway` | 本机控制台：启停 ComfyUI / API / frpc、开机自启、健康检查、日志 |
-| **Comfy Studio** | `desktop/studio` | 远程生图客户端：提示词、出图、任务队列、画廊 |
-| **Comfy Studio Web** | `desktop/studio-web` | 浏览器工作空间（跨系统；云端画廊、最近预览清除）；见 [`studio-web/README.md`](./studio-web/README.md) |
+| **Comfy Studio** | `desktop/studio` | 远程创作客户端：账号登录、出图、队列、画廊、展馆（赞/藏/评） |
+| **Comfy Studio Web** | `desktop/studio-web` | 浏览器工作空间（邮箱账号、云画廊/works、展馆互动、最近预览清除）；见 [`studio-web/README.md`](./studio-web/README.md) |
 | **Comfy Gateway Admin Web** | `desktop/gateway-web` | 外网管理台（TOTP；审用户 / 在线态 / hold / 远程启停）；见 [`gateway-web/README.md`](./gateway-web/README.md) |
 
 API 契约见 [`docs/api-contract.md`](./docs/api-contract.md)。

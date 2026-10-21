@@ -2,21 +2,23 @@
 
 将本机 ComfyUI（Qwen Image 2.1 工作流）封装为带 API Key 的异步 HTTP API，再经 FRP + 云服务器 Nginx HTTPS 对外提供服务。
 
-**推理始终在本地 GPU 完成；云端只做入口与转发。**
+**推理始终在本地 GPU 完成。** 现网可将用户 / 画廊 / 展馆 / works 等**数据面**放在云机 Meta（按 `INSTANCE_ID` 隔离），生成仍走本机；见 [`docs/ARCHITECTURE_CLOUD_DATA.md`](docs/ARCHITECTURE_CLOUD_DATA.md)。
 
-官网：https://comfy-studio.sharex.team （源码 [`web/`](web/)，本地预览 `cd web && npm run dev`）
+官网：https://comfy-studio.sharex.team （源码 [`web/`](web/)，本地预览 `cd web && npm run dev`）  
+Web Studio：https://app.comfy-studio.sharex.team  
+
+新对话速览：[`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md)。Agent / 目录约定：[`AGENTS.md`](AGENTS.md)。产品待办：[`docs/TODO.md`](docs/TODO.md)。
 
 ## 架构
 
 ```text
-外网 HTTPS + API Key
+外网 HTTPS
   → 云 Nginx
-  → frps (127.0.0.1:18000)
-  → FRP 隧道
-  → 本地 FastAPI (127.0.0.1:8000)
-  → ComfyUI (127.0.0.1:8188)
-  → 本地 GPU
+      ├─ 数据面（可选）→ 云 Meta :8101   # 用户 / 展馆 / 画廊 / works…
+      └─ 生成面 → frps :18000 → FRP → 本机 FastAPI :8000 → ComfyUI :8188 → GPU
 ```
+
+仅本机联调、未拆 Meta 时，可仍把全部 `/v1` 都反代到 FRP。
 
 ## 快速开始（Windows）
 

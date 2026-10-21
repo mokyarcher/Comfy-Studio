@@ -16,7 +16,7 @@ from app.workflow import WorkflowRegistry, load_workflow_bundle
 
 
 def _registry(settings) -> WorkflowRegistry:
-    return WorkflowRegistry(
+    return WorkflowRegistry.from_flat(
         {
             "txt2img": load_workflow_bundle(
                 settings.workflow_path, settings.workflow_mapping_path, mode="txt2img"

@@ -29,6 +29,7 @@ export type GenerateCallbacks = {
 export async function runGenerateJob(opts: {
   localId: string
   mode: GenerateMode
+  workflowId?: string
   prompt: string
   negativePrompt?: string
   width: number
@@ -75,6 +76,7 @@ export async function runGenerateJob(opts: {
 
     const params: GenerateParams = {
       mode: opts.mode,
+      workflow_id: opts.workflowId,
       prompt: opts.prompt,
       negative_prompt: opts.negativePrompt,
       width: opts.width,

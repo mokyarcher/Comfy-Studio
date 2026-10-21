@@ -19,7 +19,7 @@ async def _client(test_settings):
     state.settings = settings
     state.db = Database(settings.database_path)
     state.comfy = ComfyClient(settings)
-    state.registry = WorkflowRegistry(
+    state.registry = WorkflowRegistry.from_flat(
         {
             "txt2img": load_workflow_bundle(
                 settings.workflow_path, settings.workflow_mapping_path, mode="txt2img"

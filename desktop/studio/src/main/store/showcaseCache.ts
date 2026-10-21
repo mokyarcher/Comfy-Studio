@@ -6,7 +6,7 @@ import {
   writeFileSync
 } from 'fs'
 import { join } from 'path'
-import type { ShowcaseItem } from '../../shared/types'
+import { normalizeShowcaseItem, type ShowcaseItem } from '../../shared/types'
 import { ensureDir, getUserDataRoot } from './paths'
 
 interface CacheIndex {
@@ -102,7 +102,7 @@ export function putCachedThumb(id: string, buffer: Buffer): void {
     prev.updatedAt = new Date().toISOString()
   } else {
     idx.items[id] = {
-      meta: {
+      meta: normalizeShowcaseItem({
         id,
         author_name: '',
         author_username: '',
@@ -118,7 +118,7 @@ export function putCachedThumb(id: string, buffer: Buffer): void {
         image_url: `/v1/showcase/${id}/image`,
         thumb_url: `/v1/showcase/${id}/thumb`,
         ref_urls: []
-      },
+      }),
       hasThumb: true,
       hasFull: false,
       fullExt: '.png',
@@ -167,7 +167,7 @@ export function putCachedFull(id: string, buffer: Buffer, ext = '.png'): void {
     prev.updatedAt = new Date().toISOString()
   } else {
     idx.items[id] = {
-      meta: {
+      meta: normalizeShowcaseItem({
         id,
         author_name: '',
         author_username: '',
@@ -183,7 +183,7 @@ export function putCachedFull(id: string, buffer: Buffer, ext = '.png'): void {
         image_url: `/v1/showcase/${id}/image`,
         thumb_url: `/v1/showcase/${id}/thumb`,
         ref_urls: []
-      },
+      }),
       hasThumb: false,
       hasFull: true,
       fullExt: safeExt,

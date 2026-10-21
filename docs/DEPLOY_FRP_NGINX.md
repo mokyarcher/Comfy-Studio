@@ -9,8 +9,9 @@
 | 22 | SSH | 限制来源 |
 | 7000 | frpc ↔ frps | 建议限来源 + 强 token |
 | 80 / 443 | 证书与 HTTPS API | 443 对外开放 |
-| 18000 | Nginx → FRP | **仅 127.0.0.1** |
-| 8000 | 本地 FastAPI | 仅本机 |
+| 18000 | Nginx → FRP（**生成面**） | **仅 127.0.0.1** |
+| 8101 | 云机 Meta FastAPI（**数据面**，可选） | **仅 127.0.0.1** |
+| 8000 | 本地 GPU FastAPI | 仅本机 |
 | 8188 | ComfyUI | **禁止映射** |
 
 ## 1. 云服务器 frps
@@ -128,14 +129,29 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://img-api.example.com/v1/images/
 
 ## 4. 同机 SPA 管理台 / Web Studio（可选）
 
-API 仍走 FRP `18000`；静态站可另开子域，同源反代 `/v1` + `/health`：
+静态站可另开子域，同源反代 `/v1` + `/health`：
 
 | 站点 | 配置 | 静态目录 |
 |------|------|----------|
-| Web Studio | `deploy/comfy-studio-app.nginx.conf` | `/var/www/comfy-studio-app` |
+| Web Studio（整包反代旧式） | `deploy/comfy-studio-app.nginx.conf` | `/var/www/comfy-studio-app` |
+| Web Studio（**数据/生成分流**） | `deploy/comfy-studio-app.split.nginx.conf` | 同上 |
 | Gateway Admin | `deploy/comfy-gateway-admin.nginx.conf` | `/var/www/comfy-gateway-admin` |
 
-Gateway Admin 登录：台式机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（见根目录 `.env.example`）。
+### 4.1 云 Meta + 分流（现网推荐）
+
+当用户 / 画廊 / 展馆 / works 权威数据在云机时：
+
+```text
+浏览器 → HTTPS Nginx
+           ├─ 鉴权、提示词、画廊、展馆、works… → 127.0.0.1:8101（Meta，ENABLE_GENERATION=false）
+           └─ /v1/images、/v1/tasks…           → 127.0.0.1:18000（FRP → 本机 GPU API）
+```
+
+- 架构说明：[`ARCHITECTURE_CLOUD_DATA.md`](ARCHITECTURE_CLOUD_DATA.md)
+- 部署 / 更新 Meta：`.\scripts\deploy_cloud_meta.ps1`（**合并**远端 `.env`，不整文件覆盖 `API_KEY` / `POLISH_*` 等）
+- 本机 GPU `.env` 仍跑生成；`INSTANCE_ID` 与 Meta 对齐，避免串库
+
+Gateway Admin 登录：台式机（或 Meta，视路由）`.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（见根目录 `.env.example`）。
 
 ## 5. 生产配置提醒
 

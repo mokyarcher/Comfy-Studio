@@ -1,0 +1,6 @@
+{
+  "id": "qwen-default",
+  "display_name": "Qwen 文生图",
+  "description": "默认文生图管线",
+  "default": true
+}

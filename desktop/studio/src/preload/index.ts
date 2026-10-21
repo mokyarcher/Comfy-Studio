@@ -48,6 +48,14 @@ const api = {
   shareGalleryToShowcase: (input: unknown) =>
     ipcRenderer.invoke('studio:shareGalleryToShowcase', input),
   unlistShowcase: (input: unknown) => ipcRenderer.invoke('studio:unlistShowcase', input),
+  toggleShowcaseLike: (input: unknown) => ipcRenderer.invoke('studio:toggleShowcaseLike', input),
+  toggleShowcaseFavorite: (input: unknown) =>
+    ipcRenderer.invoke('studio:toggleShowcaseFavorite', input),
+  listShowcaseComments: (input: unknown) =>
+    ipcRenderer.invoke('studio:listShowcaseComments', input),
+  addShowcaseComment: (input: unknown) => ipcRenderer.invoke('studio:addShowcaseComment', input),
+  deleteShowcaseComment: (input: unknown) =>
+    ipcRenderer.invoke('studio:deleteShowcaseComment', input),
   fetchShowcaseAsset: (input: unknown) => ipcRenderer.invoke('studio:fetchShowcaseAsset', input),
   downloadShowcaseImage: (input: unknown) =>
     ipcRenderer.invoke('studio:downloadShowcaseImage', input),

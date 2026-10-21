@@ -113,7 +113,25 @@ export interface GalleryItem {
   showcaseId?: string | null
 }
 
-export interface ShowcaseItem {
+export interface ShowcaseEngagement {
+  like_count: number
+  favorite_count: number
+  comment_count: number
+  liked_by_me: boolean
+  favorited_by_me: boolean
+}
+
+export interface ShowcaseComment {
+  id: string
+  item_id: string
+  user_id: string
+  author_name: string
+  body: string
+  created_at: string
+  mine?: boolean
+}
+
+export interface ShowcaseItem extends ShowcaseEngagement {
   id: string
   author_name: string
   author_username: string
@@ -135,6 +153,20 @@ export interface ShowcaseItem {
   thumb_url?: string
   ref_urls: string[]
   mine?: boolean
+}
+
+/** Normalize API / cache payloads that may omit engagement fields. */
+export function normalizeShowcaseItem(
+  item: Omit<ShowcaseItem, keyof ShowcaseEngagement> & Partial<ShowcaseEngagement>
+): ShowcaseItem {
+  return {
+    ...item,
+    like_count: item.like_count ?? 0,
+    favorite_count: item.favorite_count ?? 0,
+    comment_count: item.comment_count ?? 0,
+    liked_by_me: item.liked_by_me ?? false,
+    favorited_by_me: item.favorited_by_me ?? false
+  }
 }
 
 export interface PromptPolishPrefsStored {

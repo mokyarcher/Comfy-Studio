@@ -72,6 +72,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
 ```json
 {
   "mode": "txt2img",
+  "workflow_id": "qwen-default",
   "prompt": "a red fox in snow",
   "negative_prompt": "",
   "width": 1024,
@@ -84,6 +85,7 @@ Header：`X-API-Key`、`Content-Type: application/json`
 ```
 
 - `prompt` 必填；`mode`：`txt2img` | `image_edit` | `image_to_video`（默认 `txt2img`）
+- `workflow_id`：可选；该 mode 下的具体管线（文生图可多套）。省略则用该 mode 的默认套。列表见 `GET /v1/workflows?mode=txt2img`（生成面 / GPU，非 Meta）
 - `images`：先经 upload 得到的 Comfy 文件名；`image_edit` / `image_to_video` 需要
 - `length`：仅图生视频可选帧长
 - `seed` 省略时由服务端随机
@@ -97,7 +99,29 @@ Header：`X-API-Key`、`Content-Type: application/json`
 { "task_id": "uuid", "status": "queued" }
 ```
 
-队列满：`429`；参数错误：`422`；鉴权失败：`401`
+队列满：`429`；未知 `workflow_id`：`400 unknown_workflow`；参数错误：`422`；鉴权失败：`401`
+
+### `GET /v1/workflows?mode=txt2img`
+
+生成面（GPU）。返回该 mode 下已加载的管线列表：
+
+```json
+{
+  "mode": "txt2img",
+  "default": "qwen-default",
+  "workflows": [
+    {
+      "id": "qwen-default",
+      "display_name": "Qwen 文生图",
+      "description": "默认文生图管线",
+      "default": true,
+      "mode": "txt2img"
+    }
+  ]
+}
+```
+
+需 `X-API-Key`。云端分流须把 `/v1/workflows` 指到 GPU，勿进 Meta。
 
 ### `GET /v1/tasks/{task_id}`
 

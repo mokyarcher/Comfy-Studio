@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -27,11 +28,22 @@ OPTIONAL_FIELDS = (
 
 WorkflowMode = str  # "txt2img" | "image_edit" | "image_to_video"
 
+_WORKFLOW_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
+
 
 @dataclass(frozen=True)
 class FieldMapping:
     node_id: str
     input_name: str
+
+
+@dataclass(frozen=True)
+class WorkflowListItem:
+    id: str
+    display_name: str
+    description: str
+    default: bool
+    mode: WorkflowMode
 
 
 @dataclass
@@ -41,33 +53,98 @@ class WorkflowBundle:
     path: Path
     mapping_path: Path
     mode: WorkflowMode = "txt2img"
+    workflow_id: str = "default"
+    display_name: str = ""
+    description: str = ""
 
 
 @dataclass
 class WorkflowRegistry:
-    """Holds one or more named workflow bundles (txt2img, image_edit, ...)."""
+    """mode → { workflow_id → bundle }; each mode has one default id."""
 
-    bundles: dict[str, WorkflowBundle] = field(default_factory=dict)
+    by_mode: dict[str, dict[str, WorkflowBundle]] = field(default_factory=dict)
+    default_ids: dict[str, str] = field(default_factory=dict)
 
-    def get(self, mode: str) -> WorkflowBundle:
-        bundle = self.bundles.get(mode)
-        if bundle is None:
-            available = ", ".join(sorted(self.bundles)) or "(none)"
+    @classmethod
+    def from_flat(cls, bundles: dict[str, WorkflowBundle]) -> WorkflowRegistry:
+        """Compat: one bundle per mode (tests / simple setups)."""
+        by_mode: dict[str, dict[str, WorkflowBundle]] = {}
+        default_ids: dict[str, str] = {}
+        for mode, bundle in bundles.items():
+            wid = bundle.workflow_id or "default"
+            by_mode[mode] = {wid: bundle}
+            default_ids[mode] = wid
+        return cls(by_mode=by_mode, default_ids=default_ids)
+
+    def get(self, mode: str, workflow_id: str | None = None) -> WorkflowBundle:
+        mode_map = self.by_mode.get(mode)
+        if not mode_map:
+            available = ", ".join(sorted(self.by_mode)) or "(none)"
             raise WorkflowError(
                 f"Workflow mode {mode!r} is not configured. Available: {available}"
             )
-        return bundle
+        wid = (workflow_id or "").strip() or self.default_ids.get(mode)
+        if not wid or wid not in mode_map:
+            ids = ", ".join(sorted(mode_map)) or "(none)"
+            raise UnknownWorkflowError(
+                f"workflow_id={workflow_id!r} is not available for mode={mode!r} "
+                f"(loaded: {ids})"
+            )
+        return mode_map[wid]
 
     def has(self, mode: str) -> bool:
-        return mode in self.bundles
+        return bool(self.by_mode.get(mode))
+
+    def has_workflow(self, mode: str, workflow_id: str) -> bool:
+        return workflow_id in self.by_mode.get(mode, {})
+
+    def default_id(self, mode: str) -> str | None:
+        return self.default_ids.get(mode)
 
     @property
     def modes(self) -> list[str]:
-        return sorted(self.bundles.keys())
+        return sorted(self.by_mode.keys())
+
+    def list_workflows(self, mode: str | None = None) -> list[WorkflowListItem]:
+        modes = [mode] if mode else self.modes
+        items: list[WorkflowListItem] = []
+        for m in modes:
+            mode_map = self.by_mode.get(m) or {}
+            default = self.default_ids.get(m)
+            for wid in sorted(mode_map):
+                b = mode_map[wid]
+                items.append(
+                    WorkflowListItem(
+                        id=wid,
+                        display_name=b.display_name or wid,
+                        description=b.description or "",
+                        default=wid == default,
+                        mode=m,
+                    )
+                )
+        return items
 
 
 class WorkflowError(Exception):
     """Invalid workflow or mapping configuration."""
+
+
+class UnknownWorkflowError(WorkflowError):
+    """Requested workflow_id is not registered for the mode."""
+
+
+def validate_workflow_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not _WORKFLOW_ID_RE.match(cleaned):
+        raise ValueError(
+            "workflow_id must be 1–64 chars: letters, digits, . _ - "
+            "(must start with alphanumeric)"
+        )
+    return cleaned
 
 
 def _load_json(path: Path) -> Any:
@@ -130,6 +207,9 @@ def load_workflow_bundle(
     mapping_path: Path,
     *,
     mode: WorkflowMode = "txt2img",
+    workflow_id: str = "default",
+    display_name: str = "",
+    description: str = "",
 ) -> WorkflowBundle:
     workflow = _ensure_api_format(_load_json(workflow_path), workflow_path)
     raw_mapping = _load_json(mapping_path)
@@ -153,8 +233,9 @@ def load_workflow_bundle(
 
     validate_mappings(workflow, mappings)
     logger.info(
-        "Loaded workflow mode=%s file=%s mapping=%s",
+        "Loaded workflow mode=%s id=%s file=%s mapping=%s",
         mode,
+        workflow_id,
         workflow_path.name,
         mapping_path.name,
     )
@@ -164,7 +245,61 @@ def load_workflow_bundle(
         path=workflow_path,
         mapping_path=mapping_path,
         mode=mode,
+        workflow_id=workflow_id,
+        display_name=display_name or workflow_id,
+        description=description,
     )
+
+
+def _read_meta(dir_path: Path) -> dict[str, Any]:
+    meta_path = dir_path / "meta.json"
+    if not meta_path.exists():
+        return {}
+    data = _load_json(meta_path)
+    if not isinstance(data, dict):
+        raise WorkflowError(f"meta.json must be an object: {meta_path}")
+    return data
+
+
+def scan_mode_workflows(root: Path, *, mode: WorkflowMode) -> tuple[dict[str, WorkflowBundle], str] | None:
+    """Scan ``root/<id>/workflow_api.json`` + mapping (+ optional meta.json)."""
+    if not root.is_dir():
+        return None
+    bundles: dict[str, WorkflowBundle] = {}
+    preferred_default: str | None = None
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        wf = child / "workflow_api.json"
+        mp = child / "workflow_mapping.json"
+        if not wf.is_file() or not mp.is_file():
+            continue
+        meta = _read_meta(child)
+        raw_id = str(meta.get("id") or child.name).strip()
+        try:
+            wid = validate_workflow_id(raw_id)
+        except ValueError as exc:
+            raise WorkflowError(f"Invalid workflow id in {child}: {exc}") from exc
+        if not wid:
+            continue
+        if wid in bundles:
+            raise WorkflowError(f"Duplicate workflow_id {wid!r} under {root}")
+        display = str(meta.get("display_name") or wid).strip() or wid
+        desc = str(meta.get("description") or "").strip()
+        bundles[wid] = load_workflow_bundle(
+            wf,
+            mp,
+            mode=mode,
+            workflow_id=wid,
+            display_name=display,
+            description=desc,
+        )
+        if meta.get("default") is True:
+            preferred_default = wid
+    if not bundles:
+        return None
+    default_id = preferred_default or next(iter(sorted(bundles)))
+    return bundles, default_id
 
 
 def load_workflow_registry(
@@ -175,17 +310,43 @@ def load_workflow_registry(
     image_edit_mapping: Path | None = None,
     image_to_video_workflow: Path | None = None,
     image_to_video_mapping: Path | None = None,
+    txt2img_dir: Path | None = None,
 ) -> WorkflowRegistry:
-    bundles: dict[str, WorkflowBundle] = {
-        "txt2img": load_workflow_bundle(
-            txt2img_workflow, txt2img_mapping, mode="txt2img"
+    by_mode: dict[str, dict[str, WorkflowBundle]] = {}
+    default_ids: dict[str, str] = {}
+
+    scan_root = txt2img_dir
+    if scan_root is None:
+        # Prefer sibling of legacy flat files: llm_workflow/txt2img/
+        scan_root = txt2img_workflow.resolve().parent / "txt2img"
+
+    scanned = scan_mode_workflows(scan_root, mode="txt2img") if scan_root else None
+    if scanned:
+        by_mode["txt2img"], default_ids["txt2img"] = scanned
+    else:
+        bundle = load_workflow_bundle(
+            txt2img_workflow,
+            txt2img_mapping,
+            mode="txt2img",
+            workflow_id="qwen-default",
+            display_name="Qwen 文生图",
+            description="默认文生图管线",
         )
-    }
+        by_mode["txt2img"] = {"qwen-default": bundle}
+        default_ids["txt2img"] = "qwen-default"
+
     if image_edit_workflow is not None and image_edit_mapping is not None:
         if image_edit_workflow.exists() and image_edit_mapping.exists():
-            bundles["image_edit"] = load_workflow_bundle(
-                image_edit_workflow, image_edit_mapping, mode="image_edit"
-            )
+            by_mode["image_edit"] = {
+                "default": load_workflow_bundle(
+                    image_edit_workflow,
+                    image_edit_mapping,
+                    mode="image_edit",
+                    workflow_id="default",
+                    display_name="图编辑",
+                )
+            }
+            default_ids["image_edit"] = "default"
         else:
             missing = [
                 str(p)
@@ -198,11 +359,16 @@ def load_workflow_registry(
             )
     if image_to_video_workflow is not None and image_to_video_mapping is not None:
         if image_to_video_workflow.exists() and image_to_video_mapping.exists():
-            bundles["image_to_video"] = load_workflow_bundle(
-                image_to_video_workflow,
-                image_to_video_mapping,
-                mode="image_to_video",
-            )
+            by_mode["image_to_video"] = {
+                "default": load_workflow_bundle(
+                    image_to_video_workflow,
+                    image_to_video_mapping,
+                    mode="image_to_video",
+                    workflow_id="default",
+                    display_name="图生视频",
+                )
+            }
+            default_ids["image_to_video"] = "default"
         else:
             missing = [
                 str(p)
@@ -213,7 +379,7 @@ def load_workflow_registry(
                 "image_to_video workflow not loaded (missing: %s)",
                 ", ".join(missing),
             )
-    return WorkflowRegistry(bundles=bundles)
+    return WorkflowRegistry(by_mode=by_mode, default_ids=default_ids)
 
 
 def validate_mappings(

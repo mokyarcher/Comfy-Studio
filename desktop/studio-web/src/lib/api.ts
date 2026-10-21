@@ -1,11 +1,13 @@
 import { mapHttpError, mapNetworkError, sanitizeErrorMessage } from './errors'
 import type {
+  GenerateMode,
   GenerateParams,
   HealthResult,
   SharedPrompt,
   ShowcaseItem,
   TaskProgressInfo,
-  TaskStatus
+  TaskStatus,
+  WorkflowInfo
 } from './types'
 import { joinUrl } from './url'
 
@@ -360,6 +362,7 @@ export async function submitGenerate(opts: {
     mode: opts.params.mode ?? 'txt2img',
     prompt: opts.params.prompt
   }
+  if (opts.params.workflow_id) body.workflow_id = opts.params.workflow_id
   if (opts.params.negative_prompt != null) body.negative_prompt = opts.params.negative_prompt
   if (opts.params.width != null) body.width = opts.params.width
   if (opts.params.height != null) body.height = opts.params.height
@@ -394,6 +397,37 @@ export async function submitGenerate(opts: {
     throw new Error(mapHttpError(res.status, data))
   } catch (err) {
     if (err instanceof Error && /密钥|参数|队列|服务|占用|本机/.test(err.message)) throw err
+    throw new Error(mapNetworkError(err))
+  }
+}
+
+export async function listWorkflows(opts: {
+  apiKey: string
+  timeoutMs?: number
+  mode?: GenerateMode
+}): Promise<{ mode: string; default: string | null; workflows: WorkflowInfo[] }> {
+  const mode = opts.mode ?? 'txt2img'
+  const url = joinUrl(apiBase(), `/v1/workflows?mode=${encodeURIComponent(mode)}`)
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      timeoutMs: opts.timeoutMs ?? 15000,
+      headers: authHeaders(opts.apiKey, false)
+    })
+    const data = await parseJsonSafe(res)
+    if (!res.ok) throw new Error(mapHttpError(res.status, data))
+    const d = data as {
+      mode?: string
+      default?: string | null
+      workflows?: WorkflowInfo[]
+    }
+    return {
+      mode: d.mode ?? mode,
+      default: d.default ?? null,
+      workflows: Array.isArray(d.workflows) ? d.workflows : []
+    }
+  } catch (err) {
+    if (err instanceof Error && /密钥|参数|服务/.test(err.message)) throw err
     throw new Error(mapNetworkError(err))
   }
 }
