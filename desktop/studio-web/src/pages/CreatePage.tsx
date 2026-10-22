@@ -1,4 +1,4 @@
-import { Eraser, ImageIcon, ImagePlus, Sparkles } from 'lucide-react'
+import { Eraser, ImageIcon, ImagePlus, Loader2, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GlassButton } from '@/components/GlassButton'
 import { GlassSelect } from '@/components/GlassSelect'
@@ -120,6 +120,7 @@ export function CreatePage() {
   const [length, setLength] = useState(81)
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
+  const [toolBusy, setToolBusy] = useState<'zh2en' | 'en2zh' | 'polish' | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [previewIsVideo, setPreviewIsVideo] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -253,6 +254,8 @@ export function CreatePage() {
   }, [canSubmit, mode, prompt, negative, width, height, steps, seed, length, files, busy])
 
   async function onPolish() {
+    if (toolBusy || busy || !prompt.trim()) return
+    setToolBusy('polish')
     try {
       const r = await polishViaGateway({
         apiKey: user.apiKey,
@@ -266,19 +269,41 @@ export function CreatePage() {
       })
       setPrompt(r.enhanced_prompt)
       if (r.enhanced_negative_prompt) setNegative(r.enhanced_negative_prompt)
-      push('润色完成', 'success')
+      push('提示词已润色', 'success')
     } catch (err) {
       push(err instanceof Error ? err.message : '润色失败', 'error')
+    } finally {
+      setToolBusy(null)
     }
   }
 
   async function onTranslate(dir: 'zh2en' | 'en2zh') {
+    if (toolBusy || busy || !prompt.trim()) return
+    setToolBusy(dir)
     try {
-      const t = await translateViaGateway({ apiKey: user.apiKey, text: prompt, direction: dir })
-      setPrompt(t)
-      push('已写回译文', 'success')
+      const negSrc = negative.trim()
+      const [translatedPrompt, translatedNeg] = await Promise.all([
+        translateViaGateway({ apiKey: user.apiKey, text: prompt, direction: dir }),
+        negSrc
+          ? translateViaGateway({ apiKey: user.apiKey, text: negative, direction: dir })
+          : Promise.resolve(null as string | null)
+      ])
+      setPrompt(translatedPrompt)
+      if (translatedNeg != null) setNegative(translatedNeg)
+      push(
+        translatedNeg != null
+          ? dir === 'zh2en'
+            ? '正负向已译为英文'
+            : '正负向已译为中文'
+          : dir === 'zh2en'
+            ? '已翻译为英文'
+            : '已翻译为中文',
+        'success'
+      )
     } catch (err) {
       push(err instanceof Error ? err.message : '翻译失败', 'error')
+    } finally {
+      setToolBusy(null)
     }
   }
 
@@ -592,27 +617,30 @@ export function CreatePage() {
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                className="btn-secondary py-2 text-xs"
-                disabled={busy || !prompt.trim()}
-                onClick={() => onTranslate('zh2en')}
+                className="btn-secondary inline-flex items-center justify-center gap-1.5 py-2 text-xs"
+                disabled={busy || Boolean(toolBusy) || !prompt.trim()}
+                onClick={() => void onTranslate('zh2en')}
               >
-                中 → 英
+                {toolBusy === 'zh2en' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {toolBusy === 'zh2en' ? '翻译中…' : '中 → 英'}
               </button>
               <button
                 type="button"
-                className="btn-secondary py-2 text-xs"
-                disabled={busy || !prompt.trim()}
-                onClick={() => onTranslate('en2zh')}
+                className="btn-secondary inline-flex items-center justify-center gap-1.5 py-2 text-xs"
+                disabled={busy || Boolean(toolBusy) || !prompt.trim()}
+                onClick={() => void onTranslate('en2zh')}
               >
-                英 → 中
+                {toolBusy === 'en2zh' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {toolBusy === 'en2zh' ? '翻译中…' : '英 → 中'}
               </button>
               <button
                 type="button"
-                className="btn-secondary py-2 text-xs"
-                disabled={busy || !prompt.trim()}
+                className="btn-secondary inline-flex items-center justify-center gap-1.5 py-2 text-xs"
+                disabled={busy || Boolean(toolBusy) || !prompt.trim()}
                 onClick={() => void onPolish()}
               >
-                AI 润色
+                {toolBusy === 'polish' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {toolBusy === 'polish' ? '润色中…' : 'AI 润色'}
               </button>
             </div>
             <GlassButton disabled={!canSubmit} onClick={() => void onGenerate()}>

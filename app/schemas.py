@@ -513,6 +513,33 @@ class AuthProfileResponse(BaseModel):
     email: str = ""
 
 
+class InternalAuthResolveRequest(BaseModel):
+    """GPU → Meta: resolve a Studio API key to a full user row for local upsert."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: str = Field(..., min_length=8, max_length=256)
+
+
+class InternalAuthResolveResponse(BaseModel):
+    id: str
+    name: str
+    username: str
+    password_hash: str = ""
+    status: str
+    api_key_hash: str
+    api_key_prefix: str = ""
+    api_key_secret: str = ""
+    enabled: bool
+    is_admin: bool
+    daily_generate_limit: int
+    daily_polish_limit: int
+    note: str = ""
+    created_at: str
+    last_seen_at: str | None = None
+    email: str = ""
+
+
 class AuthBindEmailRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -704,6 +731,20 @@ class ComfyFreeRequest(BaseModel):
 class ComfyControlResponse(BaseModel):
     ok: bool = True
     message: str = "ok"
+    action: str | None = None
+    cooldown_remaining_seconds: int = 0
+    cooldown_until: str | None = None
+
+
+class ComfyActionCooldown(BaseModel):
+    remaining_seconds: int = 0
+    cooldown_until: str | None = None
+
+
+class ComfyCooldownStatusResponse(BaseModel):
+    cooldown_seconds: int = 90
+    actions: dict[str, ComfyActionCooldown]
+    server_time: str
 
 
 class AdminStatsResponse(BaseModel):

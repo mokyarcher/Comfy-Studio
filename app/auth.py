@@ -39,6 +39,17 @@ def resolve_user(store: UserStore, api_key: str | None) -> ApiUser:
     store.ensure_bootstrap_admin(settings.api_key)
 
     user = store.find_by_api_key(api_key)
+    # Generation plane: new keys live on Meta first — pull once into local users.db.
+    if user is None and settings.enable_generation and settings.meta_auth_base_url:
+        from app.meta_auth_sync import fetch_user_from_meta, upsert_user_from_meta_payload
+
+        payload = fetch_user_from_meta(
+            base_url=settings.meta_auth_base_url,
+            sync_secret=(settings.meta_sync_secret or settings.api_key).strip(),
+            api_key=api_key,
+        )
+        if payload is not None:
+            user = upsert_user_from_meta_payload(store, payload)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

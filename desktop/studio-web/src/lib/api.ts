@@ -738,7 +738,39 @@ export function formatHostMetricsChip(m: HostMetrics): string | null {
   return chips.length ? chips.join(' · ') : null
 }
 
-export type ComfyControlResult = { ok: boolean; message: string }
+export type ComfyControlAction = 'interrupt' | 'clear_queue' | 'free'
+
+export type ComfyControlResult = {
+  ok: boolean
+  message: string
+  action?: ComfyControlAction | string
+  cooldownRemainingSeconds?: number
+  cooldownUntil?: string | null
+}
+
+export type ComfyCooldownStatus = {
+  cooldownSeconds: number
+  serverTime?: string
+  actions: Record<ComfyControlAction, { remainingSeconds: number; cooldownUntil: string | null }>
+}
+
+function parseComfyCooldownFields(data: unknown): Pick<
+  ComfyControlResult,
+  'action' | 'cooldownRemainingSeconds' | 'cooldownUntil'
+> {
+  if (!data || typeof data !== 'object') return {}
+  const root = data as Record<string, unknown>
+  const detail =
+    root.detail && typeof root.detail === 'object'
+      ? (root.detail as Record<string, unknown>)
+      : root
+  const rem = detail.cooldown_remaining_seconds
+  return {
+    action: typeof detail.action === 'string' ? detail.action : undefined,
+    cooldownRemainingSeconds: typeof rem === 'number' ? rem : undefined,
+    cooldownUntil: typeof detail.cooldown_until === 'string' ? detail.cooldown_until : null
+  }
+}
 
 async function postComfyControl(
   path: string,
@@ -757,11 +789,65 @@ async function postComfyControl(
       body: opts.body ? JSON.stringify(opts.body) : undefined
     })
     const data = await parseJsonSafe(res)
-    if (!res.ok) return { ok: false, message: mapHttpError(res.status, data) }
-    const body = (data ?? {}) as ComfyControlResult
-    return { ok: Boolean(body.ok ?? true), message: body.message || 'ok' }
+    const cd = parseComfyCooldownFields(data)
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: mapHttpError(res.status, data),
+        ...cd
+      }
+    }
+    const body = (data ?? {}) as Record<string, unknown>
+    return {
+      ok: Boolean(body.ok ?? true),
+      message: typeof body.message === 'string' ? body.message : 'ok',
+      ...cd
+    }
   } catch (err) {
     return { ok: false, message: mapNetworkError(err) }
+  }
+}
+
+export async function fetchComfyCooldowns(opts: {
+  apiKey: string
+}): Promise<ComfyCooldownStatus | null> {
+  if (!opts.apiKey) return null
+  const url = joinUrl(apiBase(), '/v1/system/comfy/cooldowns')
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      timeoutMs: 10_000,
+      headers: authHeaders(opts.apiKey)
+    })
+    const data = await parseJsonSafe(res)
+    if (!res.ok || !data || typeof data !== 'object') return null
+    const body = data as Record<string, unknown>
+    const rawActions =
+      body.actions && typeof body.actions === 'object'
+        ? (body.actions as Record<string, Record<string, unknown>>)
+        : {}
+    const empty = { remainingSeconds: 0, cooldownUntil: null as string | null }
+    const readOne = (key: ComfyControlAction) => {
+      const a = rawActions[key]
+      if (!a) return empty
+      return {
+        remainingSeconds:
+          typeof a.remaining_seconds === 'number' ? Math.max(0, a.remaining_seconds) : 0,
+        cooldownUntil: typeof a.cooldown_until === 'string' ? a.cooldown_until : null
+      }
+    }
+    return {
+      cooldownSeconds:
+        typeof body.cooldown_seconds === 'number' ? body.cooldown_seconds : 90,
+      serverTime: typeof body.server_time === 'string' ? body.server_time : undefined,
+      actions: {
+        interrupt: readOne('interrupt'),
+        clear_queue: readOne('clear_queue'),
+        free: readOne('free')
+      }
+    }
+  } catch {
+    return null
   }
 }
 

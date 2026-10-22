@@ -34,11 +34,14 @@ export function OverviewPage() {
   const cfg = status?.config
 
   const toggleAutoStart = async (
-    key: 'autoStartComfy' | 'autoStartApi' | 'autoStartFrp',
+    key: 'openAtLogin' | 'autoStartComfy' | 'autoStartApi' | 'autoStartFrp',
     value: boolean
   ) => {
     try {
       await saveConfig({ [key]: value })
+      if (key === 'openAtLogin') {
+        showToast('success', value ? '已开启开机自启 Gateway' : '已关闭开机自启 Gateway')
+      }
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : String(err))
     }
@@ -121,12 +124,21 @@ export function OverviewPage() {
 
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0">
-          <h2 className="font-medium text-text">启动后自动拉起</h2>
+          <h2 className="font-medium text-text">开机自启</h2>
           <p className="mt-1 text-xs text-muted">
-            勾选后，打开 Gateway 时按 ComfyUI → API → FRP 顺序启动；可单独勾选。
+            先勾选 Gateway 本身；再勾选要随 Gateway 拉起的服务（ComfyUI → API → FRP）。
           </p>
         </div>
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-text">
+          <label className="inline-flex cursor-pointer items-center gap-2 font-medium">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={Boolean(cfg?.openAtLogin)}
+              onChange={(e) => void toggleAutoStart('openAtLogin', e.target.checked)}
+            />
+            Gateway
+          </label>
           <label className="inline-flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"

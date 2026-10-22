@@ -59,8 +59,15 @@ class Settings(BaseSettings):
     comfyui_job_timeout_seconds: float = 900.0
     # Wan / image_to_video jobs are slower (~200s typical); allow a dedicated ceiling.
     comfyui_video_job_timeout_seconds: float = 400.0
+    # Shared CD for Studio「打断 / 清队列 / 清显存」(all users, per action).
+    comfy_control_cooldown_seconds: int = 90
 
     api_key: str = Field(default="change-me-to-a-long-random-string")
+    # GPU plane only: when local users.db misses a key, resolve against Meta.
+    # Example: https://app.comfy-studio.sharex.team
+    meta_auth_base_url: str = ""
+    # Shared with Meta (default: same as API_KEY). Header X-Meta-Sync-Key.
+    meta_sync_secret: str = ""
 
     database_path: Path = PROJECT_ROOT / "data" / "tasks.db"
     image_output_dir: Path = PROJECT_ROOT / "data" / "images"

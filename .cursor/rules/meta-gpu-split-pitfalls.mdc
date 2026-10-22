@@ -1,0 +1,54 @@
+---
+description: Meta vs GPU 分流反复踩过的坑——审用户、Admin 密钥、admin/stats 空库
+alwaysApply: true
+---
+
+# Meta / GPU 分流：禁止再犯
+
+云机拆了 **Meta 数据面**（`ENABLE_GENERATION=false`，如 `:8101`）和 **GPU 生成面**（FRP，如 `:18000`）。改 nginx、Admin、用户 API、`admin_stats` 时必须按下面做。长文：`docs/ARCHITECTURE_CLOUD_DATA.md`。
+
+## 权威在哪
+
+| 能力 | 打到 |
+|------|------|
+| 注册 / 登录 / 待审 / 批准 / 注销 / 用户统计 | **Meta** `users.db`（按 `INSTANCE_ID`） |
+| 生图任务队列、Comfy 启停、local-hold、host-metrics | **GPU** |
+
+Studio 注册进 Meta；Gateway Admin 若仍整站 `/v1` → GPU，待审永远空——**已反复踩过**。
+
+## 改代码 / 配置时的硬约束
+
+1. **Gateway Admin nginx**（`deploy/comfy-gateway-admin.nginx.conf`）  
+   - → Meta：`/v1/auth/admin*`、`/v1/admin/users*`、`/v1/admin/stats`、默认 `/v1/`  
+   - → GPU：仅 `host-services`、`local-hold`、`/v1/system/`、`/health/`  
+   - Electron：用户管理走 `metaApiBaseUrl`，不要默认打本机 API 审用户
+
+2. **Admin 登录密钥在 Meta**  
+   - `/opt/comfy-studio-meta/.env` 必须非空：`ADMIN_PASSWORD`、`ADMIN_TOTP_SECRET`（+ `ADMIN_LOGIN_MODE=totp`）  
+   - **只配本机 GPU `.env` 不够** → 登录报「未配置 ADMIN_*」  
+   - 部署只**补缺**，禁止用空值整文件覆盖远端 `.env`
+
+3. **`/v1/admin/stats` 跑在 Meta 上**  
+   - Meta 无任务库：`state.db is None`  
+   - **禁止**无空判断就 `state.db.list_tasks_by_status(...)` → 总览整页 `Internal Server Error`、统计全是 `—`  
+   - 无 `db` 时排队/运行置 `0`；真实占用开关走 GPU 的 `/v1/admin/local-hold`
+
+4. **Admin cookie 跨 Meta / GPU**  
+   - 登录在 Meta 发 `admin_session`；`local-hold` / `host-services` 在 GPU  
+   - 会话必须是 **签名 cookie**（`ADMIN_SESSION_SECRET` 或回退 `API_KEY`，两边一致），不能只靠本机 SQLite 会话表  
+   - 否则总览 `Promise.all(stats, localHold)` 会因 GPU `Admin login required` 把整页统计刷成 `—`（前端应对 hold 软失败）  
+   - 改密钥后须 **重新登录**；部署 Meta 后本机 GPU API 也要带上同版本 `sms_auth` 并重启
+
+5. **新用户 Key 只在 Meta、生图 401**  
+   - 批准写 Meta `users.db`；`/v1/images` `/v1/system/gpu` 在 GPU  
+   - GPU 必须配 `META_AUTH_BASE_URL`（公网 Studio 源）+ 与 Meta 相同的 `API_KEY`/`META_SYNC_SECRET`  
+   - Meta 须有 `/v1/internal/auth/resolve`；本地 miss 时 upsert，否则设置页「已连接」但「密钥无效 (401)」
+
+6. **任何读任务队列 / Comfy / worker 的路径**  
+   - 在 `ENABLE_GENERATION=false` 分支必须容忍 `state.db` / `task_service` / `comfy` 为 `None`，或根本不要注册该路由到 Meta
+
+## 自检（改完分流或 Meta 代码后）
+
+- 云 Meta 日志能看到 `Meta data plane (ENABLE_GENERATION=false)`  
+- 带 Admin 会话刷新 Gateway 总览：统计有数字、待审与 Meta `users.db` 一致，不是 500  
+- 登录不再报未配置 `ADMIN_*`（密钥长度自检见架构文档，勿把密钥打进日志）

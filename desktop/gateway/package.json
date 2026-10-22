@@ -11,6 +11,7 @@
     "build": "npm run typecheck && electron-vite build",
     "dist": "npm run build && electron-builder --win dir --config electron-builder.yml",
     "dist:dir": "npm run build && electron-builder --win dir --config electron-builder.yml",
+    "dist:nsis": "npm run build && electron-builder --win nsis --config electron-builder.yml",
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps"
   },

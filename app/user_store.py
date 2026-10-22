@@ -488,6 +488,76 @@ class UserStore:
             ).fetchone()
         return self._row_to_user(row) if row else None
 
+    def upsert_synced_user(
+        self,
+        *,
+        user_id: str,
+        name: str,
+        username: str,
+        password_hash: str,
+        status: str,
+        api_key_hash: str,
+        api_key_prefix: str,
+        api_key_secret: str,
+        enabled: bool,
+        is_admin: bool,
+        daily_generate_limit: int,
+        daily_polish_limit: int,
+        note: str,
+        created_at: str,
+        last_seen_at: str | None,
+        email: str,
+    ) -> ApiUser:
+        """Insert or replace a user row mirrored from Meta (same id)."""
+        with self._lock, self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO api_users (
+                    id, name, username, password_hash, status,
+                    api_key_hash, api_key_prefix, api_key_secret,
+                    enabled, is_admin, daily_generate_limit, daily_polish_limit,
+                    note, created_at, last_seen_at, email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    username = excluded.username,
+                    password_hash = excluded.password_hash,
+                    status = excluded.status,
+                    api_key_hash = excluded.api_key_hash,
+                    api_key_prefix = excluded.api_key_prefix,
+                    api_key_secret = excluded.api_key_secret,
+                    enabled = excluded.enabled,
+                    is_admin = excluded.is_admin,
+                    daily_generate_limit = excluded.daily_generate_limit,
+                    daily_polish_limit = excluded.daily_polish_limit,
+                    note = excluded.note,
+                    created_at = excluded.created_at,
+                    last_seen_at = excluded.last_seen_at,
+                    email = excluded.email
+                """,
+                (
+                    user_id,
+                    name,
+                    username,
+                    password_hash,
+                    status,
+                    api_key_hash,
+                    api_key_prefix,
+                    api_key_secret,
+                    1 if enabled else 0,
+                    1 if is_admin else 0,
+                    daily_generate_limit,
+                    daily_polish_limit,
+                    note,
+                    created_at,
+                    last_seen_at,
+                    email,
+                ),
+            )
+        user = self.get_user(user_id)
+        assert user is not None
+        return user
+
     def list_users(self) -> list[ApiUser]:
         with self._lock, self.connect() as conn:
             rows = conn.execute(

@@ -1,4 +1,5 @@
 import type { GalleryRecord } from './gallery-db'
+import { GALLERY_THUMB_GEN } from './gallery-thumb'
 
 /** Metadata + object URLs kept across Gallery route remounts (SPA session). */
 export type GalleryCacheRow = Omit<GalleryRecord, 'blob'> & {
@@ -7,6 +8,7 @@ export type GalleryCacheRow = Omit<GalleryRecord, 'blob'> & {
 }
 
 type GallerySession = {
+  thumbGen: number
   rows: GalleryCacheRow[]
   blobs: Map<string, Blob>
 }
@@ -20,10 +22,21 @@ function revokeRowUrls(row: GalleryCacheRow): void {
 
 /** Snapshot currently shown in GalleryPage — keeps thumb URLs alive when leaving the route. */
 export function saveGallerySession(rows: GalleryCacheRow[], blobs: Map<string, Blob>): void {
-  session = { rows: rows.map((r) => ({ ...r })), blobs }
+  session = { thumbGen: GALLERY_THUMB_GEN, rows: rows.map((r) => ({ ...r })), blobs }
 }
 
 export function peekGallerySession(): GallerySession | null {
+  if (!session) return null
+  // Drop soft long-edge-only thumbs; keep blobs so we re-encode without IDB reload.
+  if (session.thumbGen !== GALLERY_THUMB_GEN) {
+    for (const row of session.rows) {
+      if (row.thumbUrl) {
+        URL.revokeObjectURL(row.thumbUrl)
+        row.thumbUrl = ''
+      }
+    }
+    session.thumbGen = GALLERY_THUMB_GEN
+  }
   return session
 }
 

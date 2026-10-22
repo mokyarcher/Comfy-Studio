@@ -44,13 +44,25 @@ export function DashboardPage() {
   async function reload() {
     setError('')
     try {
-      const [s, h, hs] = await Promise.all([
+      // stats → Meta; hold/host → GPU. Do not let GPU auth/session miss wipe Meta stats.
+      const [sRes, hRes, hs] = await Promise.all([
         fetchStats(),
-        fetchLocalHold(),
+        fetchLocalHold().then(
+          (h) => ({ ok: true as const, h }),
+          (err) => ({
+            ok: false as const,
+            err: err instanceof Error ? err.message : '占用状态加载失败'
+          })
+        ),
         fetchHostServices().catch(() => null)
       ])
-      setStats(s)
-      setHold(h)
+      setStats(sRes)
+      if (hRes.ok) {
+        setHold(hRes.h)
+      } else {
+        setHold(null)
+        setError(hRes.err)
+      }
       if (hs) {
         setServices(hs.services)
         setServicesEnabled(hs.enabled)

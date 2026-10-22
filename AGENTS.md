@@ -97,16 +97,18 @@ Gateway Admin Web（外网）
 ```powershell
 # Studio
 cd desktop\studio
-# 若 Access denied：先结束 "Comfy Studio" 进程，再改名/删旧 win-unpacked
-npm run dist:dir   # → release\win-unpacked\Comfy Studio.exe
+# 若 Access denied：先结束 "Comfy Studio" 进程，再改名/删旧 win-unpacked / Setup
+npm run dist:dir    # → release\win-unpacked\Comfy Studio.exe
+npm run dist:nsis   # → release\Comfy-Studio-*-Setup.exe（需能下 NSIS 工具）
 
 # Gateway
 cd desktop\gateway
-npm run dist:dir   # → release\win-unpacked\Comfy Gateway.exe
+npm run dist:dir    # → release\win-unpacked\Comfy Gateway.exe
+npm run dist:nsis   # → release\Comfy-Gateway-*-Setup.exe
 ```
 
 - 图标：`desktop/*/resources/icon.png`（Gateway 另有托盘 `tray*.png`，经 `extraResources` 打进包）
-- 当前默认目标多为 `dir`（解压即用）；NSIS 需在线工具时再开
+- `dist:dir` 解压即用；`dist:nsis` 产出可安装 Setup（GitHub 拉工具时建议开代理）
 
 ### 开发
 
@@ -118,7 +120,9 @@ npm run dev
 
 Web Studio：`desktop/studio-web`（Vite）；部署见 `deploy/comfy-studio-app.nginx.conf`。生产若已拆云 Meta，用 `deploy/comfy-studio-app.split.nginx.conf`（数据类 → Meta，生成类 → FRP）。  
 云 Meta 部署：`.\scripts\deploy_cloud_meta.ps1`（详见 `docs/ARCHITECTURE_CLOUD_DATA.md`）。  
-Gateway Admin Web：`desktop/gateway-web`（默认端口 5174）；部署见 `deploy/comfy-gateway-admin.nginx.conf`。本机 `.env` 配 `ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`（Authenticator）；短信模式可选；远程启停另配 `HOST_*`。  
+Gateway Admin Web：`desktop/gateway-web`（默认端口 5174）；部署见 `deploy/comfy-gateway-admin.nginx.conf`（**用户/登录/待审 → Meta；host-services / local-hold / system → GPU**）。  
+Admin 登录密钥必须写在 **云 Meta** 的 `.env`（`ADMIN_LOGIN_MODE=totp` + `ADMIN_PASSWORD` + `ADMIN_TOTP_SECRET`），与本机 GPU `.env` 对齐；**只配本机不够**——分流到 Meta 后会出现「未配置 ADMIN_PASSWORD / ADMIN_TOTP_SECRET」，且待审永远对不上 Studio 注册（权威在 Meta `users.db`）。详见 `docs/ARCHITECTURE_CLOUD_DATA.md`「权威库与审用户」「Meta 上的 Admin 登录密钥」。短信模式可选；远程启停另配本机 `HOST_*`。  
+Electron Gateway 审用户须设「云 Meta API」（`metaApiBaseUrl`，默认 `https://app.comfy-studio.sharex.team`）。  
 API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 
 契约补充：`desktop/docs/api-contract.md`。
@@ -177,6 +181,11 @@ API 需配置 `CORS_ORIGINS`（或同源反代 `/v1`）。
 4. **502 / 连不上**：先 Gateway 侧 API+FRP，再 Studio「测试连接」；错误文案保持短、带状态码即可。
 5. **ComfyUI 启不来 / 缺包**：多半用了系统 `python`，改回 ComfyUI `.venv` 启动命令。
 6. **Admin Web 远程启停无效**：确认台式机 FastAPI 在跑、`.env` 已配 `HOST_*` 且 `HOST_SERVICES_ENABLED=true`，操作时填对 TOTP。
+7. **Studio 提交申请但 Gateway「暂无待审」**：注册在云 Meta，后台却读了 GPU 本机 `users.db`。用户管理必须走 Meta（nginx / `metaApiBaseUrl`），见 `docs/ARCHITECTURE_CLOUD_DATA.md`。
+8. **Gateway 登录报「未配置 ADMIN_PASSWORD / ADMIN_TOTP_SECRET」**：登录已打到 Meta，但 Meta `.env` 这两项为空。从本机 GPU `.env` **补缺**到 `/opt/comfy-studio-meta/.env` 后重启 `comfy-meta-qwen-image`，**不要**用空值覆盖远端。
+9. **Gateway 总览 Internal Server Error、统计全是 —**：`/v1/admin/stats` 已指 Meta，但旧代码对 `state.db`（任务库）无空判断；Meta `ENABLE_GENERATION=false` 时 `db is None` 会 500。`admin_stats` 须在无任务库时把排队/运行置 0。
+10. **Gateway 总览 `Admin login required`、头像仍显示已登录**：`/v1/auth/me` 与 stats 在 Meta 通过，但 `local-hold` 在 GPU；旧会话只写 Meta SQLite，GPU 认不出。须签名会话（两边 `ADMIN_SESSION_SECRET`/`API_KEY` 一致）+ 前端 hold 软失败；升级后重新登录并重启本机 API。
+11. **新注册已批准但 Studio「密钥无效 401」、健康检查却「已连接」**：Key 在 Meta，生图/GPU 状态在本机。GPU 配 `META_AUTH_BASE_URL` + 同 `API_KEY`，走 `/v1/internal/auth/resolve` 自动 upsert；见 `docs/ARCHITECTURE_CLOUD_DATA.md`。
 
 ## 改动优先级建议
 

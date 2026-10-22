@@ -13,18 +13,22 @@ extraResources:
     to: icon-32.png
 win:
   icon: icon.png
+  # 避免 winCodeSign 解压需管理员符号链接权限
+  signAndEditExecutable: false
   target:
     - target: nsis
-      arch:
-        - x64
-    - target: portable
       arch:
         - x64
   artifactName: Comfy-Studio-${version}-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  allowElevation: true
   createDesktopShortcut: true
+  createStartMenuShortcut: true
   shortcutName: Comfy Studio
-portable:
-  artifactName: Comfy-Studio-Portable-${version}.${ext}
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: 2052
+  deleteAppDataOnUninstall: false

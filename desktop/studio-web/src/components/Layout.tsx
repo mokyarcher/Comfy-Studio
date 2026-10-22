@@ -16,10 +16,13 @@ import {
   comfyClearQueue,
   comfyFreeMemory,
   comfyInterrupt,
+  fetchComfyCooldowns,
   fetchGpuStatus,
   fetchHostMetrics,
   formatHostMetricsChips,
-  testConnection
+  testConnection,
+  type ComfyControlAction,
+  type ComfyControlResult
 } from '@/lib/api'
 import { preloadBackground } from '@/lib/backgrounds'
 import { useServerLimits } from '@/store/serverLimits'
@@ -42,10 +45,38 @@ const nav = [
 
 type PillBox = { top: number; left: number; width: number; height: number }
 
+type ComfyActionId = 'interrupt' | 'clearQueue' | 'freeMemory'
+
 type ComfyConfirm = {
+  id: ComfyActionId
   title: string
   detail: string
-  run: () => Promise<{ ok: boolean; message: string }>
+  run: () => Promise<ComfyControlResult>
+}
+
+const EMPTY_COOLDOWNS: Record<ComfyActionId, number> = {
+  interrupt: 0,
+  clearQueue: 0,
+  freeMemory: 0
+}
+
+const SERVER_TO_ACTION: Record<ComfyControlAction, ComfyActionId> = {
+  interrupt: 'interrupt',
+  clear_queue: 'clearQueue',
+  free: 'freeMemory'
+}
+
+function untilFromRemaining(remainingSeconds: number): number {
+  if (remainingSeconds <= 0) return 0
+  return Date.now() + remainingSeconds * 1000
+}
+
+function untilFromIso(iso: string | null | undefined, remainingSeconds?: number): number {
+  if (iso) {
+    const t = Date.parse(iso)
+    if (!Number.isNaN(t)) return t
+  }
+  return untilFromRemaining(remainingSeconds ?? 0)
 }
 
 function readPillBox(navEl: HTMLElement, itemEl: HTMLElement): PillBox {
@@ -87,6 +118,8 @@ export function Layout() {
   const [bgHint, setBgHint] = useState(false)
   const [comfyBusy, setComfyBusy] = useState(false)
   const [comfyConfirm, setComfyConfirm] = useState<ComfyConfirm | null>(null)
+  const [comfyCooldownUntil, setComfyCooldownUntil] = useState(EMPTY_COOLDOWNS)
+  const [comfyNow, setComfyNow] = useState(() => Date.now())
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === '1'
@@ -254,6 +287,22 @@ export function Layout() {
 
   useEffect(() => {
     let alive = true
+    const applySharedCd = async () => {
+      const cd = await fetchComfyCooldowns({ apiKey: user.apiKey })
+      if (!alive || !cd) return
+      setComfyCooldownUntil({
+        interrupt: untilFromIso(
+          cd.actions.interrupt.cooldownUntil,
+          cd.actions.interrupt.remainingSeconds
+        ),
+        clearQueue: untilFromIso(
+          cd.actions.clear_queue.cooldownUntil,
+          cd.actions.clear_queue.remainingSeconds
+        ),
+        freeMemory: untilFromIso(cd.actions.free.cooldownUntil, cd.actions.free.remainingSeconds)
+      })
+      setComfyNow(Date.now())
+    }
     const tick = async () => {
       const [h, g, m] = await Promise.all([
         testConnection({ timeoutMs: 10_000 }),
@@ -271,6 +320,7 @@ export function Layout() {
           maxWidth: h.maxWidth,
           maxHeight: h.maxHeight
         })
+        void applySharedCd()
       }
     }
     tick()
@@ -290,23 +340,58 @@ export function Layout() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
+  const comfyCdLeft = (id: ComfyActionId): number =>
+    Math.max(0, Math.ceil((comfyCooldownUntil[id] - comfyNow) / 1000))
+
+  useEffect(() => {
+    const active = Object.values(comfyCooldownUntil).some((t) => t > Date.now())
+    if (!active) return
+    const tick = window.setInterval(() => setComfyNow(Date.now()), 250)
+    return () => window.clearInterval(tick)
+  }, [comfyCooldownUntil])
+
   const askComfyControl = (confirm: ComfyConfirm) => {
-    if (comfyBusy || !connected) return
+    if (comfyBusy || !connected || comfyCdLeft(confirm.id) > 0) return
     setComfyConfirm(confirm)
+  }
+
+  const applyResultCooldown = (res: ComfyControlResult, fallbackId: ComfyActionId) => {
+    const actionId =
+      res.action && res.action in SERVER_TO_ACTION
+        ? SERVER_TO_ACTION[res.action as ComfyControlAction]
+        : fallbackId
+    const until = untilFromIso(res.cooldownUntil, res.cooldownRemainingSeconds)
+    if (until <= 0 && res.ok) {
+      // Server may omit fields on older API — fall back to 90s local estimate.
+      setComfyCooldownUntil((prev) => ({ ...prev, [actionId]: Date.now() + 90_000 }))
+    } else if (until > 0) {
+      setComfyCooldownUntil((prev) => ({ ...prev, [actionId]: until }))
+    }
+    setComfyNow(Date.now())
   }
 
   const runComfyControl = async () => {
     if (!comfyConfirm || comfyBusy) return
     const pending = comfyConfirm
+    if (comfyCdLeft(pending.id) > 0) {
+      setComfyConfirm(null)
+      return
+    }
     setComfyConfirm(null)
     setComfyBusy(true)
     try {
       const res = await pending.run()
       pushToast(res.message || pending.title, res.ok ? 'success' : 'error')
+      // Shared host CD from GPU API (all users). Also sync on 429.
+      applyResultCooldown(res, pending.id)
     } finally {
       setComfyBusy(false)
     }
   }
+
+  const interruptCd = comfyCdLeft('interrupt')
+  const clearCd = comfyCdLeft('clearQueue')
+  const freeCd = comfyCdLeft('freeMemory')
 
   return (
     <div
@@ -418,40 +503,47 @@ export function Layout() {
             <button
               type="button"
               className="glass-cta-btn glass-cta-btn-sm"
-              disabled={comfyBusy || !connected}
-              title="打断 ComfyUI 当前任务"
+              disabled={comfyBusy || !connected || interruptCd > 0}
+              title={interruptCd > 0 ? `冷却中 ${interruptCd}s` : '打断 ComfyUI 当前任务'}
               onClick={() =>
                 askComfyControl({
+                  id: 'interrupt',
                   title: '打断当前任务？',
                   detail: '将请求打断 ComfyUI 正在执行的工作流。无任务在跑时通常无影响。',
                   run: () => comfyInterrupt({ apiKey: user.apiKey })
                 })
               }
             >
-              <span className="glass-cta-btn-label">打断</span>
+              <span className="glass-cta-btn-label">
+                {interruptCd > 0 ? `打断 ${interruptCd}s` : '打断'}
+              </span>
             </button>
             <button
               type="button"
               className="glass-cta-btn glass-cta-btn-sm"
-              disabled={comfyBusy || !connected}
-              title="清空 ComfyUI 等待队列"
+              disabled={comfyBusy || !connected || clearCd > 0}
+              title={clearCd > 0 ? `冷却中 ${clearCd}s` : '清空 ComfyUI 等待队列'}
               onClick={() =>
                 askComfyControl({
+                  id: 'clearQueue',
                   title: '清空等待队列？',
                   detail: '将清空 ComfyUI 中尚未开始的排队任务，不影响已完成记录。',
                   run: () => comfyClearQueue({ apiKey: user.apiKey })
                 })
               }
             >
-              <span className="glass-cta-btn-label">清队列</span>
+              <span className="glass-cta-btn-label">
+                {clearCd > 0 ? `清队列 ${clearCd}s` : '清队列'}
+              </span>
             </button>
             <button
               type="button"
               className="glass-cta-btn glass-cta-btn-sm"
-              disabled={comfyBusy || !connected}
-              title="卸载模型并清理执行缓存（释放显存）"
+              disabled={comfyBusy || !connected || freeCd > 0}
+              title={freeCd > 0 ? `冷却中 ${freeCd}s` : '卸载模型并清理执行缓存（释放显存）'}
               onClick={() =>
                 askComfyControl({
+                  id: 'freeMemory',
                   title: '清理显存？',
                   detail: '将卸载已加载模型并清理执行缓存。下次出图需重新加载，会稍慢。',
                   run: () =>
@@ -463,7 +555,9 @@ export function Layout() {
                 })
               }
             >
-              <span className="glass-cta-btn-label">清显存</span>
+              <span className="glass-cta-btn-label">
+                {freeCd > 0 ? `清显存 ${freeCd}s` : '清显存'}
+              </span>
             </button>
           </div>
           {bgHint ? (

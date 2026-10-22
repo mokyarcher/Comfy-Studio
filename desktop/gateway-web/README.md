@@ -5,7 +5,18 @@
 
 线上：`https://comfy-gateway.sharex.team`
 
-**依赖**：台式机上 FastAPI + frpc 已在跑（隧道通着）。远程启停走 FastAPI 的 `/v1/admin/host-services*`，**不是**再起一套 Electron。ComfyUI 本身不必事先在跑——可由总览远程拉起。
+**依赖**：
+
+- **审用户 / 待审 / 登录**：云 Meta（与 Studio 同一 `INSTANCE_ID` 的 `users.db`）。nginx 须把 `/v1/auth/admin*`、`/v1/admin/users*`、`/v1/admin/stats` 指到 Meta（见 `deploy/comfy-gateway-admin.nginx.conf`）。
+- **远程启停 / local-hold**：台式机 FastAPI + frpc（GPU 面）。ComfyUI 不必事先在跑——可由总览远程拉起。
+
+**踩坑（已多次，Agent 规则 `.cursor/rules/meta-gpu-split-pitfalls.mdc`）**：
+
+1. 整站 `/v1` 只反代 GPU → Studio 注册在 Meta，后台「暂无待审」。
+2. 用户接口改指 Meta 后，Meta `.env` 若空着 `ADMIN_PASSWORD` / `ADMIN_TOTP_SECRET` → 登录报「未配置…」。须与本机 GPU 管理密码对齐并重启 Meta 进程。
+3. `/v1/admin/stats` 在 Meta 上时，代码不得假定有任务库 `state.db`（Meta 为 `None`）→ 否则总览 `Internal Server Error`。排队在 Meta 显示 0 属正常。
+
+长文见 `docs/ARCHITECTURE_CLOUD_DATA.md`。
 
 ## 开发
 
@@ -17,7 +28,10 @@ npm run dev
 
 默认 `http://localhost:5174`，`/v1` 代理到本机 FastAPI `:8000`。
 
-本机项目根 `.env`（与 FastAPI 同一份）：
+**两份** `.env` 都要有 Admin 登录键（内容一致）：
+
+1. 本机 GPU 项目根 `.env`（生成面 / `HOST_*`）
+2. 云机 `/opt/comfy-studio-meta/.env`（**登录与待审实际校验这份**）
 
 ```env
 ADMIN_LOGIN_MODE=totp
@@ -28,7 +42,7 @@ ADMIN_TOTP_SECRET=
 ADMIN_SESSION_SECRET=一长串随机字符
 CORS_ORIGINS=...,https://comfy-gateway.sharex.team,http://localhost:5174,http://127.0.0.1:5174
 
-# 远程启停（可选但推荐）
+# 仅 GPU 本机需要（远程启停）
 HOST_SERVICES_ENABLED=true
 HOST_COMFY_DIR=D:\path\to\ComfyUI
 HOST_COMFY_LAUNCH=.venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188
@@ -67,4 +81,4 @@ Nginx：[`deploy/comfy-gateway-admin.nginx.conf`](../../deploy/comfy-gateway-adm
 1. DNS：`comfy-gateway.sharex.team` A 记录 → VPS IP  
 2. 上传 `dist/` 到 `/var/www/comfy-gateway-admin`  
 3. 启用 nginx 后：`certbot --nginx -d comfy-gateway.sharex.team`  
-4. **台式机**（跑 FastAPI + frpc）的 `.env` 配好 `ADMIN_*` 与 `HOST_*`，`CORS_ORIGINS` 含该域名，并重启 FastAPI  
+4. **云 Meta** `.env` 配好非空 `ADMIN_*`（与本机一致）并重启 Meta；**台式机**另配 `HOST_*` + `CORS_ORIGINS`，重启 FastAPI + frpc  

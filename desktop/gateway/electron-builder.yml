@@ -17,9 +17,20 @@ win:
   icon: icon.png
   # 避免 winCodeSign 解压需管理员符号链接权限
   signAndEditExecutable: false
-  # NSIS/portable 需在线下载工具；当前网络受限时用 dir（解压即用）
   target:
-    - target: dir
+    - target: nsis
       arch:
         - x64
   artifactName: Comfy-Gateway-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Comfy Gateway
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: 2052
+  deleteAppDataOnUninstall: false

@@ -13,12 +13,16 @@ export const GatewayConfigSchema = z.object({
     .string()
     .default('.venv\\Scripts\\python.exe main.py --listen 127.0.0.1 --port 8188'),
   publicBaseUrl: z.string().default('http://111.229.166.216:8080/qwen-image'),
+  /** 云 Meta 数据面（用户注册/待审权威库）。空则用户管理仍走本机 API（易与云端脱节）。 */
+  metaApiBaseUrl: z.string().default('https://app.comfy-studio.sharex.team'),
   frpcPath: z.string().default(''),
   frpcConfigPath: z.string().default(''),
   workflowPath: z.string().default(''),
   healthIntervalMs: z.number().int().min(1000).max(60000).default(3000),
   requestTimeoutMs: z.number().int().min(1000).max(120000).default(8000),
   minimizeToTrayOnClose: z.boolean().default(false),
+  /** 开机 / 登录 Windows 时启动 Comfy Gateway 本身 */
+  openAtLogin: z.boolean().default(false),
   /** Gateway 启动后自动拉起 ComfyUI（可独立勾选） */
   autoStartComfy: z.boolean().default(false),
   /** Gateway 启动后自动拉起 FastAPI */

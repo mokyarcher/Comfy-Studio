@@ -79,6 +79,12 @@ function localBase(cfg: GatewayConfig): string {
   return `http://${cfg.apiHost}:${cfg.apiPort}`
 }
 
+/** User / stats / prompts / showcase — prefer cloud Meta (same DB as Studio register). */
+function metaBase(cfg: GatewayConfig): string {
+  const m = (cfg.metaApiBaseUrl || '').trim().replace(/\/$/, '')
+  return m || localBase(cfg)
+}
+
 function failDetail(status: number, data: unknown): string {
   if (typeof data === 'object' && data && 'detail' in data) {
     const d = (data as { detail: unknown }).detail
@@ -92,7 +98,7 @@ export async function adminGetStats(
   apiKey: string
 ): Promise<{ ok: boolean; message: string; stats?: AdminStats }> {
   if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
-  const url = `${localBase(cfg)}/v1/admin/stats`
+  const url = `${metaBase(cfg)}/v1/admin/stats`
   try {
     const res = await fetchJson(url, apiKey)
     if (!res.ok) {
@@ -138,7 +144,7 @@ export async function adminListUsers(
 ): Promise<{ ok: boolean; message: string; users?: AdminUser[] }> {
   if (!apiKey) return { ok: false, message: '本地 API Key 为空' }
   try {
-    const res = await fetchJson(`${localBase(cfg)}/v1/admin/users`, apiKey)
+    const res = await fetchJson(`${metaBase(cfg)}/v1/admin/users`, apiKey)
     if (!res.ok) return { ok: false, message: `用户列表失败 HTTP ${res.status}` }
     return { ok: true, message: 'ok', users: res.data as AdminUser[] }
   } catch (err) {
@@ -153,7 +159,7 @@ export async function adminApproveUser(
 ): Promise<{ ok: boolean; message: string; user?: AdminUser }> {
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/users/${userId}/approve`,
+      `${metaBase(cfg)}/v1/admin/users/${userId}/approve`,
       apiKey,
       { method: 'POST' }
     )
@@ -173,7 +179,7 @@ export async function adminRejectUser(
 ): Promise<{ ok: boolean; message: string; user?: AdminUser }> {
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/users/${userId}/reject`,
+      `${metaBase(cfg)}/v1/admin/users/${userId}/reject`,
       apiKey,
       { method: 'POST' }
     )
@@ -193,7 +199,7 @@ export async function adminDeleteUser(
 ): Promise<{ ok: boolean; message: string }> {
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/users/${userId}`,
+      `${metaBase(cfg)}/v1/admin/users/${userId}`,
       apiKey,
       { method: 'DELETE' }
     )
@@ -217,7 +223,7 @@ export async function adminPatchUser(
   body: Record<string, unknown>
 ): Promise<{ ok: boolean; message: string; user?: AdminUser }> {
   try {
-    const res = await fetchJson(`${localBase(cfg)}/v1/admin/users/${userId}`, apiKey, {
+    const res = await fetchJson(`${metaBase(cfg)}/v1/admin/users/${userId}`, apiKey, {
       method: 'PATCH',
       body: JSON.stringify(body)
     })
@@ -237,7 +243,7 @@ export async function adminRotateKey(
 ): Promise<{ ok: boolean; message: string; user?: AdminUser }> {
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/users/${userId}/rotate-key`,
+      `${metaBase(cfg)}/v1/admin/users/${userId}/rotate-key`,
       apiKey,
       { method: 'POST' }
     )
@@ -262,7 +268,7 @@ export async function adminResetPassword(
 }> {
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/users/${userId}/reset-password`,
+      `${metaBase(cfg)}/v1/admin/users/${userId}/reset-password`,
       apiKey,
       { method: 'POST', body: JSON.stringify({}) }
     )
@@ -317,7 +323,7 @@ export async function listShowcase(
   if (!apiKey) return { ok: false, message: '本地 API Key 为空' }
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/showcase?limit=${limit}`,
+      `${metaBase(cfg)}/v1/showcase?limit=${limit}`,
       apiKey
     )
     if (!res.ok) {
@@ -402,7 +408,7 @@ export async function adminUnlistShowcase(
   if (!apiKey) return { ok: false, message: '本地 API Key 为空' }
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/showcase/${itemId}/unlist`,
+      `${metaBase(cfg)}/v1/admin/showcase/${itemId}/unlist`,
       apiKey,
       { method: 'POST' }
     )
@@ -425,7 +431,7 @@ export async function fetchShowcaseAssetDataUrl(
 ): Promise<{ ok: boolean; message: string; dataUrl?: string }> {
   if (!apiKey) return { ok: false, message: '本地 API Key 为空' }
   const clean = path.startsWith('/') ? path : `/${path}`
-  const url = `${localBase(cfg)}${clean}`
+  const url = `${metaBase(cfg)}${clean}`
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 60_000)
   try {
@@ -486,7 +492,7 @@ export async function adminGetPromptLibrary(
 ): Promise<{ ok: boolean; message: string; library?: PromptLibraryDoc }> {
   if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
   try {
-    const res = await fetchJson(`${localBase(cfg)}/v1/admin/prompt-library`, apiKey)
+    const res = await fetchJson(`${metaBase(cfg)}/v1/admin/prompt-library`, apiKey)
     if (!res.ok) {
       const detail = failDetail(res.status, res.data)
       if (res.status === 404) {
@@ -510,7 +516,7 @@ export async function adminReplacePromptLibrary(
 ): Promise<{ ok: boolean; message: string; library?: PromptLibraryDoc }> {
   if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
   try {
-    const res = await fetchJson(`${localBase(cfg)}/v1/admin/prompt-library`, apiKey, {
+    const res = await fetchJson(`${metaBase(cfg)}/v1/admin/prompt-library`, apiKey, {
       method: 'PUT',
       body: JSON.stringify({
         templates: body.templates,
@@ -551,7 +557,7 @@ export async function adminListSharedPrompts(
 ): Promise<{ ok: boolean; message: string; items?: SharedPromptAdminItem[]; count?: number }> {
   if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
   try {
-    const res = await fetchJson(`${localBase(cfg)}/v1/admin/prompt-library/shared?limit=100`, apiKey)
+    const res = await fetchJson(`${metaBase(cfg)}/v1/admin/prompt-library/shared?limit=100`, apiKey)
     if (!res.ok) {
       return {
         ok: false,
@@ -578,7 +584,7 @@ export async function adminDeleteSharedPrompt(
   if (!apiKey) return { ok: false, message: '本地 API Key 为空，请先在「访问密钥」配置' }
   try {
     const res = await fetchJson(
-      `${localBase(cfg)}/v1/admin/prompt-library/shared/${encodeURIComponent(itemId)}`,
+      `${metaBase(cfg)}/v1/admin/prompt-library/shared/${encodeURIComponent(itemId)}`,
       apiKey,
       { method: 'DELETE' }
     )

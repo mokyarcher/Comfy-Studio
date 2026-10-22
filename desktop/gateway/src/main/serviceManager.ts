@@ -15,6 +15,7 @@ import type {
 import { resolveComfyInstall, resolveComfyLaunch } from './comfyResolve'
 import { loadConfig, saveConfig, suggestApiProjectDir } from './config'
 import { testComfy, testLocalApi, testPublicApi } from './health'
+import { applyOpenAtLogin } from './loginItem'
 import { RingLogBuffer } from './logs'
 import {
   generateApiKey,
@@ -170,7 +171,13 @@ export class ServiceManager {
         this.config = saveConfig({ apiProjectDir: suggested })
       }
     }
-    this.logs.append('system', 'system', 'Comfy Gateway 已启动')
+    // Keep OS login item in sync with saved preference (installer / manual edits).
+    applyOpenAtLogin(this.config.openAtLogin)
+    this.logs.append(
+      'system',
+      'system',
+      this.config.openAtLogin ? 'Comfy Gateway 已启动（开机自启已开启）' : 'Comfy Gateway 已启动'
+    )
   }
 
   getConfig(): GatewayConfig {
@@ -178,7 +185,16 @@ export class ServiceManager {
   }
 
   saveConfig(partial: Partial<GatewayConfig>): GatewayConfig {
+    const prevOpen = this.config.openAtLogin
     this.config = saveConfig(partial)
+    if (partial.openAtLogin !== undefined && partial.openAtLogin !== prevOpen) {
+      applyOpenAtLogin(this.config.openAtLogin)
+      this.logs.append(
+        'system',
+        'system',
+        this.config.openAtLogin ? '已开启开机自启 Gateway' : '已关闭开机自启 Gateway'
+      )
+    }
     this.logs.append('system', 'system', '配置已保存')
     return this.config
   }

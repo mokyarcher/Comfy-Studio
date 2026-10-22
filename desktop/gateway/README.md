@@ -1,6 +1,8 @@
 # Comfy Gateway
 
-Windows 桌面控制台：管理本机 **ComfyUI**、FastAPI 与 FRP 客户端（Electron + React + TypeScript + Vite + Tailwind）。可勾选开机自启三项服务。
+Windows 桌面控制台：管理本机 **ComfyUI**、FastAPI 与 FRP 客户端（Electron + React + TypeScript + Vite + Tailwind）。可勾选 **开机自启 Gateway**，以及启动后自动拉起 ComfyUI / API / FRP。
+
+用户注册 / 待审走云 **Meta**（设置里「云 Meta API」，默认 `https://app.comfy-studio.sharex.team`），与 Web Studio 同一 `users.db`；本机启停与 local-hold 仍走本机 API。
 
 外网管理（审用户 / 远程启停）见 [`../gateway-web/README.md`](../gateway-web/README.md)。
 

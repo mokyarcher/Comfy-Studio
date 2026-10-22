@@ -79,7 +79,20 @@ export function SettingsPage() {
       </section>
 
       <section className="card space-y-4 p-5">
-        <h2 className="font-medium">启动后自动拉起</h2>
+        <h2 className="font-medium">开机自启</h2>
+        <p className="text-xs text-muted">
+          写入系统「登录时启动」。勾选后登录 Windows 会打开 Gateway；服务仍需在下方单独勾选才会跟着拉起。
+        </p>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-[var(--color-primary)]"
+            checked={draft.openAtLogin}
+            onChange={(e) => set('openAtLogin', e.target.checked)}
+          />
+          开机时启动 Comfy Gateway
+        </label>
+        <h3 className="pt-1 text-sm font-medium text-text">启动后自动拉起服务</h3>
         <p className="text-xs text-muted">
           打开 Gateway 时按勾选项启动（ComfyUI → API → FRP）。与「启动全部」无关，可独立勾选。
         </p>
@@ -132,6 +145,18 @@ export function SettingsPage() {
               value={draft.publicBaseUrl}
               onChange={(e) => set('publicBaseUrl', e.target.value)}
               placeholder="http://111.229.166.216:8080/qwen-image"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">云 Meta API（用户/待审）</label>
+            <p className="mb-1 text-xs text-muted">
+              Studio 注册申请落在云端用户库。须指向与 Web Studio 相同的 Meta，后台才能看到待审。
+            </p>
+            <input
+              className="input"
+              value={draft.metaApiBaseUrl}
+              onChange={(e) => set('metaApiBaseUrl', e.target.value)}
+              placeholder="https://app.comfy-studio.sharex.team"
             />
           </div>
           <div>

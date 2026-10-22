@@ -47,6 +47,8 @@ from app.schemas import (
     AuthProfileResponse,
     AuthRegisterRequest,
     AuthRegisterResponse,
+    InternalAuthResolveRequest,
+    InternalAuthResolveResponse,
     AdminTotpLoginRequest,
     AdminTotpLoginResponse,
     SmsSendRequest,
@@ -57,6 +59,7 @@ from app.schemas import (
     GenerateImageResponse,
     GpuStatusResponse,
     ComfyControlResponse,
+    ComfyCooldownStatusResponse,
     ComfyFreeRequest,
     HostMetricsResponse,
     HealthLiveResponse,
@@ -227,7 +230,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.cloud_gallery_db_path, settings.cloud_gallery_files_dir
     )
     state.works = WorksStore(settings.works_db_path)
-    state.sms_auth = SmsAuthStore(settings.admin_sms_db_path)
+    state.sms_auth = SmsAuthStore(
+        settings.admin_sms_db_path,
+        signing_secret=(settings.admin_session_secret or settings.api_key).strip(),
+    )
     state.email_reset = EmailResetStore(settings.email_reset_db_path)
     state.prompt_library = PromptLibraryStore(settings.prompt_library_path)
     state.shared_prompts = SharedPromptStore(settings.shared_prompts_db_path)
@@ -1502,6 +1508,49 @@ def create_app() -> FastAPI:
             email=user.email or "",
         )
 
+    @app.post(
+        "/v1/internal/auth/resolve",
+        response_model=InternalAuthResolveResponse,
+        tags=["internal"],
+    )
+    async def internal_auth_resolve(
+        body: InternalAuthResolveRequest,
+        request: Request,
+    ) -> InternalAuthResolveResponse:
+        """GPU generation plane pulls a Meta-approved user by API key (shared sync secret)."""
+        expected = (
+            state.settings.meta_sync_secret or state.settings.api_key
+        ).strip()
+        got = (request.headers.get("X-Meta-Sync-Key") or "").strip()
+        if not expected or not got or not _secrets.compare_digest(got, expected):
+            raise HTTPException(status_code=401, detail="Invalid meta sync key")
+        user = state.user_store.find_by_api_key(body.api_key)
+        if (
+            user is None
+            or not user.enabled
+            or user.status != STATUS_ACTIVE
+            or not user.api_key_secret
+        ):
+            raise HTTPException(status_code=404, detail="Unknown or inactive API key")
+        return InternalAuthResolveResponse(
+            id=user.id,
+            name=user.name,
+            username=user.username,
+            password_hash=user.password_hash,
+            status=user.status,
+            api_key_hash=user.api_key_hash,
+            api_key_prefix=user.api_key_prefix,
+            api_key_secret=user.api_key_secret,
+            enabled=user.enabled,
+            is_admin=user.is_admin,
+            daily_generate_limit=user.daily_generate_limit,
+            daily_polish_limit=user.daily_polish_limit,
+            note=user.note,
+            created_at=user.created_at,
+            last_seen_at=user.last_seen_at,
+            email=user.email or "",
+        )
+
     @app.post("/v1/auth/email", response_model=AuthBindEmailResponse, tags=["auth"])
     async def auth_bind_email(
         body: AuthBindEmailRequest,
@@ -1652,6 +1701,34 @@ def create_app() -> FastAPI:
         data = await fetch_host_metrics(state.settings)
         return HostMetricsResponse(**data)
 
+    def _comfy_cd_seconds() -> int:
+        return max(0, int(getattr(state.settings, "comfy_control_cooldown_seconds", 90) or 0))
+
+    def _comfy_cd_guard(action: str) -> None:
+        from app.comfy_control_cooldown import check_allowed
+
+        allowed, left, until = check_allowed(action)  # type: ignore[arg-type]
+        if allowed:
+            return
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": f"冷却中，请 {left}s 后再试（全站共用）",
+                "action": action,
+                "cooldown_remaining_seconds": left,
+                "cooldown_until": until,
+            },
+        )
+
+    def _comfy_cd_mark(action: str) -> tuple[int, str | None]:
+        from app.comfy_control_cooldown import mark_used
+
+        sec = _comfy_cd_seconds()
+        if sec <= 0:
+            return 0, None
+        left, until = mark_used(action, sec)  # type: ignore[arg-type]
+        return left, until
+
     async def _comfy_control(action: str) -> ComfyControlResponse:
         """Proxy a ComfyUI control call; never expose 8188 publicly."""
         _require_generation()
@@ -1659,6 +1736,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=503, detail="ComfyUI client unavailable")
         from app.comfy_client import ComfyClientError
 
+        _comfy_cd_guard(action)
         try:
             if action == "interrupt":
                 await state.comfy.interrupt()
@@ -1670,8 +1748,27 @@ def create_app() -> FastAPI:
                 raise HTTPException(status_code=400, detail="unknown action")
         except ComfyClientError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        logger.info("comfy control action=%s", action)
-        return ComfyControlResponse(ok=True, message=msg)
+        left, until = _comfy_cd_mark(action)
+        logger.info("comfy control action=%s cooldown=%ss", action, left)
+        return ComfyControlResponse(
+            ok=True,
+            message=msg,
+            action=action,
+            cooldown_remaining_seconds=left,
+            cooldown_until=until,
+        )
+
+    @app.get(
+        "/v1/system/comfy/cooldowns",
+        response_model=ComfyCooldownStatusResponse,
+        tags=["system"],
+    )
+    async def comfy_cooldowns(auth: AuthContext = Depends(require_auth)) -> ComfyCooldownStatusResponse:
+        _ = auth
+        _require_generation()
+        from app.comfy_control_cooldown import status_snapshot
+
+        return ComfyCooldownStatusResponse(**status_snapshot(_comfy_cd_seconds()))
 
     @app.post(
         "/v1/system/comfy/interrupt",
@@ -1706,6 +1803,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=503, detail="ComfyUI client unavailable")
         from app.comfy_client import ComfyClientError
 
+        _comfy_cd_guard("free")
         try:
             await state.comfy.free_memory(
                 unload_models=body.unload_models,
@@ -1719,12 +1817,20 @@ def create_app() -> FastAPI:
         if body.free_memory:
             parts.append("清缓存")
         msg = "已请求" + "·".join(parts) if parts else "ok"
+        left, until = _comfy_cd_mark("free")
         logger.info(
-            "comfy free unload_models=%s free_memory=%s",
+            "comfy free unload_models=%s free_memory=%s cooldown=%ss",
             body.unload_models,
             body.free_memory,
+            left,
         )
-        return ComfyControlResponse(ok=True, message=msg)
+        return ComfyControlResponse(
+            ok=True,
+            message=msg,
+            action="free",
+            cooldown_remaining_seconds=left,
+            cooldown_until=until,
+        )
 
     @app.get("/v1/local-hold", response_model=LocalHoldResponse, tags=["system"])
     async def get_local_hold(auth: AuthContext = Depends(require_auth)) -> LocalHoldResponse:
@@ -2026,13 +2132,18 @@ def create_app() -> FastAPI:
     @app.get("/v1/admin/stats", response_model=AdminStatsResponse, tags=["admin"])
     async def admin_stats(auth: AuthContext = Depends(admin_auth)) -> AdminStatsResponse:
         _ = auth
-        queued = len(state.db.list_tasks_by_status("queued"))
-        running = len(state.db.list_tasks_by_status("running"))
+        # Meta (ENABLE_GENERATION=false): no task DB — queue stays 0; real queue/hold on GPU.
+        if state.db is not None:
+            queued = len(state.db.list_tasks_by_status("queued"))
+            running = len(state.db.list_tasks_by_status("running"))
+        else:
+            queued = 0
+            running = 0
+        hold = local_hold.snapshot()
         gen, pol = state.user_store.usage_today_global()
         users = state.user_store.list_users()
         max_approved = state.settings.max_approved_users
         approved = state.user_store.approved_non_admin_count()
-        hold = local_hold.snapshot()
         return AdminStatsResponse(
             queue_open=queued + running,
             queue_queued=queued,

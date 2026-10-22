@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +23,8 @@ import httpx
 logger = logging.getLogger(__name__)
 
 COOKIE_NAME = "admin_session"
+# Portable cookie: Meta issues, GPU verifies with the same ADMIN_SESSION_SECRET / API_KEY.
+SIGNED_SESSION_PREFIX = "cs1."
 
 
 def utcnow() -> str:
@@ -44,6 +46,10 @@ def _hash(value: str, *, salt: str = "") -> str:
     return hashlib.sha256(f"{salt}:{value}".encode("utf-8")).hexdigest()
 
 
+def _b64url_encode(raw: bytes) -> str:
+    return b64encode(raw).decode("ascii").rstrip("=").replace("+", "-").replace("/", "_")
+
+
 @dataclass
 class SessionInfo:
     session_id: str
@@ -52,9 +58,10 @@ class SessionInfo:
 
 
 class SmsAuthStore:
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, *, signing_secret: str = "") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.signing_secret = (signing_secret or "").strip()
         self._lock = threading.Lock()
         self._init_schema()
 
@@ -86,11 +93,74 @@ class SmsAuthStore:
                     );
                     CREATE INDEX IF NOT EXISTS idx_admin_sessions_exp
                         ON admin_sessions(expires_at);
+                    CREATE TABLE IF NOT EXISTS admin_session_revoked (
+                        jti_hash TEXT PRIMARY KEY,
+                        revoked_at REAL NOT NULL
+                    );
                     """
                 )
                 conn.commit()
             finally:
                 conn.close()
+
+    def _sign_payload(self, body: str) -> str:
+        assert self.signing_secret
+        return hmac.new(
+            self.signing_secret.encode("utf-8"),
+            body.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def _decode_signed_body(self, token: str) -> tuple[dict[str, Any], str] | None:
+        """Return (payload, jti_hash) if signature ok; does not check exp/revoke."""
+        if not self.signing_secret or not token.startswith(SIGNED_SESSION_PREFIX):
+            return None
+        rest = token[len(SIGNED_SESSION_PREFIX) :]
+        if "." not in rest:
+            return None
+        body, sig = rest.rsplit(".", 1)
+        if not body or not sig:
+            return None
+        expect = self._sign_payload(body)
+        if not hmac.compare_digest(expect, sig):
+            return None
+        pad = "=" * (-len(body) % 4)
+        try:
+            raw = body.replace("-", "+").replace("_", "/") + pad
+            payload = json.loads(b64decode(raw).decode("utf-8"))
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        jti = str(payload.get("jti") or "")
+        if not jti:
+            return None
+        return payload, _hash(jti)
+
+    def _parse_signed_token(self, token: str) -> SessionInfo | None:
+        decoded = self._decode_signed_body(token)
+        if decoded is None:
+            return None
+        payload, jti_hash = decoded
+        sub = str(payload.get("sub") or "")
+        try:
+            exp = float(payload.get("exp") or 0)
+        except (TypeError, ValueError):
+            return None
+        if not sub or exp <= time.time():
+            return None
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT 1 FROM admin_session_revoked WHERE jti_hash = ?",
+                    (jti_hash,),
+                ).fetchone()
+                if row is not None:
+                    return None
+            finally:
+                conn.close()
+        return SessionInfo(session_id=jti_hash[:12], phone=sub, expires_at=exp)
 
     def can_send(
         self,
@@ -202,10 +272,21 @@ class SmsAuthStore:
     def create_session(
         self, phone: str, *, ttl_seconds: int
     ) -> tuple[str, float]:
-        token = secrets.token_urlsafe(32)
-        token_hash = _hash(token)
         now = time.time()
         expires = now + ttl_seconds
+        if self.signing_secret:
+            jti = secrets.token_urlsafe(16)
+            payload = json.dumps(
+                {"sub": phone, "exp": int(expires), "jti": jti},
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+            body = _b64url_encode(payload)
+            token = f"{SIGNED_SESSION_PREFIX}{body}.{self._sign_payload(body)}"
+            token_hash = _hash(jti)
+        else:
+            token = secrets.token_urlsafe(32)
+            token_hash = _hash(token)
         with self._lock:
             conn = self._connect()
             try:
@@ -227,6 +308,9 @@ class SmsAuthStore:
     def validate_session(self, token: str | None) -> SessionInfo | None:
         if not token:
             return None
+        signed = self._parse_signed_token(token)
+        if signed is not None:
+            return signed
         now = time.time()
         token_hash = _hash(token)
         with self._lock:
@@ -255,6 +339,24 @@ class SmsAuthStore:
 
     def revoke_session(self, token: str | None) -> None:
         if not token:
+            return
+        decoded = self._decode_signed_body(token)
+        if decoded is not None:
+            _payload, jti_hash = decoded
+            with self._lock:
+                conn = self._connect()
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO admin_session_revoked (jti_hash, revoked_at) VALUES (?, ?)",
+                        (jti_hash, time.time()),
+                    )
+                    conn.execute(
+                        "DELETE FROM admin_sessions WHERE token_hash = ?",
+                        (jti_hash,),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
             return
         token_hash = _hash(token)
         with self._lock:

@@ -59,3 +59,19 @@ def test_otp_and_session_roundtrip(tmp_path: Path) -> None:
     assert sess.phone == phone
     store.revoke_session(token)
     assert store.validate_session(token) is None
+
+
+def test_signed_session_portable_across_stores(tmp_path: Path) -> None:
+    """Meta issues cookie; GPU validates with same signing_secret (separate DBs)."""
+    secret = "shared-admin-session-secret"
+    meta = SmsAuthStore(tmp_path / "meta.db", signing_secret=secret)
+    gpu = SmsAuthStore(tmp_path / "gpu.db", signing_secret=secret)
+    token, _ = meta.create_session("admin", ttl_seconds=3600)
+    assert token.startswith("cs1.")
+    sess = gpu.validate_session(token)
+    assert sess is not None
+    assert sess.phone == "admin"
+    meta.revoke_session(token)
+    assert meta.validate_session(token) is None
+    # GPU has no revoke row — still valid until TTL (acceptable across planes)
+    assert gpu.validate_session(token) is not None
