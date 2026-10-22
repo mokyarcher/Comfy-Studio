@@ -430,8 +430,9 @@ export function CreatePage() {
 
   return (
     <div className="page-fill">
-      <div className="flex min-h-0 flex-col gap-4 lg:flex-row lg:gap-5">
-        <section className="card flex min-h-0 w-full shrink-0 flex-col overflow-hidden lg:w-[28rem] xl:w-[30rem]">
+      {/* Phone/tablet: natural height + page pan. Desktop lg+: fill main + inner scroll. */}
+      <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-row lg:gap-5">
+        <section className="card flex w-full shrink-0 flex-col lg:min-h-0 lg:w-[28rem] lg:overflow-hidden xl:w-[30rem]">
           <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5 sm:px-4">
             <div className="min-w-0 flex-1">
               <SlidingSeg
@@ -447,7 +448,7 @@ export function CreatePage() {
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-3.5 py-3.5 sm:px-4">
+          <div className="flex flex-1 flex-col gap-3 px-3.5 py-3.5 sm:px-4 lg:min-h-0 lg:overflow-auto">
             {mode === 'txt2img' && workflows.length > 1 ? (
               <div>
                 <label className="label" htmlFor="txt2img-workflow">
@@ -471,20 +472,24 @@ export function CreatePage() {
 
             {/* Prompt stack: with upload 50/25/25; without upload ~67/33 */}
             <div className="flex min-h-[14rem] flex-1 flex-col gap-2.5">
-              <div className={`flex min-h-0 flex-col ${needsUpload ? 'basis-[50%] flex-[2]' : 'basis-[65%] flex-[2]'}`}>
+              <div
+                className={`flex flex-col ${needsUpload ? 'basis-[50%] flex-[2]' : 'basis-[65%] flex-[2]'} lg:min-h-0`}
+              >
                 <label className="label shrink-0">提示词</label>
                 <textarea
-                  className="input min-h-0 flex-1 resize-none leading-relaxed"
+                  className="input min-h-[8rem] flex-1 resize-none leading-relaxed lg:min-h-0"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="描述画面…（Ctrl+Enter 生成）"
                 />
               </div>
 
-              <div className={`flex min-h-0 flex-col ${needsUpload ? 'basis-[25%] flex-1' : 'basis-[35%] flex-1'}`}>
+              <div
+                className={`flex flex-col ${needsUpload ? 'basis-[25%] flex-1' : 'basis-[35%] flex-1'} lg:min-h-0`}
+              >
                 <label className="label shrink-0">负向提示词</label>
                 <textarea
-                  className="input min-h-0 flex-1 resize-none"
+                  className="input min-h-[4.5rem] flex-1 resize-none lg:min-h-0"
                   value={negative}
                   onChange={(e) => setNegative(e.target.value)}
                   placeholder="不想出现的内容…"
@@ -492,11 +497,11 @@ export function CreatePage() {
               </div>
 
               {needsUpload ? (
-                <div className="flex min-h-0 basis-[25%] flex-1 flex-col">
+                <div className="flex min-h-[7rem] basis-[25%] flex-1 flex-col lg:min-h-0">
                   <label className="label shrink-0">
                     {mode === 'image_to_video' ? '起始图' : '参考图（可多选）'}
                   </label>
-                  <label className="file-drop min-h-0 flex-1 cursor-pointer">
+                  <label className="file-drop min-h-[6rem] flex-1 cursor-pointer lg:min-h-0">
                     <input
                       type="file"
                       accept="image/*"

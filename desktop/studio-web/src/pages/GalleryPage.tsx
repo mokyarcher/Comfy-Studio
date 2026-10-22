@@ -13,7 +13,10 @@ import {
 import { ImageLightbox } from '@/components/ImageLightbox'
 import { WorkDetailMeta } from '@/components/WorkDetailMeta'
 import {
+  cloudIdOf,
+  dedupeGalleryByCloudId,
   deleteGallery,
+  findByCloudId,
   listGallery,
   newGalleryId,
   putGallery,
@@ -44,6 +47,9 @@ const THUMB_BATCH = 3
 const PAGE_SIZE = 12
 /** Prefetch next page thumbs so flipping pages feels instant. */
 const PREFETCH = PAGE_SIZE
+
+/** One cloud→IndexedDB sync at a time (Strict Mode / remount safe). */
+let cloudSyncInflight: Promise<void> | null = null
 
 export function GalleryPage() {
   const apiKey = useSession((s) => s.user!.apiKey)
@@ -152,39 +158,66 @@ export function GalleryPage() {
   }
 
   async function syncCloud() {
-    try {
-      const known = new Set(
-        itemsRef.current.map((r) => r.cloudId).filter((id): id is string => Boolean(id))
-      )
-      const { items: cloud } = await listCloudGallery({ apiKey, limit: 100 })
-      let added = 0
-      for (const c of cloud) {
-        if (known.has(c.id)) continue
-        const blob = await fetchAuthedBlob({ apiKey, path: c.image_url })
-        await putGallery({
-          id: newGalleryId(),
-          taskId: `cloud:${c.id}`,
-          blob,
-          mimeType: c.mime_type || blob.type || 'image/png',
-          prompt: c.prompt,
-          negativePrompt: c.negative_prompt || undefined,
-          width: c.width,
-          height: c.height,
-          steps: c.steps,
-          seed: c.seed,
-          mode: (c.mode as GenerateMode) || 'txt2img',
-          createdAt: c.created_at,
-          favorite: false,
-          showcaseId: null,
-          cloudId: c.id
-        })
-        known.add(c.id)
-        added += 1
-        await yieldToMain()
+    if (cloudSyncInflight) {
+      await cloudSyncInflight
+      return
+    }
+    cloudSyncInflight = (async () => {
+      try {
+        // Clean prior duplicates from concurrent syncs (same cloud id / taskId).
+        const removed = await dedupeGalleryByCloudId()
+        if (removed) await reload()
+
+        const local = await listGallery()
+        const known = new Set<string>()
+        for (const r of local) {
+          const cid = cloudIdOf(r)
+          if (cid) known.add(cid)
+        }
+        const { items: cloud } = await listCloudGallery({ apiKey, limit: 100 })
+        let added = 0
+        for (const c of cloud) {
+          if (known.has(c.id)) continue
+          // Re-check IDB in case another tab wrote while we were downloading.
+          if (await findByCloudId(c.id)) {
+            known.add(c.id)
+            continue
+          }
+          const blob = await fetchAuthedBlob({ apiKey, path: c.image_url })
+          if (await findByCloudId(c.id)) {
+            known.add(c.id)
+            continue
+          }
+          await putGallery({
+            id: newGalleryId(),
+            taskId: `cloud:${c.id}`,
+            blob,
+            mimeType: c.mime_type || blob.type || 'image/png',
+            prompt: c.prompt,
+            negativePrompt: c.negative_prompt || undefined,
+            width: c.width,
+            height: c.height,
+            steps: c.steps,
+            seed: c.seed,
+            mode: (c.mode as GenerateMode) || 'txt2img',
+            createdAt: c.created_at,
+            favorite: false,
+            showcaseId: null,
+            cloudId: c.id
+          })
+          known.add(c.id)
+          added += 1
+          await yieldToMain()
+        }
+        if (added || removed) await reload()
+      } catch {
+        /* offline / API down — local gallery still works */
       }
-      if (added) await reload()
-    } catch {
-      /* offline / API down — local gallery still works */
+    })()
+    try {
+      await cloudSyncInflight
+    } finally {
+      cloudSyncInflight = null
     }
   }
 

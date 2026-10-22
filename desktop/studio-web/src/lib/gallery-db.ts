@@ -131,10 +131,60 @@ export async function setGalleryShowcaseId(
 
 export async function findByCloudId(cloudId: string): Promise<GalleryRecord | null> {
   const rows = await listGallery()
-  return rows.find((r) => r.cloudId === cloudId) || null
+  return (
+    rows.find((r) => r.cloudId === cloudId) ||
+    rows.find((r) => r.taskId === `cloud:${cloudId}`) ||
+    null
+  )
 }
 
 export async function findByShowcaseId(showcaseId: string): Promise<GalleryRecord | null> {
   const rows = await listGallery()
   return rows.find((r) => r.showcaseId === showcaseId) || null
+}
+
+/** Resolve cloud gallery id from a local row (explicit cloudId or taskId cloud:…). */
+export function cloudIdOf(row: Pick<GalleryRecord, 'cloudId' | 'taskId'>): string | null {
+  if (row.cloudId) return row.cloudId
+  if (row.taskId.startsWith('cloud:')) return row.taskId.slice('cloud:'.length) || null
+  return null
+}
+
+/**
+ * Drop duplicate IndexedDB rows for the same cloud gallery id
+ * (concurrent syncCloud used to insert the same image multiple times).
+ * Keeps favorite / showcase / earliest copy.
+ */
+export async function dedupeGalleryByCloudId(): Promise<number> {
+  const rows = await listGallery()
+  const groups = new Map<string, GalleryRecord[]>()
+  for (const r of rows) {
+    const cid = cloudIdOf(r)
+    if (!cid) continue
+    const list = groups.get(cid) || []
+    list.push(r)
+    groups.set(cid, list)
+  }
+  let removed = 0
+  for (const [, list] of groups) {
+    if (list.length < 2) continue
+    list.sort((a, b) => {
+      const score = (x: GalleryRecord) =>
+        (x.favorite ? 4 : 0) + (x.showcaseId ? 2 : 0) + (x.cloudId ? 1 : 0)
+      const d = score(b) - score(a)
+      if (d !== 0) return d
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+    const [keep, ...dupes] = list
+    if (!keep.cloudId) {
+      keep.cloudId = cloudIdOf(keep)
+      await putGallery(keep)
+    }
+    for (const d of dupes) {
+      await deleteGallery(d.id)
+      removed += 1
+    }
+  }
+  if (removed) invalidateGallerySession()
+  return removed
 }

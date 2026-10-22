@@ -126,24 +126,31 @@ body {
   /* Always reserve scrollbar track — avoids jump when prompts→create overflow changes */
   overflow-y: scroll;
   scrollbar-gutter: stable;
+  /* Tablet / phone: nested overflow must opt into touch pan */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 
 /*
  * Tab switch reveal: fade a veil overlay — never put opacity/transform/filter
  * on the content wrapper, or backdrop-filter (frosted glass) stays dead until
  * the animation ends (~0.4s), which reads as “blur arrives late”.
+ *
+ * height:auto (not 100%) so tall pages (gallery / settings) grow and
+ * .workspace-main can scroll with finger — height:100% trapped touch scroll.
  */
 .page-enter {
   position: relative;
   box-sizing: border-box;
   min-height: 100%;
-  height: 100%;
+  height: auto;
 }
 
 .page-enter-body {
   box-sizing: border-box;
   min-height: 100%;
-  height: 100%;
+  height: auto;
 }
 
 .page-enter-veil {
@@ -1136,16 +1143,25 @@ body {
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    height: 100%;
-    min-height: 0;
+    /* Desktop create: fill main. Phone/tablet: grow with content so page pans. */
+    min-height: 100%;
+    height: auto;
     padding: var(--page-pad-y) var(--page-pad-x);
   }
   .page-fill > * {
     width: 100%;
     max-width: 1600px;
-    flex: 1 1 0%;
+    flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
+  }
+  @media (min-width: 1024px) {
+    .page-fill {
+      height: 100%;
+    }
+    .page-fill > * {
+      flex: 1 1 0%;
+    }
   }
   .page-narrow {
     width: 100%;
@@ -1474,6 +1490,22 @@ body {
   background: color-mix(in srgb, #ffffff 8%, transparent);
   cursor: pointer;
   transition: background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .image-lightbox-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .image-lightbox-hint {
+    white-space: normal;
+    max-width: min(92vw, 22rem);
+    text-align: center;
+    line-height: 1.35;
+  }
 }
 
 .image-lightbox-btn:hover:not(:disabled) {
